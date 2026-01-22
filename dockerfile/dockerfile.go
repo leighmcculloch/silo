@@ -1,13 +1,10 @@
-#!/usr/bin/env zsh
-set -euo pipefail
+package dockerfile
 
-log() { echo "==> $*" >&2 }
+import "fmt"
 
-SCRIPT_DIR="${0:a:h}"
-
-# Inline Dockerfile
-read -r -d '' DOCKERFILE << 'DOCKERFILE_EOF' || true
-# syntax=docker/dockerfile:1
+// Dockerfile returns the embedded Dockerfile content
+func Dockerfile() string {
+	return `# syntax=docker/dockerfile:1
 # ============================================
 # Base stage: common setup for both tools
 # ============================================
@@ -127,113 +124,24 @@ RUN curl -fsSL https://gh.io/copilot-install | bash
 ENV PATH="${HOME}/.local/bin:${PATH}"
 
 ENTRYPOINT ["/bin/sh", "-c", "exec copilot --allow-all"]
-DOCKERFILE_EOF
+`
+}
 
-# Select tool
-TOOL="${TOOL:-$(gum choose --header "Select AI tool:" "opencode" "claude" "copilot")}"
+// AvailableTools returns the list of available tool targets
+func AvailableTools() []string {
+	return []string{"opencode", "claude", "copilot"}
+}
 
-# Build image
-log "Preparing image for $TOOL..."
-docker build \
-  -t "$TOOL" \
-  --target "$TOOL" \
-  --build-arg HOME="$HOME" \
-  --build-arg USER="$USER" \
-  --build-arg UID="$(id -u)" \
-  -f =(echo "$DOCKERFILE") \
-  "$SCRIPT_DIR"
-
-# Build volume mounts
-MOUNTS=()
-MOUNT_DIRS=(
-  # current directory
-  "$(pwd)"
-  # claude code
-  "$HOME/.claude.json"
-  "$HOME/.claude"
-  # opencode
-  "$HOME/.config/opencode"
-  "$HOME/.local/share/opencode"
-  # copilot-cli
-  "$XDG_CONFIG_HOME/.copilot"
-)
-# Mount common git dir if current dir or any immediate subdir is a worktree
-typeset -A seen_common_dirs
-for dir in "$(pwd)" "$(pwd)"/*/; do
-  [[ -d "$dir" ]] || continue
-  git -C "$dir" rev-parse --is-inside-work-tree &>/dev/null || continue
-  git_dir="$(cd "$dir" && cd "$(git rev-parse --git-dir)" && pwd)"
-  git_common_dir="$(cd "$dir" && cd "$(git rev-parse --git-common-dir)" && pwd)"
-  [[ "$git_dir" != "$git_common_dir" ]] || continue
-  common_dir="$(cd "$dir" && cd "$(dirname "$git_common_dir")" && pwd)"
-  [[ -z "${seen_common_dirs[$common_dir]:-}" ]] || continue
-  echo "adding to mounts $common_dir ($git_dir) ($git_common_dir)"
-  seen_common_dirs[$common_dir]=1
-  MOUNT_DIRS+=("$common_dir")
-done
-for dir in "${MOUNT_DIRS[@]}"; do
-    MOUNTS+=(-v "${dir}:${dir}")
-done
-
-# Mount API key files if they exist (warn if missing)
-KEYFILES=(
-  "$HOME/.zenv_apikey_perplexity"
-  "$HOME/.zenv_apikey_context7"
-  "$HOME/.zenv_apikey_pushover"
-  "$HOME/.zenv_apikey_github_ro"
-)
-for keyfile in "${KEYFILES[@]}"; do
-  MOUNTS+=(-v "${keyfile}:${keyfile}:ro")
-done
-
-# Get git identity from host
-GIT_USER_NAME="$(git config --global user.name 2>/dev/null || true)"
-GIT_USER_EMAIL="$(git config --global user.email 2>/dev/null || true)"
-log "Setting git identity in container: $GIT_USER_NAME <$GIT_USER_EMAIL>"
-
-# Generate container name from current directory + random 2-digit suffix
-CONTAINER_NAME="$(basename "$(pwd)" | tr -d '.')-$(printf '%02d' $((RANDOM % 100)))"
-log "Container name: $CONTAINER_NAME"
-
-# Load any keys needed
-source "$HOME/.zenv_apikey_github_ro"
-source "$HOME/.zenv_apikey_github_copilot"
-
-# Environment variables passed through from host
-ENV_PASSTHROUGH=(
-  XDG_CONFIG_HOME
-  GITHUB_TOKEN
-  COPILOT_GITHUB_TOKEN
-)
-
-# Environment variables set explicitly
-ENV_SET=(
-  "GIT_AUTHOR_NAME=$GIT_USER_NAME"
-  "GIT_AUTHOR_EMAIL=$GIT_USER_EMAIL"
-  "GIT_COMMITTER_NAME=$GIT_USER_NAME"
-  "GIT_COMMITTER_EMAIL=$GIT_USER_EMAIL"
-)
-
-log "Mounts:"
-for mount in "${MOUNT_DIRS[@]}"; do
-  echo "  $mount" >&2
-done
-
-log "Environment (passthrough):"
-for var in "${ENV_PASSTHROUGH[@]}"; do
-  echo "  $var" >&2
-done
-
-log "Running container $CONTAINER_NAME..."
-# Run container
-docker run --rm -it \
-  --privileged=false \
-  --cap-drop=ALL \
-  --security-opt=no-new-privileges:true \
-  --name "$CONTAINER_NAME" \
-  "${MOUNTS[@]}" \
-  ${ENV_PASSTHROUGH[@]/#/-e=} \
-  ${ENV_SET[@]/#/-e=} \
-  -w "$(pwd)" \
-  "$TOOL" \
-  "$@"
+// ToolDescription returns a description for a tool
+func ToolDescription(tool string) string {
+	switch tool {
+	case "opencode":
+		return "OpenCode - AI coding assistant"
+	case "claude":
+		return "Claude Code - Anthropic's CLI for Claude"
+	case "copilot":
+		return "GitHub Copilot CLI"
+	default:
+		return fmt.Sprintf("Unknown tool: %s", tool)
+	}
+}
