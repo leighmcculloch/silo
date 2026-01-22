@@ -8,14 +8,17 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/term"
 )
 
 // Client wraps the Docker client with silo-specific functionality
@@ -178,6 +181,26 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
+	// Set terminal to raw mode if TTY and handle resizing
+	if opts.TTY {
+		if f, ok := opts.Stdin.(*os.File); ok {
+			fd := f.Fd()
+			if term.IsTerminal(fd) {
+				oldState, err := term.MakeRaw(fd)
+				if err != nil {
+					return fmt.Errorf("failed to set raw terminal: %w", err)
+				}
+				defer term.RestoreTerminal(fd, oldState)
+
+				// Set initial terminal size
+				c.resizeContainerTTY(ctx, resp.ID, fd)
+
+				// Handle terminal resize signals
+				go c.monitorTTYSize(ctx, resp.ID, fd)
+			}
+		}
+	}
+
 	// Copy stdin to container
 	if opts.Stdin != nil {
 		go func() {
@@ -207,6 +230,35 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	return nil
+}
+
+// resizeContainerTTY resizes the container's TTY to match the terminal size
+func (c *Client) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
+	winsize, err := term.GetWinsize(fd)
+	if err != nil {
+		return
+	}
+
+	c.cli.ContainerResize(ctx, containerID, container.ResizeOptions{
+		Height: uint(winsize.Height),
+		Width:  uint(winsize.Width),
+	})
+}
+
+// monitorTTYSize monitors for terminal resize signals and updates the container
+func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uintptr) {
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGWINCH)
+	defer signal.Stop(sigchan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigchan:
+			c.resizeContainerTTY(ctx, containerID, fd)
+		}
+	}
 }
 
 // GetGitWorktreeRoots returns git worktree common directories for the given directory
