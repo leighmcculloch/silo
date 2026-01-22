@@ -17,7 +17,6 @@ import (
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/docker"
-	"github.com/leighmcculloch/silo/dockerfile"
 	"github.com/spf13/cobra"
 )
 
@@ -118,11 +117,11 @@ func completeTools(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	tools := dockerfile.AvailableTools()
+	tools := AvailableTools()
 	var completions []string
 	for _, t := range tools {
 		if strings.HasPrefix(t, toComplete) {
-			completions = append(completions, fmt.Sprintf("%s\t%s", t, dockerfile.ToolDescription(t)))
+			completions = append(completions, fmt.Sprintf("%s\t%s", t, ToolDescription(t)))
 		}
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
@@ -149,7 +148,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	}
 
 	// Validate tool
-	validTools := dockerfile.AvailableTools()
+	validTools := AvailableTools()
 	if !slices.Contains(validTools, tool) {
 		return fmt.Errorf("invalid tool: %s (valid tools: %s)", tool, strings.Join(validTools, ", "))
 	}
@@ -165,11 +164,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 }
 
 func selectTool() (string, error) {
-	tools := dockerfile.AvailableTools()
+	tools := AvailableTools()
 
 	var options []huh.Option[string]
 	for _, t := range tools {
-		options = append(options, huh.NewOption(dockerfile.ToolDescription(t), t))
+		options = append(options, huh.NewOption(ToolDescription(t), t))
 	}
 
 	var selected string
@@ -218,7 +217,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	// Build the image
 	cli.LogTo(stderr, "Preparing image for %s...", tool)
 	_, err = dockerClient.Build(ctx, docker.BuildOptions{
-		Dockerfile: dockerfile.Dockerfile(),
+		Dockerfile: Dockerfile(),
 		Target:     tool,
 		BuildArgs: map[string]string{
 			"HOME": home,

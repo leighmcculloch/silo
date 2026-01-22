@@ -1,10 +1,4 @@
-package dockerfile
-
-import "fmt"
-
-// Dockerfile returns the embedded Dockerfile content
-func Dockerfile() string {
-	return `# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1
 # ============================================
 # Base stage: common setup for both tools
 # ============================================
@@ -124,24 +118,3 @@ RUN curl -fsSL https://gh.io/copilot-install | bash
 ENV PATH="${HOME}/.local/bin:${PATH}"
 
 ENTRYPOINT ["/bin/sh", "-c", "exec copilot --allow-all"]
-`
-}
-
-// AvailableTools returns the list of available tool targets
-func AvailableTools() []string {
-	return []string{"opencode", "claude", "copilot"}
-}
-
-// ToolDescription returns a description for a tool
-func ToolDescription(tool string) string {
-	switch tool {
-	case "opencode":
-		return "OpenCode - AI coding assistant"
-	case "claude":
-		return "Claude Code - Anthropic's CLI for Claude"
-	case "copilot":
-		return "GitHub Copilot CLI"
-	default:
-		return fmt.Sprintf("Unknown tool: %s", tool)
-	}
-}
