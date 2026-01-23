@@ -654,9 +654,15 @@ func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
 func runConfigEdit(_ *cobra.Command, _ []string, _, stderr io.Writer) error {
 	paths := config.GetConfigPaths()
 
-	// Build options for the selector
+	// Build options for the selector:
+	// - Always include global config (first path)
+	// - Only include local configs that exist
 	var options []huh.Option[string]
-	for _, p := range paths {
+	for i, p := range paths {
+		isGlobal := i == 0
+		if !isGlobal && !p.Exists {
+			continue
+		}
 		label := p.Path
 		if !p.Exists {
 			label += " (new)"
