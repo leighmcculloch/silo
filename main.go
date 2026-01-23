@@ -25,6 +25,22 @@ var (
 	version = "dev"
 )
 
+const sampleConfig = `{
+  // Read-only directories or files to mount into the container
+  "mounts_ro": [],
+  // Read-write directories or files to mount into the container
+  "mounts_rw": [],
+  // Environment variables: names without '=' pass through from host,
+  // names with '=' set explicitly (e.g., "FOO=bar")
+  "env": [],
+  // Shell commands to run inside the container before the tool
+  "prehooks": [],
+  // Tool-specific configuration (merged with global config above)
+  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
+  "tools": {}
+}
+`
+
 // expandPath expands ~ to the user's home directory
 func expandPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -137,12 +153,7 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
-	configCmd.AddCommand(configShowCmd)
-	configCmd.AddCommand(configPathsCmd)
-	configCmd.AddCommand(configEditCmd)
-	configCmd.AddCommand(configDefaultCmd)
-
-	initCmd := &cobra.Command{
+	configInitCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create a sample configuration file",
 		Long: `Create a sample silo configuration file.
@@ -155,12 +166,17 @@ Use --local or --global to skip the prompt.`,
 			return runInit(cmd, args, stderr, globalFlag, localFlag)
 		},
 	}
-	initCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/silo.jsonc)")
-	initCmd.Flags().BoolP("local", "l", false, "Create local config (silo.jsonc)")
-	initCmd.MarkFlagsMutuallyExclusive("global", "local")
+	configInitCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/silo.jsonc)")
+	configInitCmd.Flags().BoolP("local", "l", false, "Create local config (silo.jsonc)")
+	configInitCmd.MarkFlagsMutuallyExclusive("global", "local")
+
+	configCmd.AddCommand(configShowCmd)
+	configCmd.AddCommand(configPathsCmd)
+	configCmd.AddCommand(configEditCmd)
+	configCmd.AddCommand(configDefaultCmd)
+	configCmd.AddCommand(configInitCmd)
 
 	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(initCmd)
 
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
@@ -700,6 +716,13 @@ func runConfigEdit(_ *cobra.Command, _ []string, _, stderr io.Writer) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
+	// If file doesn't exist, pre-fill with template
+	if _, err := os.Stat(selectedPath); os.IsNotExist(err) {
+		if err := os.WriteFile(selectedPath, []byte(sampleConfig), 0644); err != nil {
+			return fmt.Errorf("failed to create config: %w", err)
+		}
+	}
+
 	// Open editor
 	cmd := exec.Command(editor, selectedPath)
 	cmd.Stdin = os.Stdin
@@ -755,22 +778,6 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config file already exists: %s", configPath)
 	}
-
-	sampleConfig := `{
-  // Read-only directories or files to mount into the container
-  "mounts_ro": [],
-  // Read-write directories or files to mount into the container
-  "mounts_rw": [],
-  // Environment variables: names without '=' pass through from host,
-  // names with '=' set explicitly (e.g., "FOO=bar")
-  "env": [],
-  // Shell commands to run inside the container before the tool
-  "prehooks": [],
-  // Tool-specific configuration (merged with global config above)
-  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  "tools": {}
-}
-`
 
 	if err := os.WriteFile(configPath, []byte(sampleConfig), 0644); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)

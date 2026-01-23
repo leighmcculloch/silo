@@ -53,11 +53,6 @@ func TestHelp(t *testing.T) {
 	if !strings.Contains(stdout, "config") {
 		t.Error("expected config command in help output")
 	}
-
-	// Check for init command
-	if !strings.Contains(stdout, "init") {
-		t.Error("expected init command in help output")
-	}
 }
 
 func TestVersion(t *testing.T) {
@@ -165,7 +160,7 @@ func TestInitCommand(t *testing.T) {
 	tmpDir := testcli.MkdirTemp(t)
 	testcli.Chdir(t, tmpDir)
 
-	exitCode, _, stderr := testcli.Main(t, []string{"init", "--local"}, nil, mainFunc)
+	exitCode, _, stderr := testcli.Main(t, []string{"config", "init", "--local"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr)
@@ -204,7 +199,7 @@ func TestInitCommandAlreadyExists(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "silo.jsonc")
 	testcli.WriteFile(t, configPath, []byte("{}"))
 
-	exitCode, _, stderr := testcli.Main(t, []string{"init", "--local"}, nil, mainFunc)
+	exitCode, _, stderr := testcli.Main(t, []string{"config", "init", "--local"}, nil, mainFunc)
 
 	if exitCode == 0 {
 		t.Error("expected failure when config already exists")
@@ -216,7 +211,7 @@ func TestInitCommandAlreadyExists(t *testing.T) {
 }
 
 func TestInitHelp(t *testing.T) {
-	exitCode, stdout, _ := testcli.Main(t, []string{"init", "--help"}, nil, mainFunc)
+	exitCode, stdout, _ := testcli.Main(t, []string{"config", "init", "--help"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
@@ -248,7 +243,7 @@ func TestInitCommandGlobal(t *testing.T) {
 		xdg.Reload()
 	}()
 
-	exitCode, _, stderr := testcli.Main(t, []string{"init", "--global"}, nil, mainFunc)
+	exitCode, _, stderr := testcli.Main(t, []string{"config", "init", "--global"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr)
