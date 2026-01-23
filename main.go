@@ -129,9 +129,18 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
+	configDefaultCmd := &cobra.Command{
+		Use:   "default",
+		Short: "Show the default configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigDefault(cmd, args, stdout)
+		},
+	}
+
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configPathsCmd)
 	configCmd.AddCommand(configEditCmd)
+	configCmd.AddCommand(configDefaultCmd)
 
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -535,6 +544,110 @@ func runConfigPaths(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		}
 	}
 
+	return nil
+}
+
+func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
+	cfg := config.DefaultConfig()
+
+	// Output as JSON
+	fmt.Fprintln(stdout, "{")
+
+	// MountsRO
+	fmt.Fprintln(stdout, "  \"mounts_ro\": [")
+	for i, v := range cfg.MountsRO {
+		comma := ","
+		if i == len(cfg.MountsRO)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// MountsRW
+	fmt.Fprintln(stdout, "  \"mounts_rw\": [")
+	for i, v := range cfg.MountsRW {
+		comma := ","
+		if i == len(cfg.MountsRW)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// Env
+	fmt.Fprintln(stdout, "  \"env\": [")
+	for i, v := range cfg.Env {
+		comma := ","
+		if i == len(cfg.Env)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// Prehooks
+	fmt.Fprintln(stdout, "  \"prehooks\": [")
+	for i, v := range cfg.Prehooks {
+		comma := ","
+		if i == len(cfg.Prehooks)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// Tools
+	fmt.Fprintln(stdout, "  \"tools\": {")
+	toolNames := make([]string, 0, len(cfg.Tools))
+	for name := range cfg.Tools {
+		toolNames = append(toolNames, name)
+	}
+	slices.Sort(toolNames)
+
+	for ti, toolName := range toolNames {
+		toolCfg := cfg.Tools[toolName]
+		fmt.Fprintf(stdout, "    %q: {\n", toolName)
+
+		fmt.Fprintln(stdout, "      \"mounts_ro\": [")
+		for i, v := range toolCfg.MountsRO {
+			comma := ","
+			if i == len(toolCfg.MountsRO)-1 {
+				comma = ""
+			}
+			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		fmt.Fprintln(stdout, "      \"mounts_rw\": [")
+		for i, v := range toolCfg.MountsRW {
+			comma := ","
+			if i == len(toolCfg.MountsRW)-1 {
+				comma = ""
+			}
+			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		fmt.Fprintln(stdout, "      \"env\": [")
+		for i, v := range toolCfg.Env {
+			comma := ","
+			if i == len(toolCfg.Env)-1 {
+				comma = ""
+			}
+			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
+		}
+		fmt.Fprintln(stdout, "      ]")
+
+		toolComma := ","
+		if ti == len(toolNames)-1 {
+			toolComma = ""
+		}
+		fmt.Fprintf(stdout, "    }%s\n", toolComma)
+	}
+	fmt.Fprintln(stdout, "  }")
+
+	fmt.Fprintln(stdout, "}")
 	return nil
 }
 
