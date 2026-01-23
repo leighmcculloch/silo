@@ -1,0 +1,23 @@
+{
+  // Additional directories or files to mount into the container
+  "mounts": [
+    // API key files (mounted read-only by the container)
+    "~/.zenv_apikey_perplexity",
+    "~/.zenv_apikey_context7",
+    "~/.zenv_apikey_pushover",
+    "~/.zenv_apikey_github_ro"
+  ],
+  // Environment variables: names without '=' pass through from host,
+  // names with '=' set explicitly (e.g., "FOO=bar")
+  "env": [
+    "GITHUB_TOKEN",
+    "COPILOT_GITHUB_TOKEN"
+  ],
+  // Files to source before running (to load exports like GITHUB_TOKEN)
+  "source_files": [
+    "~/.zenv_apikey_github_ro",
+    "~/.zenv_apikey_github_copilot"
+  ],
+  // Tool-specific configuration
+  "tools": {}
+}

@@ -24,6 +24,18 @@ var (
 	version = "dev"
 )
 
+// expandPath expands ~ to the user's home directory
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home := os.Getenv("HOME")
+		return filepath.Join(home, path[2:])
+	}
+	if path == "~" {
+		return os.Getenv("HOME")
+	}
+	return path
+}
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
@@ -248,11 +260,15 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Add tool-specific mounts
 	if toolCfg, ok := cfg.Tools[tool]; ok {
-		mounts = append(mounts, toolCfg.Mounts...)
+		for _, m := range toolCfg.Mounts {
+			mounts = append(mounts, expandPath(m))
+		}
 	}
 
 	// Add global config mounts
-	mounts = append(mounts, cfg.Mounts...)
+	for _, m := range cfg.Mounts {
+		mounts = append(mounts, expandPath(m))
+	}
 
 	// Add git worktree roots
 	worktreeRoots, _ := docker.GetGitWorktreeRoots(cwd)
@@ -279,7 +295,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Source files and add their exports
 	for _, sf := range cfg.SourceFiles {
-		if data, err := os.ReadFile(sf); err == nil {
+		if data, err := os.ReadFile(expandPath(sf)); err == nil {
 			for _, line := range strings.Split(string(data), "\n") {
 				line = strings.TrimSpace(line)
 				if rest, found := strings.CutPrefix(line, "export "); found {
