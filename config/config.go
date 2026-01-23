@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/tidwall/jsonc"
@@ -42,7 +43,13 @@ type ToolConfig struct {
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
-	home := xdg.Home
+	// Helper to replace home dir with ~
+	tildePath := func(path string) string {
+		if rest, ok := strings.CutPrefix(path, xdg.Home); ok {
+			return "~" + rest
+		}
+		return path
+	}
 
 	return Config{
 		MountsRO: []string{},
@@ -54,19 +61,19 @@ func DefaultConfig() Config {
 		Tools: map[string]ToolConfig{
 			"claude": {
 				MountsRW: []string{
-					filepath.Join(home, ".claude.json"),
-					filepath.Join(home, ".claude"),
+					"~/.claude.json",
+					"~/.claude",
 				},
 			},
 			"opencode": {
 				MountsRW: []string{
-					filepath.Join(xdg.ConfigHome, "opencode"),
-					filepath.Join(xdg.DataHome, "opencode"),
+					tildePath(filepath.Join(xdg.ConfigHome, "opencode")),
+					tildePath(filepath.Join(xdg.DataHome, "opencode")),
 				},
 			},
 			"copilot": {
 				MountsRW: []string{
-					filepath.Join(xdg.ConfigHome, ".copilot"),
+					tildePath(filepath.Join(xdg.ConfigHome, ".copilot")),
 				},
 				Env: []string{
 					"COPILOT_GITHUB_TOKEN",
