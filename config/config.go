@@ -126,20 +126,55 @@ func Merge(base, overlay Config) Config {
 	return result
 }
 
+// SourceInfo tracks the source of configuration values
+type SourceInfo struct {
+	Mounts         map[string]string // value -> source path
+	EnvPassthrough map[string]string
+	EnvSet         map[string]string
+	SourceFiles    map[string]string
+	ToolMounts     map[string]map[string]string // tool -> value -> source
+	ToolEnvPass    map[string]map[string]string
+	ToolEnvSet     map[string]map[string]string
+}
+
+// NewSourceInfo creates a new empty SourceInfo
+func NewSourceInfo() *SourceInfo {
+	return &SourceInfo{
+		Mounts:         make(map[string]string),
+		EnvPassthrough: make(map[string]string),
+		EnvSet:         make(map[string]string),
+		SourceFiles:    make(map[string]string),
+		ToolMounts:     make(map[string]map[string]string),
+		ToolEnvPass:    make(map[string]map[string]string),
+		ToolEnvSet:     make(map[string]map[string]string),
+	}
+}
+
 // LoadAll loads and merges all configuration files from XDG config home and current/parent directories
 func LoadAll() (Config, error) {
+	cfg, _ := LoadAllWithSources()
+	return cfg, nil
+}
+
+// LoadAllWithSources loads and merges all configs, tracking the source of each value
+func LoadAllWithSources() (Config, *SourceInfo) {
 	cfg := DefaultConfig()
+	sources := NewSourceInfo()
+
+	// Track defaults
+	trackConfigSources(cfg, "default", sources)
 
 	// Load from XDG config home
 	globalConfigPath := filepath.Join(xdg.ConfigHome, "silo", "config.json")
 	if globalCfg, err := Load(globalConfigPath); err == nil {
+		trackConfigSources(globalCfg, globalConfigPath, sources)
 		cfg = Merge(cfg, globalCfg)
 	}
 
 	// Find all config files from root to current directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		return cfg, nil
+		return cfg, sources
 	}
 
 	var configPaths []string
@@ -160,9 +195,46 @@ func LoadAll() (Config, error) {
 	// Load and merge configs from parent to child (child overrides parent)
 	for _, path := range configPaths {
 		if localCfg, err := Load(path); err == nil {
+			trackConfigSources(localCfg, path, sources)
 			cfg = Merge(cfg, localCfg)
 		}
 	}
 
-	return cfg, nil
+	return cfg, sources
+}
+
+// trackConfigSources records the source for each value in the config
+func trackConfigSources(cfg Config, source string, info *SourceInfo) {
+	for _, v := range cfg.Mounts {
+		info.Mounts[v] = source
+	}
+	for _, v := range cfg.EnvPassthrough {
+		info.EnvPassthrough[v] = source
+	}
+	for _, v := range cfg.EnvSet {
+		info.EnvSet[v] = source
+	}
+	for _, v := range cfg.SourceFiles {
+		info.SourceFiles[v] = source
+	}
+	for toolName, toolCfg := range cfg.Tools {
+		if info.ToolMounts[toolName] == nil {
+			info.ToolMounts[toolName] = make(map[string]string)
+		}
+		if info.ToolEnvPass[toolName] == nil {
+			info.ToolEnvPass[toolName] = make(map[string]string)
+		}
+		if info.ToolEnvSet[toolName] == nil {
+			info.ToolEnvSet[toolName] = make(map[string]string)
+		}
+		for _, v := range toolCfg.Mounts {
+			info.ToolMounts[toolName][v] = source
+		}
+		for _, v := range toolCfg.EnvPassthrough {
+			info.ToolEnvPass[toolName][v] = source
+		}
+		for _, v := range toolCfg.EnvSet {
+			info.ToolEnvSet[toolName][v] = source
+		}
+	}
 }

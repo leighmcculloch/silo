@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -360,17 +359,112 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 }
 
 func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
-	cfg, err := config.LoadAll()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
+	cfg, sources := config.LoadAllWithSources()
 
-	jsonBytes, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
+	// Output JSONC with source comments
+	fmt.Fprintln(stdout, "{")
 
-	fmt.Fprintln(stdout, string(jsonBytes))
+	// Mounts
+	fmt.Fprintln(stdout, "  \"mounts\": [")
+	for i, v := range cfg.Mounts {
+		comma := ","
+		if i == len(cfg.Mounts)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Mounts[v])
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// EnvPassthrough
+	fmt.Fprintln(stdout, "  \"env_passthrough\": [")
+	for i, v := range cfg.EnvPassthrough {
+		comma := ","
+		if i == len(cfg.EnvPassthrough)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.EnvPassthrough[v])
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// EnvSet
+	fmt.Fprintln(stdout, "  \"env_set\": [")
+	for i, v := range cfg.EnvSet {
+		comma := ","
+		if i == len(cfg.EnvSet)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.EnvSet[v])
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// SourceFiles
+	fmt.Fprintln(stdout, "  \"source_files\": [")
+	for i, v := range cfg.SourceFiles {
+		comma := ","
+		if i == len(cfg.SourceFiles)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.SourceFiles[v])
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// Tools
+	fmt.Fprintln(stdout, "  \"tools\": {")
+	toolNames := make([]string, 0, len(cfg.Tools))
+	for name := range cfg.Tools {
+		toolNames = append(toolNames, name)
+	}
+	slices.Sort(toolNames)
+
+	for ti, toolName := range toolNames {
+		toolCfg := cfg.Tools[toolName]
+		fmt.Fprintf(stdout, "    %q: {\n", toolName)
+
+		// Tool mounts
+		fmt.Fprintln(stdout, "      \"mounts\": [")
+		for i, v := range toolCfg.Mounts {
+			comma := ","
+			if i == len(toolCfg.Mounts)-1 {
+				comma = ""
+			}
+			source := sources.ToolMounts[toolName][v]
+			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Tool env passthrough
+		fmt.Fprintln(stdout, "      \"env_passthrough\": [")
+		for i, v := range toolCfg.EnvPassthrough {
+			comma := ","
+			if i == len(toolCfg.EnvPassthrough)-1 {
+				comma = ""
+			}
+			source := sources.ToolEnvPass[toolName][v]
+			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Tool env set
+		fmt.Fprintln(stdout, "      \"env_set\": [")
+		for i, v := range toolCfg.EnvSet {
+			comma := ","
+			if i == len(toolCfg.EnvSet)-1 {
+				comma = ""
+			}
+			source := sources.ToolEnvSet[toolName][v]
+			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+		}
+		fmt.Fprintln(stdout, "      ]")
+
+		toolComma := ","
+		if ti == len(toolNames)-1 {
+			toolComma = ""
+		}
+		fmt.Fprintf(stdout, "    }%s\n", toolComma)
+	}
+	fmt.Fprintln(stdout, "  }")
+
+	fmt.Fprintln(stdout, "}")
 	return nil
 }
 

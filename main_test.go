@@ -79,30 +79,35 @@ func TestConfigCommand(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	// Check that output is valid JSON with expected fields
+	// Check that output is valid JSONC with expected fields
 	if !strings.Contains(stdout, `"mounts"`) {
-		t.Error("expected mounts field in JSON output")
+		t.Error("expected mounts field in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"env_passthrough"`) {
-		t.Error("expected env_passthrough field in JSON output")
+		t.Error("expected env_passthrough field in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"tools"`) {
-		t.Error("expected tools field in JSON output")
+		t.Error("expected tools field in JSONC output")
 	}
 
-	// Check for default tools in JSON
+	// Check for default tools in JSONC
 	if !strings.Contains(stdout, `"claude"`) {
-		t.Error("expected claude tool in JSON output")
+		t.Error("expected claude tool in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"opencode"`) {
-		t.Error("expected opencode tool in JSON output")
+		t.Error("expected opencode tool in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"copilot"`) {
-		t.Error("expected copilot tool in JSON output")
+		t.Error("expected copilot tool in JSONC output")
+	}
+
+	// Check for source comments
+	if !strings.Contains(stdout, "// default") {
+		t.Error("expected source comments in JSONC output")
 	}
 }
 
