@@ -553,14 +553,9 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
   "env": [],
   // Shell commands to run inside the container before the tool
   "prehooks": [],
-  // Tool-specific configuration
-  "tools": {
-    "claude": {
-      "mounts_ro": [],
-      "mounts_rw": [],
-      "env": []
-    }
-  }
+  // Tool-specific configuration (merged with global config above)
+  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
+  "tools": {}
 }
 `
 
