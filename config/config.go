@@ -153,7 +153,7 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 	trackConfigSources(cfg, "default", sources)
 
 	// Load from XDG config home
-	globalConfigPath := filepath.Join(xdg.ConfigHome, "silo", "config.jsonc")
+	globalConfigPath := filepath.Join(xdg.ConfigHome, "silo", "silo.jsonc")
 	if globalCfg, err := Load(globalConfigPath); err == nil {
 		trackConfigSources(globalCfg, globalConfigPath, sources)
 		cfg = Merge(cfg, globalCfg)
@@ -168,7 +168,7 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 	var configPaths []string
 	dir := cwd
 	for {
-		configPath := filepath.Join(dir, ".silo.jsonc")
+		configPath := filepath.Join(dir, "silo.jsonc")
 		if _, err := os.Stat(configPath); err == nil {
 			configPaths = append([]string{configPath}, configPaths...)
 		}

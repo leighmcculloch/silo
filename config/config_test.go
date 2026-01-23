@@ -226,7 +226,7 @@ func TestLoadAll(t *testing.T) {
 
 	// Create global config
 	globalConfig := `{"mounts": ["/global"]}`
-	if err := os.WriteFile(filepath.Join(xdgConfigDir, "config.jsonc"), []byte(globalConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(xdgConfigDir, "silo.jsonc"), []byte(globalConfig), 0644); err != nil {
 		t.Fatalf("failed to write global config: %v", err)
 	}
 
@@ -238,7 +238,7 @@ func TestLoadAll(t *testing.T) {
 
 	// Create local config in project
 	localConfig := `{"mounts": ["/local"]}`
-	if err := os.WriteFile(filepath.Join(projectDir, ".silo.jsonc"), []byte(localConfig), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(projectDir, "silo.jsonc"), []byte(localConfig), 0644); err != nil {
 		t.Fatalf("failed to write local config: %v", err)
 	}
 

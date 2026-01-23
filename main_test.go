@@ -134,9 +134,9 @@ func TestInitCommand(t *testing.T) {
 	}
 
 	// Check that config file was created
-	configPath := filepath.Join(tmpDir, ".silo.jsonc")
+	configPath := filepath.Join(tmpDir, "silo.jsonc")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Error("expected .silo.jsonc to be created")
+		t.Error("expected silo.jsonc to be created")
 	}
 
 	// Check contents
@@ -159,7 +159,7 @@ func TestInitCommandAlreadyExists(t *testing.T) {
 	testcli.Chdir(t, tmpDir)
 
 	// Create existing config
-	configPath := filepath.Join(tmpDir, ".silo.jsonc")
+	configPath := filepath.Join(tmpDir, "silo.jsonc")
 	testcli.WriteFile(t, configPath, []byte("{}"))
 
 	exitCode, _, stderr := testcli.Main(t, []string{"init", "--local"}, nil, mainFunc)
@@ -213,7 +213,7 @@ func TestInitCommandGlobal(t *testing.T) {
 	}
 
 	// Check that config file was created in the right place
-	configPath := filepath.Join(configDir, "silo", "config.jsonc")
+	configPath := filepath.Join(configDir, "silo", "silo.jsonc")
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Errorf("expected global config at %s to be created", configPath)
 	}
