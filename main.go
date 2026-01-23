@@ -97,11 +97,20 @@ Configuration is loaded from (in order, merged):
 
 	initCmd := &cobra.Command{
 		Use:   "init",
-		Short: "Create a sample .silo.json configuration file",
+		Short: "Create a sample configuration file",
+		Long: `Create a sample silo configuration file.
+
+By default, an interactive prompt lets you choose between local and global config.
+Use --local or --global to skip the prompt.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInit(cmd, args, stderr)
+			globalFlag, _ := cmd.Flags().GetBool("global")
+			localFlag, _ := cmd.Flags().GetBool("local")
+			return runInit(cmd, args, stderr, globalFlag, localFlag)
 		},
 	}
+	initCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/config.json)")
+	initCmd.Flags().BoolP("local", "l", false, "Create local config (.silo.json)")
+	initCmd.MarkFlagsMutuallyExclusive("global", "local")
 
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(initCmd)
@@ -249,9 +258,6 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	worktreeRoots, _ := docker.GetGitWorktreeRoots(cwd)
 	mounts = append(mounts, worktreeRoots...)
 
-	// Add key files
-	mounts = append(mounts, cfg.KeyFiles...)
-
 	// Collect environment variables
 	var envVars []string
 
@@ -365,7 +371,6 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "  Mounts:          %v\n", cfg.Mounts)
 	fmt.Fprintf(stdout, "  Env Passthrough: %v\n", cfg.EnvPassthrough)
 	fmt.Fprintf(stdout, "  Env Set:         %v\n", cfg.EnvSet)
-	fmt.Fprintf(stdout, "  Key Files:       %v\n", cfg.KeyFiles)
 	fmt.Fprintf(stdout, "  Source Files:    %v\n", cfg.SourceFiles)
 	fmt.Fprintln(stdout)
 
@@ -380,8 +385,44 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	return nil
 }
 
-func runInit(_ *cobra.Command, _ []string, stderr io.Writer) error {
-	configPath := ".silo.json"
+func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFlag bool) error {
+	var configType string
+
+	// Determine config type from flags or interactive prompt
+	if globalFlag {
+		configType = "global"
+	} else if localFlag {
+		configType = "local"
+	} else {
+		// Interactive selection
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Create Configuration").
+					Description("Choose which configuration file to create").
+					Options(
+						huh.NewOption("Local (.silo.json in current directory)", "local"),
+						huh.NewOption("Global (~/.config/silo/config.json)", "global"),
+					).
+					Value(&configType),
+			),
+		)
+
+		if err := form.Run(); err != nil {
+			return fmt.Errorf("selection cancelled")
+		}
+	}
+
+	var configPath string
+	if configType == "global" {
+		configDir := filepath.Join(config.XDGConfigHome(), "silo")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		configPath = filepath.Join(configDir, "config.json")
+	} else {
+		configPath = ".silo.json"
+	}
 
 	if _, err := os.Stat(configPath); err == nil {
 		return fmt.Errorf("config file already exists: %s", configPath)
@@ -391,7 +432,6 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer) error {
   "mounts": [],
   "env_passthrough": [],
   "env_set": [],
-  "key_files": [],
   "source_files": [],
   "tools": {
     "claude": {

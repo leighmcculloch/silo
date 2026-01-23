@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"4d63.com/testcli"
+	"github.com/adrg/xdg"
 )
 
 // mainFunc wraps our run function to match testcli.MainFunc signature
@@ -121,7 +122,7 @@ func TestInitCommand(t *testing.T) {
 	tmpDir := testcli.MkdirTemp(t)
 	testcli.Chdir(t, tmpDir)
 
-	exitCode, _, stderr := testcli.Main(t, []string{"init"}, nil, mainFunc)
+	exitCode, _, stderr := testcli.Main(t, []string{"init", "--local"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr)
@@ -156,7 +157,7 @@ func TestInitCommandAlreadyExists(t *testing.T) {
 	configPath := filepath.Join(tmpDir, ".silo.json")
 	testcli.WriteFile(t, configPath, []byte("{}"))
 
-	exitCode, _, stderr := testcli.Main(t, []string{"init"}, nil, mainFunc)
+	exitCode, _, stderr := testcli.Main(t, []string{"init", "--local"}, nil, mainFunc)
 
 	if exitCode == 0 {
 		t.Error("expected failure when config already exists")
@@ -174,8 +175,42 @@ func TestInitHelp(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	if !strings.Contains(stdout, "Create a sample .silo.json configuration file") {
+	if !strings.Contains(stdout, "Create a sample") {
 		t.Error("expected init description in help output")
+	}
+
+	if !strings.Contains(stdout, "--global") {
+		t.Error("expected --global flag in help output")
+	}
+
+	if !strings.Contains(stdout, "--local") {
+		t.Error("expected --local flag in help output")
+	}
+}
+
+func TestInitCommandGlobal(t *testing.T) {
+	tmpDir := testcli.MkdirTemp(t)
+	configDir := filepath.Join(tmpDir, ".config")
+
+	// Set XDG_CONFIG_HOME to temp directory
+	oldXdg := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("XDG_CONFIG_HOME", configDir)
+	xdg.Reload()
+	defer func() {
+		os.Setenv("XDG_CONFIG_HOME", oldXdg)
+		xdg.Reload()
+	}()
+
+	exitCode, _, stderr := testcli.Main(t, []string{"init", "--global"}, nil, mainFunc)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d, stderr: %s", exitCode, stderr)
+	}
+
+	// Check that config file was created in the right place
+	configPath := filepath.Join(configDir, "silo", "config.json")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Errorf("expected global config at %s to be created", configPath)
 	}
 }
 

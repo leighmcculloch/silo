@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/adrg/xdg"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -35,7 +37,6 @@ func TestLoad(t *testing.T) {
 		"mounts": ["/test/mount"],
 		"env_passthrough": ["TEST_VAR"],
 		"env_set": ["FOO=bar"],
-		"key_files": ["/test/key"],
 		"source_files": ["/test/source"],
 		"tools": {
 			"test-tool": {
@@ -65,10 +66,6 @@ func TestLoad(t *testing.T) {
 
 	if len(cfg.EnvSet) != 1 || cfg.EnvSet[0] != "FOO=bar" {
 		t.Errorf("expected env set [FOO=bar], got %v", cfg.EnvSet)
-	}
-
-	if len(cfg.KeyFiles) != 1 || cfg.KeyFiles[0] != "/test/key" {
-		t.Errorf("expected key files [/test/key], got %v", cfg.KeyFiles)
 	}
 
 	if len(cfg.SourceFiles) != 1 || cfg.SourceFiles[0] != "/test/source" {
@@ -111,7 +108,6 @@ func TestMerge(t *testing.T) {
 		Mounts:         []string{"/base/mount"},
 		EnvPassthrough: []string{"BASE_VAR"},
 		EnvSet:         []string{"BASE=1"},
-		KeyFiles:       []string{"/base/key"},
 		SourceFiles:    []string{"/base/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
@@ -124,7 +120,6 @@ func TestMerge(t *testing.T) {
 		Mounts:         []string{"/overlay/mount"},
 		EnvPassthrough: []string{"OVERLAY_VAR"},
 		EnvSet:         []string{"OVERLAY=1"},
-		KeyFiles:       []string{"/overlay/key"},
 		SourceFiles:    []string{"/overlay/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
@@ -230,10 +225,12 @@ func TestLoadAll(t *testing.T) {
 	defer func() {
 		os.Chdir(oldWd)
 		os.Setenv("XDG_CONFIG_HOME", oldXdg)
+		xdg.Reload()
 	}()
 
 	os.Chdir(projectDir)
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+	xdg.Reload()
 
 	cfg, err := LoadAll()
 	if err != nil {

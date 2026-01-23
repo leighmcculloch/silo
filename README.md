@@ -118,9 +118,6 @@ Silo uses a hierarchical configuration system that merges settings from multiple
   "env_set": [
     "FOO=bar"
   ],
-  "key_files": [
-    "/path/to/keyfile"
-  ],
   "source_files": [
     "/path/to/file/to/source"
   ],
@@ -141,7 +138,6 @@ Silo uses a hierarchical configuration system that merges settings from multiple
 | `mounts` | Additional directories or files to mount into the container |
 | `env_passthrough` | Environment variable names to pass from host to container |
 | `env_set` | Environment variables to set explicitly (`KEY=VALUE` format) |
-| `key_files` | Files containing API keys to mount read-only |
 | `source_files` | Files to source before running (to load environment variables with `export KEY=value`) |
 | `tools` | Tool-specific configuration overrides |
 
@@ -154,9 +150,6 @@ Silo uses a hierarchical configuration system that merges settings from multiple
   "env_passthrough": [
     "GITHUB_TOKEN",
     "ANTHROPIC_API_KEY"
-  ],
-  "key_files": [
-    "~/.secrets/perplexity_key"
   ],
   "source_files": [
     "~/.env_api_keys"
@@ -194,7 +187,6 @@ By default, Silo mounts:
   - OpenCode: `~/.config/opencode/`, `~/.local/share/opencode/`
   - Copilot: `~/.config/.copilot/`
 - **Git worktree directories**: Automatically detected
-- **Configured key files**: Read-only
 
 ## Container Environment
 

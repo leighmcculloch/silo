@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/adrg/xdg"
 )
 
 // Config represents the silo configuration
@@ -16,9 +18,6 @@ type Config struct {
 
 	// EnvSet are environment variables to set explicitly (KEY=VALUE format)
 	EnvSet []string `json:"env_set,omitempty"`
-
-	// KeyFiles are files containing API keys to mount read-only
-	KeyFiles []string `json:"key_files,omitempty"`
 
 	// SourceFiles are files to source before running (to load environment variables)
 	SourceFiles []string `json:"source_files,omitempty"`
@@ -41,11 +40,7 @@ type ToolConfig struct {
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
-	home := os.Getenv("HOME")
-	xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	if xdgConfigHome == "" {
-		xdgConfigHome = filepath.Join(home, ".config")
-	}
+	home := xdg.Home
 
 	return Config{
 		Mounts: []string{},
@@ -53,7 +48,6 @@ func DefaultConfig() Config {
 			"XDG_CONFIG_HOME",
 		},
 		EnvSet:      []string{},
-		KeyFiles:    []string{},
 		SourceFiles: []string{},
 		Tools: map[string]ToolConfig{
 			"claude": {
@@ -64,13 +58,13 @@ func DefaultConfig() Config {
 			},
 			"opencode": {
 				Mounts: []string{
-					filepath.Join(xdgConfigHome, "opencode"),
-					filepath.Join(home, ".local", "share", "opencode"),
+					filepath.Join(xdg.ConfigHome, "opencode"),
+					filepath.Join(xdg.DataHome, "opencode"),
 				},
 			},
 			"copilot": {
 				Mounts: []string{
-					filepath.Join(xdgConfigHome, ".copilot"),
+					filepath.Join(xdg.ConfigHome, ".copilot"),
 				},
 				EnvPassthrough: []string{
 					"COPILOT_GITHUB_TOKEN",
@@ -78,6 +72,11 @@ func DefaultConfig() Config {
 			},
 		},
 	}
+}
+
+// XDGConfigHome returns the XDG config home directory
+func XDGConfigHome() string {
+	return xdg.ConfigHome
 }
 
 // Load loads configuration from the given path
@@ -103,7 +102,6 @@ func Merge(base, overlay Config) Config {
 	result.Mounts = append(result.Mounts, overlay.Mounts...)
 	result.EnvPassthrough = append(result.EnvPassthrough, overlay.EnvPassthrough...)
 	result.EnvSet = append(result.EnvSet, overlay.EnvSet...)
-	result.KeyFiles = append(result.KeyFiles, overlay.KeyFiles...)
 	result.SourceFiles = append(result.SourceFiles, overlay.SourceFiles...)
 
 	// Merge tools map
@@ -128,14 +126,8 @@ func Merge(base, overlay Config) Config {
 func LoadAll() (Config, error) {
 	cfg := DefaultConfig()
 
-	// Load from XDG_CONFIG_HOME
-	xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	if xdgConfigHome == "" {
-		home := os.Getenv("HOME")
-		xdgConfigHome = filepath.Join(home, ".config")
-	}
-
-	globalConfigPath := filepath.Join(xdgConfigHome, "silo", "config.json")
+	// Load from XDG config home
+	globalConfigPath := filepath.Join(xdg.ConfigHome, "silo", "config.json")
 	if globalCfg, err := Load(globalConfigPath); err == nil {
 		cfg = Merge(cfg, globalCfg)
 	}
