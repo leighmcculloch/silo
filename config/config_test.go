@@ -11,10 +11,6 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if len(cfg.Env) == 0 {
-		t.Error("expected default env to not be empty")
-	}
-
 	if _, ok := cfg.Tools["claude"]; !ok {
 		t.Error("expected claude tool config to exist")
 	}

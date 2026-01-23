@@ -444,55 +444,92 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	cfg, sources := config.LoadAllWithSources()
 
+	// Check if stdout is a TTY for color output
+	isTTY := false
+	if f, ok := stdout.(*os.File); ok {
+		stat, _ := f.Stat()
+		isTTY = (stat.Mode() & os.ModeCharDevice) != 0
+	}
+
+	// Color styles for syntax highlighting
+	keyStyle := lipgloss.NewStyle()
+	stringStyle := lipgloss.NewStyle()
+	commentStyle := lipgloss.NewStyle()
+	if isTTY {
+		keyStyle = keyStyle.Foreground(lipgloss.Color("6"))   // Cyan
+		stringStyle = stringStyle.Foreground(lipgloss.Color("2")) // Green
+		commentStyle = commentStyle.Foreground(lipgloss.Color("8")) // Gray
+	}
+
+	// Helper to replace home dir with ~ in paths
+	home := os.Getenv("HOME")
+	tildePath := func(path string) string {
+		if home != "" && strings.HasPrefix(path, home) {
+			return "~" + strings.TrimPrefix(path, home)
+		}
+		return path
+	}
+
+	// Helper functions for colored output
+	key := func(k string) string {
+		return keyStyle.Render(fmt.Sprintf("%q", k))
+	}
+	str := func(s string) string {
+		return stringStyle.Render(fmt.Sprintf("%q", s))
+	}
+	comment := func(c string) string {
+		return commentStyle.Render("// " + tildePath(c))
+	}
+
 	// Output JSONC with source comments
 	fmt.Fprintln(stdout, "{")
 
 	// MountsRO
-	fmt.Fprintln(stdout, "  \"mounts_ro\": [")
+	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_ro"))
 	for i, v := range cfg.MountsRO {
 		comma := ","
 		if i == len(cfg.MountsRO)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.MountsRO[v])
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.MountsRO[v]))
 	}
 	fmt.Fprintln(stdout, "  ],")
 
 	// MountsRW
-	fmt.Fprintln(stdout, "  \"mounts_rw\": [")
+	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_rw"))
 	for i, v := range cfg.MountsRW {
 		comma := ","
 		if i == len(cfg.MountsRW)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.MountsRW[v])
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.MountsRW[v]))
 	}
 	fmt.Fprintln(stdout, "  ],")
 
 	// Env
-	fmt.Fprintln(stdout, "  \"env\": [")
+	fmt.Fprintf(stdout, "  %s: [\n", key("env"))
 	for i, v := range cfg.Env {
 		comma := ","
 		if i == len(cfg.Env)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Env[v])
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.Env[v]))
 	}
 	fmt.Fprintln(stdout, "  ],")
 
 	// Prehooks
-	fmt.Fprintln(stdout, "  \"prehooks\": [")
+	fmt.Fprintf(stdout, "  %s: [\n", key("prehooks"))
 	for i, v := range cfg.Prehooks {
 		comma := ","
 		if i == len(cfg.Prehooks)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Prehooks[v])
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.Prehooks[v]))
 	}
 	fmt.Fprintln(stdout, "  ],")
 
 	// Tools
-	fmt.Fprintln(stdout, "  \"tools\": {")
+	fmt.Fprintf(stdout, "  %s: {\n", key("tools"))
 	toolNames := make([]string, 0, len(cfg.Tools))
 	for name := range cfg.Tools {
 		toolNames = append(toolNames, name)
@@ -501,41 +538,41 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 
 	for ti, toolName := range toolNames {
 		toolCfg := cfg.Tools[toolName]
-		fmt.Fprintf(stdout, "    %q: {\n", toolName)
+		fmt.Fprintf(stdout, "    %s: {\n", key(toolName))
 
 		// Tool mounts_ro
-		fmt.Fprintln(stdout, "      \"mounts_ro\": [")
+		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_ro"))
 		for i, v := range toolCfg.MountsRO {
 			comma := ","
 			if i == len(toolCfg.MountsRO)-1 {
 				comma = ""
 			}
 			source := sources.ToolMountsRO[toolName][v]
-			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
 		}
 		fmt.Fprintln(stdout, "      ],")
 
 		// Tool mounts_rw
-		fmt.Fprintln(stdout, "      \"mounts_rw\": [")
+		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_rw"))
 		for i, v := range toolCfg.MountsRW {
 			comma := ","
 			if i == len(toolCfg.MountsRW)-1 {
 				comma = ""
 			}
 			source := sources.ToolMountsRW[toolName][v]
-			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
 		}
 		fmt.Fprintln(stdout, "      ],")
 
 		// Tool env
-		fmt.Fprintln(stdout, "      \"env\": [")
+		fmt.Fprintf(stdout, "      %s: [\n", key("env"))
 		for i, v := range toolCfg.Env {
 			comma := ","
 			if i == len(toolCfg.Env)-1 {
 				comma = ""
 			}
 			source := sources.ToolEnv[toolName][v]
-			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
 		}
 		fmt.Fprintln(stdout, "      ]")
 

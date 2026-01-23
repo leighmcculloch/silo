@@ -54,9 +54,7 @@ func DefaultConfig() Config {
 	return Config{
 		MountsRO: []string{},
 		MountsRW: []string{},
-		Env: []string{
-			"XDG_CONFIG_HOME",
-		},
+		Env:      []string{},
 		Prehooks: []string{},
 		Tools: map[string]ToolConfig{
 			"claude": {
