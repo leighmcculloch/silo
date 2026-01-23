@@ -108,8 +108,8 @@ Use --local or --global to skip the prompt.`,
 			return runInit(cmd, args, stderr, globalFlag, localFlag)
 		},
 	}
-	initCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/config.json)")
-	initCmd.Flags().BoolP("local", "l", false, "Create local config (.silo.json)")
+	initCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/config.jsonc)")
+	initCmd.Flags().BoolP("local", "l", false, "Create local config (.silo.jsonc)")
 	initCmd.MarkFlagsMutuallyExclusive("global", "local")
 
 	rootCmd.AddCommand(configCmd)
@@ -461,8 +461,8 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 					Title("Create Configuration").
 					Description("Choose which configuration file to create").
 					Options(
-						huh.NewOption("Local (.silo.json in current directory)", "local"),
-						huh.NewOption("Global (~/.config/silo/config.json)", "global"),
+						huh.NewOption("Local (.silo.jsonc in current directory)", "local"),
+						huh.NewOption("Global (~/.config/silo/config.jsonc)", "global"),
 					).
 					Value(&configType),
 			),
@@ -479,9 +479,9 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
-		configPath = filepath.Join(configDir, "config.json")
+		configPath = filepath.Join(configDir, "config.jsonc")
 	} else {
-		configPath = ".silo.json"
+		configPath = ".silo.jsonc"
 	}
 
 	if _, err := os.Stat(configPath); err == nil {

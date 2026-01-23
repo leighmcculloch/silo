@@ -102,8 +102,8 @@ silo completion fish > ~/.config/fish/completions/silo.fish
 
 Silo uses a hierarchical configuration system that merges settings from multiple sources:
 
-1. **Global config**: `~/.config/silo/config.json` (or `$XDG_CONFIG_HOME/silo/config.json`)
-2. **Local configs**: `.silo.json` files from root to current directory (closer files override)
+1. **Global config**: `~/.config/silo/config.jsonc` (or `$XDG_CONFIG_HOME/silo/config.jsonc`)
+2. **Local configs**: `.silo.jsonc` files from root to current directory (closer files override)
 
 Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */` style comments.
 
@@ -146,7 +146,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 
 ### Example Configurations
 
-#### Global Configuration (`~/.config/silo/config.json`)
+#### Global Configuration (`~/.config/silo/config.jsonc`)
 
 ```json
 {
@@ -160,7 +160,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 }
 ```
 
-#### Project Configuration (`.silo.json`)
+#### Project Configuration (`.silo.jsonc`)
 
 ```json
 {
