@@ -15,9 +15,9 @@
     "GITHUB_TOKEN",
     "COPILOT_GITHUB_TOKEN"
   ],
-  // Shell commands to run before starting the container
+  // Shell commands to run inside the container before the tool
   // (e.g., to source files that set environment variables)
-  "prehook": [
+  "prehooks": [
     "source ~/.zenv_apikey_github_ro",
     "source ~/.zenv_apikey_github_copilot"
   ],

@@ -21,8 +21,8 @@ type Config struct {
 	// Values with '=' are set explicitly (KEY=VALUE format).
 	Env []string `json:"env,omitempty"`
 
-	// Prehook is a list of shell commands to run before starting the container.
-	Prehook []string `json:"prehook,omitempty"`
+	// Prehooks is a list of shell commands to run inside the container before the tool.
+	Prehooks []string `json:"prehooks,omitempty"`
 
 	// Tools defines available AI tools with their configurations
 	Tools map[string]ToolConfig `json:"tools,omitempty"`
@@ -50,7 +50,7 @@ func DefaultConfig() Config {
 		Env: []string{
 			"XDG_CONFIG_HOME",
 		},
-		Prehook: []string{},
+		Prehooks: []string{},
 		Tools: map[string]ToolConfig{
 			"claude": {
 				MountsRW: []string{
@@ -107,7 +107,7 @@ func Merge(base, overlay Config) Config {
 	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
 	result.MountsRW = append(result.MountsRW, overlay.MountsRW...)
 	result.Env = append(result.Env, overlay.Env...)
-	result.Prehook = append(result.Prehook, overlay.Prehook...)
+	result.Prehooks = append(result.Prehooks, overlay.Prehooks...)
 
 	// Merge tools map
 	if result.Tools == nil {
@@ -132,7 +132,7 @@ type SourceInfo struct {
 	MountsRO      map[string]string            // value -> source path
 	MountsRW      map[string]string            // value -> source path
 	Env           map[string]string            // value -> source path
-	Prehook       map[string]string            // value -> source path
+	Prehooks       map[string]string            // value -> source path
 	ToolMountsRO  map[string]map[string]string // tool -> value -> source
 	ToolMountsRW  map[string]map[string]string // tool -> value -> source
 	ToolEnv       map[string]map[string]string // tool -> value -> source
@@ -144,7 +144,7 @@ func NewSourceInfo() *SourceInfo {
 		MountsRO:     make(map[string]string),
 		MountsRW:     make(map[string]string),
 		Env:          make(map[string]string),
-		Prehook:      make(map[string]string),
+		Prehooks:      make(map[string]string),
 		ToolMountsRO: make(map[string]map[string]string),
 		ToolMountsRW: make(map[string]map[string]string),
 		ToolEnv:      make(map[string]map[string]string),
@@ -215,8 +215,8 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	for _, v := range cfg.Env {
 		info.Env[v] = source
 	}
-	for _, v := range cfg.Prehook {
-		info.Prehook[v] = source
+	for _, v := range cfg.Prehooks {
+		info.Prehooks[v] = source
 	}
 	for toolName, toolCfg := range cfg.Tools {
 		if info.ToolMountsRO[toolName] == nil {

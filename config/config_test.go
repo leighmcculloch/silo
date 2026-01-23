@@ -37,7 +37,7 @@ func TestLoad(t *testing.T) {
 		"mounts_ro": ["/test/mount/ro"],
 		"mounts_rw": ["/test/mount/rw"],
 		"env": ["TEST_VAR", "FOO=bar"],
-		"prehook": ["echo hello"],
+		"prehooks": ["echo hello"],
 		"tools": {
 			"test-tool": {
 				"mounts_ro": ["/tool/mount/ro"],
@@ -68,8 +68,8 @@ func TestLoad(t *testing.T) {
 		t.Errorf("expected env [TEST_VAR, FOO=bar], got %v", cfg.Env)
 	}
 
-	if len(cfg.Prehook) != 1 || cfg.Prehook[0] != "echo hello" {
-		t.Errorf("expected prehook [echo hello], got %v", cfg.Prehook)
+	if len(cfg.Prehooks) != 1 || cfg.Prehooks[0] != "echo hello" {
+		t.Errorf("expected prehooks [echo hello], got %v", cfg.Prehooks)
 	}
 
 	toolCfg, ok := cfg.Tools["test-tool"]
@@ -147,7 +147,7 @@ func TestMerge(t *testing.T) {
 		MountsRO: []string{"/base/mount/ro"},
 		MountsRW: []string{"/base/mount/rw"},
 		Env:      []string{"BASE_VAR", "BASE=1"},
-		Prehook:  []string{"echo base"},
+		Prehooks:  []string{"echo base"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				MountsRW: []string{"/tool1/base"},
@@ -159,7 +159,7 @@ func TestMerge(t *testing.T) {
 		MountsRO: []string{"/overlay/mount/ro"},
 		MountsRW: []string{"/overlay/mount/rw"},
 		Env:      []string{"OVERLAY_VAR", "OVERLAY=1"},
-		Prehook:  []string{"echo overlay"},
+		Prehooks:  []string{"echo overlay"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				MountsRW: []string{"/tool1/overlay"},
@@ -191,12 +191,12 @@ func TestMerge(t *testing.T) {
 		t.Errorf("expected 4 env, got %d", len(result.Env))
 	}
 
-	// Check prehook arrays are appended
-	if len(result.Prehook) != 2 {
-		t.Errorf("expected 2 prehook commands, got %d", len(result.Prehook))
+	// Check prehooks arrays are appended
+	if len(result.Prehooks) != 2 {
+		t.Errorf("expected 2 prehooks commands, got %d", len(result.Prehooks))
 	}
-	if result.Prehook[0] != "echo base" || result.Prehook[1] != "echo overlay" {
-		t.Errorf("unexpected prehook: %v", result.Prehook)
+	if result.Prehooks[0] != "echo base" || result.Prehooks[1] != "echo overlay" {
+		t.Errorf("unexpected prehooks: %v", result.Prehooks)
 	}
 
 	// Check tools are merged
@@ -217,34 +217,34 @@ func TestMerge(t *testing.T) {
 	}
 }
 
-func TestMergePrehookAppend(t *testing.T) {
-	// Test that prehook arrays are appended
+func TestMergePrehooksAppend(t *testing.T) {
+	// Test that prehooks arrays are appended
 	base := Config{
-		Prehook: []string{"echo base"},
+		Prehooks: []string{"echo base"},
 	}
 	overlay := Config{
-		Prehook: []string{"echo overlay"},
+		Prehooks: []string{"echo overlay"},
 	}
 
 	result := Merge(base, overlay)
-	if len(result.Prehook) != 2 {
-		t.Errorf("expected 2 prehook commands, got %d", len(result.Prehook))
+	if len(result.Prehooks) != 2 {
+		t.Errorf("expected 2 prehooks commands, got %d", len(result.Prehooks))
 	}
-	if result.Prehook[0] != "echo base" || result.Prehook[1] != "echo overlay" {
-		t.Errorf("expected [echo base, echo overlay], got %v", result.Prehook)
+	if result.Prehooks[0] != "echo base" || result.Prehooks[1] != "echo overlay" {
+		t.Errorf("expected [echo base, echo overlay], got %v", result.Prehooks)
 	}
 
 	// Test that empty overlay doesn't add anything
 	base2 := Config{
-		Prehook: []string{"echo base"},
+		Prehooks: []string{"echo base"},
 	}
 	overlay2 := Config{
-		Prehook: []string{},
+		Prehooks: []string{},
 	}
 
 	result2 := Merge(base2, overlay2)
-	if len(result2.Prehook) != 1 || result2.Prehook[0] != "echo base" {
-		t.Errorf("expected [echo base], got %v", result2.Prehook)
+	if len(result2.Prehooks) != 1 || result2.Prehooks[0] != "echo base" {
+		t.Errorf("expected [echo base], got %v", result2.Prehooks)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/kballard/go-shellquote"
 	"github.com/moby/term"
 )
 
@@ -112,7 +113,9 @@ type RunOptions struct {
 	MountsRO        []string
 	MountsRW        []string
 	Env             []string
-	Args            []string
+	Command         []string // Base command to run (e.g., ["claude", "--flag"])
+	Args            []string // Additional args appended to command
+	Prehooks        []string // Shell commands to run before the main command
 	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
@@ -149,12 +152,45 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 		})
 	}
 
+	// Build the entrypoint script if we have prehooks or a command
+	var entrypoint []string
+	var cmd []string
+
+	if len(opts.Command) > 0 {
+		// Build full command: Command + Args
+		fullCmd := append(opts.Command, opts.Args...)
+
+		if len(opts.Prehooks) > 0 {
+			// Create a bash script that runs prehooks then execs the command
+			var script strings.Builder
+			for _, hook := range opts.Prehooks {
+				script.WriteString(hook)
+				script.WriteString(" && ")
+			}
+			script.WriteString("exec ")
+			script.WriteString(shellquote.Join(fullCmd...))
+			entrypoint = []string{"/bin/bash", "-c", script.String()}
+			cmd = nil
+		} else {
+			// No prehooks, just run the command directly
+			entrypoint = []string{fullCmd[0]}
+			if len(fullCmd) > 1 {
+				cmd = fullCmd[1:]
+			}
+		}
+	} else {
+		// No command specified, use image's default entrypoint
+		// Pass args as Cmd (will be appended to entrypoint)
+		cmd = opts.Args
+	}
+
 	// Create container configuration
 	config := &container.Config{
 		Image:        opts.Image,
 		WorkingDir:   opts.WorkDir,
 		Env:          opts.Env,
-		Cmd:          opts.Args,
+		Entrypoint:   entrypoint,
+		Cmd:          cmd,
 		Tty:          opts.TTY,
 		OpenStdin:    true,
 		StdinOnce:    true,

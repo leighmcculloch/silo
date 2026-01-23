@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/rand"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -301,17 +300,6 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		)
 	}
 
-	// Run prehook commands if configured
-	for _, hook := range cfg.Prehook {
-		cli.LogTo(stderr, "Running prehook: %s", hook)
-		cmd := exec.Command("sh", "-c", hook)
-		cmd.Stdout = stderr
-		cmd.Stderr = stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("prehook failed: %w", err)
-		}
-	}
-
 	// Process env vars (passthrough if no '=', explicit if has '=')
 	for _, e := range cfg.Env {
 		if strings.Contains(e, "=") {
@@ -367,6 +355,13 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	cli.LogTo(stderr, "Container name: %s", containerName)
 	cli.LogTo(stderr, "Running %s...", tool)
 
+	// Define tool-specific commands (these match the Dockerfile entrypoints)
+	toolCommands := map[string][]string{
+		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
+		"opencode": {"opencode"},
+		"copilot":  {"copilot", "--allow-all"},
+	}
+
 	// Run the container
 	err = dockerClient.Run(ctx, docker.RunOptions{
 		Image:        tool,
@@ -375,7 +370,9 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		MountsRO:     mountsRO,
 		MountsRW:     mountsRW,
 		Env:          envVars,
+		Command:      toolCommands[tool],
 		Args:         toolArgs,
+		Prehooks:     cfg.Prehooks,
 		Stdin:        os.Stdin,
 		Stdout:       os.Stdout,
 		Stderr:       os.Stderr,
@@ -432,14 +429,14 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "  ],")
 
-	// Prehook
-	fmt.Fprintln(stdout, "  \"prehook\": [")
-	for i, v := range cfg.Prehook {
+	// Prehooks
+	fmt.Fprintln(stdout, "  \"prehooks\": [")
+	for i, v := range cfg.Prehooks {
 		comma := ","
-		if i == len(cfg.Prehook)-1 {
+		if i == len(cfg.Prehooks)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Prehook[v])
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Prehooks[v])
 	}
 	fmt.Fprintln(stdout, "  ],")
 
@@ -554,8 +551,8 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
-  // Shell commands to run before starting the container
-  "prehook": [],
+  // Shell commands to run inside the container before the tool
+  "prehooks": [],
   // Tool-specific configuration
   "tools": {
     "claude": {
