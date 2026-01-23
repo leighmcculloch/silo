@@ -72,8 +72,8 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestConfigCommand(t *testing.T) {
-	exitCode, stdout, _ := testcli.Main(t, []string{"config"}, nil, mainFunc)
+func TestConfigShowCommand(t *testing.T) {
+	exitCode, stdout, _ := testcli.Main(t, []string{"config", "show"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
@@ -122,8 +122,38 @@ func TestConfigHelp(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	if !strings.Contains(stdout, "Show the current merged configuration") {
+	if !strings.Contains(stdout, "Configuration management commands") {
 		t.Error("expected config description in help output")
+	}
+
+	if !strings.Contains(stdout, "show") {
+		t.Error("expected show subcommand in help output")
+	}
+
+	if !strings.Contains(stdout, "paths") {
+		t.Error("expected paths subcommand in help output")
+	}
+
+	if !strings.Contains(stdout, "edit") {
+		t.Error("expected edit subcommand in help output")
+	}
+}
+
+func TestConfigPathsCommand(t *testing.T) {
+	exitCode, stdout, _ := testcli.Main(t, []string{"config", "paths"}, nil, mainFunc)
+
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	// Should show global config path
+	if !strings.Contains(stdout, "silo.jsonc") {
+		t.Error("expected silo.jsonc in paths output")
+	}
+
+	// Should show status indicators
+	if !strings.Contains(stdout, "✓") && !strings.Contains(stdout, "✗") {
+		t.Error("expected status indicators in paths output")
 	}
 }
 

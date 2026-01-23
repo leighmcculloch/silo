@@ -151,6 +151,45 @@ func NewSourceInfo() *SourceInfo {
 	}
 }
 
+// ConfigPath represents a config file path with its status
+type ConfigPath struct {
+	Path   string
+	Exists bool
+}
+
+// GetConfigPaths returns all config paths that would be checked/loaded
+func GetConfigPaths() []ConfigPath {
+	var paths []ConfigPath
+
+	// Global config
+	globalConfigPath := filepath.Join(xdg.ConfigHome, "silo", "silo.jsonc")
+	_, err := os.Stat(globalConfigPath)
+	paths = append(paths, ConfigPath{Path: globalConfigPath, Exists: err == nil})
+
+	// Find all config files from root to current directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return paths
+	}
+
+	var localPaths []ConfigPath
+	dir := cwd
+	for {
+		configPath := filepath.Join(dir, "silo.jsonc")
+		_, err := os.Stat(configPath)
+		localPaths = append([]ConfigPath{{Path: configPath, Exists: err == nil}}, localPaths...)
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	paths = append(paths, localPaths...)
+	return paths
+}
+
 // LoadAll loads and merges all configuration files from XDG config home and current/parent directories
 func LoadAll() (Config, error) {
 	cfg, _ := LoadAllWithSources()

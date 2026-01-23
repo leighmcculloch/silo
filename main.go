@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -101,11 +102,36 @@ Configuration is loaded from (in order, merged):
 
 	configCmd := &cobra.Command{
 		Use:   "config",
+		Short: "Configuration management commands",
+	}
+
+	configShowCmd := &cobra.Command{
+		Use:   "show",
 		Short: "Show the current merged configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runConfig(cmd, args, stdout)
+			return runConfigShow(cmd, args, stdout)
 		},
 	}
+
+	configPathsCmd := &cobra.Command{
+		Use:   "paths",
+		Short: "Show all config file paths being merged",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigPaths(cmd, args, stdout)
+		},
+	}
+
+	configEditCmd := &cobra.Command{
+		Use:   "edit",
+		Short: "Edit a config file in your editor",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runConfigEdit(cmd, args, stdout, stderr)
+		},
+	}
+
+	configCmd.AddCommand(configShowCmd)
+	configCmd.AddCommand(configPathsCmd)
+	configCmd.AddCommand(configEditCmd)
 
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -390,7 +416,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	return nil
 }
 
-func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
+func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	cfg, sources := config.LoadAllWithSources()
 
 	// Output JSONC with source comments
@@ -497,6 +523,76 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	fmt.Fprintln(stdout, "  }")
 
 	fmt.Fprintln(stdout, "}")
+	return nil
+}
+
+func runConfigPaths(_ *cobra.Command, _ []string, stdout io.Writer) error {
+	paths := config.GetConfigPaths()
+
+	for _, p := range paths {
+		status := "✓"
+		if !p.Exists {
+			status = "✗"
+		}
+		fmt.Fprintf(stdout, "%s %s\n", status, p.Path)
+	}
+
+	return nil
+}
+
+func runConfigEdit(_ *cobra.Command, _ []string, _, stderr io.Writer) error {
+	paths := config.GetConfigPaths()
+
+	// Build options for the selector
+	var options []huh.Option[string]
+	for _, p := range paths {
+		label := p.Path
+		if !p.Exists {
+			label += " (new)"
+		}
+		options = append(options, huh.NewOption(label, p.Path))
+	}
+
+	var selectedPath string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Select Config to Edit").
+				Description("Configs are merged in order shown (later overrides earlier)").
+				Options(options...).
+				Value(&selectedPath),
+		),
+	)
+
+	if err := form.Run(); err != nil {
+		return fmt.Errorf("selection cancelled")
+	}
+
+	// Get editor from environment
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+
+	// Ensure parent directory exists for new files
+	dir := filepath.Dir(selectedPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Open editor
+	cmd := exec.Command(editor, selectedPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("editor failed: %w", err)
+	}
+
 	return nil
 }
 
