@@ -79,30 +79,30 @@ func TestConfigCommand(t *testing.T) {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	// Check for configuration sections
-	if !strings.Contains(stdout, "Silo Configuration") {
-		t.Error("expected configuration title in output")
+	// Check that output is valid JSON with expected fields
+	if !strings.Contains(stdout, `"mounts"`) {
+		t.Error("expected mounts field in JSON output")
 	}
 
-	if !strings.Contains(stdout, "Global Settings") {
-		t.Error("expected global settings section in output")
+	if !strings.Contains(stdout, `"env_passthrough"`) {
+		t.Error("expected env_passthrough field in JSON output")
 	}
 
-	if !strings.Contains(stdout, "Tools") {
-		t.Error("expected tools section in output")
+	if !strings.Contains(stdout, `"tools"`) {
+		t.Error("expected tools field in JSON output")
 	}
 
-	// Check for default tools
-	if !strings.Contains(stdout, "claude:") {
-		t.Error("expected claude tool in output")
+	// Check for default tools in JSON
+	if !strings.Contains(stdout, `"claude"`) {
+		t.Error("expected claude tool in JSON output")
 	}
 
-	if !strings.Contains(stdout, "opencode:") {
-		t.Error("expected opencode tool in output")
+	if !strings.Contains(stdout, `"opencode"`) {
+		t.Error("expected opencode tool in JSON output")
 	}
 
-	if !strings.Contains(stdout, "copilot:") {
-		t.Error("expected copilot tool in output")
+	if !strings.Contains(stdout, `"copilot"`) {
+		t.Error("expected copilot tool in JSON output")
 	}
 }
 

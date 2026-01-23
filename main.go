@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -364,24 +365,12 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	fmt.Fprintln(stdout, cli.Title("Silo Configuration"))
-	fmt.Fprintln(stdout)
-
-	fmt.Fprintln(stdout, cli.Subtitle("Global Settings"))
-	fmt.Fprintf(stdout, "  Mounts:          %v\n", cfg.Mounts)
-	fmt.Fprintf(stdout, "  Env Passthrough: %v\n", cfg.EnvPassthrough)
-	fmt.Fprintf(stdout, "  Env Set:         %v\n", cfg.EnvSet)
-	fmt.Fprintf(stdout, "  Source Files:    %v\n", cfg.SourceFiles)
-	fmt.Fprintln(stdout)
-
-	fmt.Fprintln(stdout, cli.Subtitle("Tools"))
-	for name, tool := range cfg.Tools {
-		fmt.Fprintf(stdout, "  %s:\n", name)
-		fmt.Fprintf(stdout, "    Mounts:          %v\n", tool.Mounts)
-		fmt.Fprintf(stdout, "    Env Passthrough: %v\n", tool.EnvPassthrough)
-		fmt.Fprintf(stdout, "    Env Set:         %v\n", tool.EnvSet)
+	jsonBytes, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
+	fmt.Fprintln(stdout, string(jsonBytes))
 	return nil
 }
 
