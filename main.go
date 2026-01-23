@@ -256,23 +256,30 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Collect mounts
 	cwd, _ := os.Getwd()
-	mounts := []string{cwd}
+	mountsRW := []string{cwd}
+	var mountsRO []string
 
 	// Add tool-specific mounts
 	if toolCfg, ok := cfg.Tools[tool]; ok {
-		for _, m := range toolCfg.Mounts {
-			mounts = append(mounts, expandPath(m))
+		for _, m := range toolCfg.MountsRO {
+			mountsRO = append(mountsRO, expandPath(m))
+		}
+		for _, m := range toolCfg.MountsRW {
+			mountsRW = append(mountsRW, expandPath(m))
 		}
 	}
 
 	// Add global config mounts
-	for _, m := range cfg.Mounts {
-		mounts = append(mounts, expandPath(m))
+	for _, m := range cfg.MountsRO {
+		mountsRO = append(mountsRO, expandPath(m))
+	}
+	for _, m := range cfg.MountsRW {
+		mountsRW = append(mountsRW, expandPath(m))
 	}
 
-	// Add git worktree roots
+	// Add git worktree roots (read-write for git operations)
 	worktreeRoots, _ := docker.GetGitWorktreeRoots(cwd)
-	mounts = append(mounts, worktreeRoots...)
+	mountsRW = append(mountsRW, worktreeRoots...)
 
 	// Collect environment variables
 	var envVars []string
@@ -333,9 +340,22 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	containerName := fmt.Sprintf("%s-%02d", baseName, rand.Intn(100))
 
 	// Log mounts
-	cli.LogTo(stderr, "Mounts:")
 	seen := make(map[string]bool)
-	for _, m := range mounts {
+	if len(mountsRO) > 0 {
+		cli.LogTo(stderr, "Mounts (read-only):")
+		for _, m := range mountsRO {
+			if _, err := os.Stat(m); err != nil {
+				continue
+			}
+			if seen[m] {
+				continue
+			}
+			seen[m] = true
+			cli.LogBulletTo(stderr, "%s", m)
+		}
+	}
+	cli.LogTo(stderr, "Mounts (read-write):")
+	for _, m := range mountsRW {
 		if _, err := os.Stat(m); err != nil {
 			continue
 		}
@@ -354,7 +374,8 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		Image:        tool,
 		Name:         containerName,
 		WorkDir:      cwd,
-		Mounts:       mounts,
+		MountsRO:     mountsRO,
+		MountsRW:     mountsRW,
 		Env:          envVars,
 		Args:         toolArgs,
 		Stdin:        os.Stdin,
@@ -380,14 +401,25 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	// Output JSONC with source comments
 	fmt.Fprintln(stdout, "{")
 
-	// Mounts
-	fmt.Fprintln(stdout, "  \"mounts\": [")
-	for i, v := range cfg.Mounts {
+	// MountsRO
+	fmt.Fprintln(stdout, "  \"mounts_ro\": [")
+	for i, v := range cfg.MountsRO {
 		comma := ","
-		if i == len(cfg.Mounts)-1 {
+		if i == len(cfg.MountsRO)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Mounts[v])
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.MountsRO[v])
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// MountsRW
+	fmt.Fprintln(stdout, "  \"mounts_rw\": [")
+	for i, v := range cfg.MountsRW {
+		comma := ","
+		if i == len(cfg.MountsRW)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.MountsRW[v])
 	}
 	fmt.Fprintln(stdout, "  ],")
 
@@ -425,14 +457,26 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		toolCfg := cfg.Tools[toolName]
 		fmt.Fprintf(stdout, "    %q: {\n", toolName)
 
-		// Tool mounts
-		fmt.Fprintln(stdout, "      \"mounts\": [")
-		for i, v := range toolCfg.Mounts {
+		// Tool mounts_ro
+		fmt.Fprintln(stdout, "      \"mounts_ro\": [")
+		for i, v := range toolCfg.MountsRO {
 			comma := ","
-			if i == len(toolCfg.Mounts)-1 {
+			if i == len(toolCfg.MountsRO)-1 {
 				comma = ""
 			}
-			source := sources.ToolMounts[toolName][v]
+			source := sources.ToolMountsRO[toolName][v]
+			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Tool mounts_rw
+		fmt.Fprintln(stdout, "      \"mounts_rw\": [")
+		for i, v := range toolCfg.MountsRW {
+			comma := ","
+			if i == len(toolCfg.MountsRW)-1 {
+				comma = ""
+			}
+			source := sources.ToolMountsRW[toolName][v]
 			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
 		}
 		fmt.Fprintln(stdout, "      ],")
@@ -505,8 +549,10 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 	}
 
 	sampleConfig := `{
-  // Additional directories or files to mount into the container
-  "mounts": [],
+  // Read-only directories or files to mount into the container
+  "mounts_ro": [],
+  // Read-write directories or files to mount into the container
+  "mounts_rw": [],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
@@ -515,7 +561,8 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
   // Tool-specific configuration
   "tools": {
     "claude": {
-      "mounts": [],
+      "mounts_ro": [],
+      "mounts_rw": [],
       "env": []
     }
   }

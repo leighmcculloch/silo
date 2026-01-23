@@ -11,8 +11,11 @@ import (
 
 // Config represents the silo configuration
 type Config struct {
-	// Mounts are additional directories or files to mount into the container
-	Mounts []string `json:"mounts,omitempty"`
+	// MountsRO are read-only directories or files to mount into the container
+	MountsRO []string `json:"mounts_ro,omitempty"`
+
+	// MountsRW are read-write directories or files to mount into the container
+	MountsRW []string `json:"mounts_rw,omitempty"`
 
 	// Env are environment variables. Values without '=' are passed through from host.
 	// Values with '=' are set explicitly (KEY=VALUE format).
@@ -27,8 +30,11 @@ type Config struct {
 
 // ToolConfig represents configuration for a specific AI tool
 type ToolConfig struct {
-	// Mounts specific to this tool
-	Mounts []string `json:"mounts,omitempty"`
+	// MountsRO are read-only mounts specific to this tool
+	MountsRO []string `json:"mounts_ro,omitempty"`
+
+	// MountsRW are read-write mounts specific to this tool
+	MountsRW []string `json:"mounts_rw,omitempty"`
 
 	// Env specific to this tool (same format as Config.Env)
 	Env []string `json:"env,omitempty"`
@@ -39,26 +45,27 @@ func DefaultConfig() Config {
 	home := xdg.Home
 
 	return Config{
-		Mounts: []string{},
+		MountsRO: []string{},
+		MountsRW: []string{},
 		Env: []string{
 			"XDG_CONFIG_HOME",
 		},
 		SourceFiles: []string{},
 		Tools: map[string]ToolConfig{
 			"claude": {
-				Mounts: []string{
+				MountsRW: []string{
 					filepath.Join(home, ".claude.json"),
 					filepath.Join(home, ".claude"),
 				},
 			},
 			"opencode": {
-				Mounts: []string{
+				MountsRW: []string{
 					filepath.Join(xdg.ConfigHome, "opencode"),
 					filepath.Join(xdg.DataHome, "opencode"),
 				},
 			},
 			"copilot": {
-				Mounts: []string{
+				MountsRW: []string{
 					filepath.Join(xdg.ConfigHome, ".copilot"),
 				},
 				Env: []string{
@@ -97,7 +104,8 @@ func Merge(base, overlay Config) Config {
 	result := base
 
 	// Append arrays
-	result.Mounts = append(result.Mounts, overlay.Mounts...)
+	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
+	result.MountsRW = append(result.MountsRW, overlay.MountsRW...)
 	result.Env = append(result.Env, overlay.Env...)
 	result.SourceFiles = append(result.SourceFiles, overlay.SourceFiles...)
 
@@ -107,7 +115,8 @@ func Merge(base, overlay Config) Config {
 	}
 	for name, tool := range overlay.Tools {
 		if existing, ok := result.Tools[name]; ok {
-			existing.Mounts = append(existing.Mounts, tool.Mounts...)
+			existing.MountsRO = append(existing.MountsRO, tool.MountsRO...)
+			existing.MountsRW = append(existing.MountsRW, tool.MountsRW...)
 			existing.Env = append(existing.Env, tool.Env...)
 			result.Tools[name] = existing
 		} else {
@@ -120,21 +129,25 @@ func Merge(base, overlay Config) Config {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
-	Mounts      map[string]string            // value -> source path
-	Env         map[string]string            // value -> source path
-	SourceFiles map[string]string            // value -> source path
-	ToolMounts  map[string]map[string]string // tool -> value -> source
-	ToolEnv     map[string]map[string]string // tool -> value -> source
+	MountsRO      map[string]string            // value -> source path
+	MountsRW      map[string]string            // value -> source path
+	Env           map[string]string            // value -> source path
+	SourceFiles   map[string]string            // value -> source path
+	ToolMountsRO  map[string]map[string]string // tool -> value -> source
+	ToolMountsRW  map[string]map[string]string // tool -> value -> source
+	ToolEnv       map[string]map[string]string // tool -> value -> source
 }
 
 // NewSourceInfo creates a new empty SourceInfo
 func NewSourceInfo() *SourceInfo {
 	return &SourceInfo{
-		Mounts:      make(map[string]string),
-		Env:         make(map[string]string),
-		SourceFiles: make(map[string]string),
-		ToolMounts:  make(map[string]map[string]string),
-		ToolEnv:     make(map[string]map[string]string),
+		MountsRO:     make(map[string]string),
+		MountsRW:     make(map[string]string),
+		Env:          make(map[string]string),
+		SourceFiles:  make(map[string]string),
+		ToolMountsRO: make(map[string]map[string]string),
+		ToolMountsRW: make(map[string]map[string]string),
+		ToolEnv:      make(map[string]map[string]string),
 	}
 }
 
@@ -193,8 +206,11 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 
 // trackConfigSources records the source for each value in the config
 func trackConfigSources(cfg Config, source string, info *SourceInfo) {
-	for _, v := range cfg.Mounts {
-		info.Mounts[v] = source
+	for _, v := range cfg.MountsRO {
+		info.MountsRO[v] = source
+	}
+	for _, v := range cfg.MountsRW {
+		info.MountsRW[v] = source
 	}
 	for _, v := range cfg.Env {
 		info.Env[v] = source
@@ -203,14 +219,20 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		info.SourceFiles[v] = source
 	}
 	for toolName, toolCfg := range cfg.Tools {
-		if info.ToolMounts[toolName] == nil {
-			info.ToolMounts[toolName] = make(map[string]string)
+		if info.ToolMountsRO[toolName] == nil {
+			info.ToolMountsRO[toolName] = make(map[string]string)
+		}
+		if info.ToolMountsRW[toolName] == nil {
+			info.ToolMountsRW[toolName] = make(map[string]string)
 		}
 		if info.ToolEnv[toolName] == nil {
 			info.ToolEnv[toolName] = make(map[string]string)
 		}
-		for _, v := range toolCfg.Mounts {
-			info.ToolMounts[toolName][v] = source
+		for _, v := range toolCfg.MountsRO {
+			info.ToolMountsRO[toolName][v] = source
+		}
+		for _, v := range toolCfg.MountsRW {
+			info.ToolMountsRW[toolName][v] = source
 		}
 		for _, v := range toolCfg.Env {
 			info.ToolEnv[toolName][v] = source

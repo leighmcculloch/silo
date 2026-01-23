@@ -111,9 +111,13 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 
 ```jsonc
 {
-  // Additional directories or files to mount into the container
-  "mounts": [
-    "/path/to/mount"
+  // Read-only directories or files to mount into the container
+  "mounts_ro": [
+    "/path/to/readonly/mount"
+  ],
+  // Read-write directories or files to mount into the container
+  "mounts_rw": [
+    "/path/to/readwrite/mount"
   ],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
@@ -128,7 +132,8 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
   // Tool-specific configuration
   "tools": {
     "claude": {
-      "mounts": [],
+      "mounts_ro": [],
+      "mounts_rw": [],
       "env": []
     }
   }
@@ -139,7 +144,8 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 
 | Option | Description |
 |--------|-------------|
-| `mounts` | Additional directories or files to mount into the container |
+| `mounts_ro` | Read-only directories or files to mount into the container |
+| `mounts_rw` | Read-write directories or files to mount into the container |
 | `env` | Environment variables: names without `=` pass through from host, with `=` set explicitly |
 | `source_files` | Files to source before running (to load environment variables with `export KEY=value`) |
 | `tools` | Tool-specific configuration overrides |
@@ -164,7 +170,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 
 ```json
 {
-  "mounts": [
+  "mounts_rw": [
     "/path/to/shared/libraries"
   ],
   "env": [

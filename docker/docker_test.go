@@ -69,7 +69,8 @@ func TestRunOptions(t *testing.T) {
 		Image:        "test-image",
 		Name:         "test-container",
 		WorkDir:      "/app",
-		Mounts:       []string{"/host:/container"},
+		MountsRO:     []string{"/host/ro:/container/ro"},
+		MountsRW:     []string{"/host/rw:/container/rw"},
 		Env:          []string{"KEY=value"},
 		Args:         []string{"arg1", "arg2"},
 		TTY:          true,
@@ -88,8 +89,11 @@ func TestRunOptions(t *testing.T) {
 	if opts.WorkDir != "/app" {
 		t.Error("unexpected workdir")
 	}
-	if len(opts.Mounts) != 1 {
-		t.Error("unexpected mounts")
+	if len(opts.MountsRO) != 1 {
+		t.Error("unexpected mounts_ro")
+	}
+	if len(opts.MountsRW) != 1 {
+		t.Error("unexpected mounts_rw")
 	}
 	if len(opts.Env) != 1 {
 		t.Error("unexpected env")

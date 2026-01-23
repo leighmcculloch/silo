@@ -34,12 +34,14 @@ func TestLoad(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "config.json")
 
 	configContent := `{
-		"mounts": ["/test/mount"],
+		"mounts_ro": ["/test/mount/ro"],
+		"mounts_rw": ["/test/mount/rw"],
 		"env": ["TEST_VAR", "FOO=bar"],
 		"source_files": ["/test/source"],
 		"tools": {
 			"test-tool": {
-				"mounts": ["/tool/mount"],
+				"mounts_ro": ["/tool/mount/ro"],
+				"mounts_rw": ["/tool/mount/rw"],
 				"env": ["TOOL_VAR", "TOOL_FOO=bar"]
 			}
 		}
@@ -54,8 +56,12 @@ func TestLoad(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if len(cfg.Mounts) != 1 || cfg.Mounts[0] != "/test/mount" {
-		t.Errorf("expected mounts [/test/mount], got %v", cfg.Mounts)
+	if len(cfg.MountsRO) != 1 || cfg.MountsRO[0] != "/test/mount/ro" {
+		t.Errorf("expected mounts_ro [/test/mount/ro], got %v", cfg.MountsRO)
+	}
+
+	if len(cfg.MountsRW) != 1 || cfg.MountsRW[0] != "/test/mount/rw" {
+		t.Errorf("expected mounts_rw [/test/mount/rw], got %v", cfg.MountsRW)
 	}
 
 	if len(cfg.Env) != 2 || cfg.Env[0] != "TEST_VAR" || cfg.Env[1] != "FOO=bar" {
@@ -71,8 +77,12 @@ func TestLoad(t *testing.T) {
 		t.Fatal("expected test-tool config to exist")
 	}
 
-	if len(toolCfg.Mounts) != 1 || toolCfg.Mounts[0] != "/tool/mount" {
-		t.Errorf("expected tool mounts [/tool/mount], got %v", toolCfg.Mounts)
+	if len(toolCfg.MountsRO) != 1 || toolCfg.MountsRO[0] != "/tool/mount/ro" {
+		t.Errorf("expected tool mounts_ro [/tool/mount/ro], got %v", toolCfg.MountsRO)
+	}
+
+	if len(toolCfg.MountsRW) != 1 || toolCfg.MountsRW[0] != "/tool/mount/rw" {
+		t.Errorf("expected tool mounts_rw [/tool/mount/rw], got %v", toolCfg.MountsRW)
 	}
 
 	if len(toolCfg.Env) != 2 || toolCfg.Env[0] != "TOOL_VAR" || toolCfg.Env[1] != "TOOL_FOO=bar" {
@@ -108,7 +118,7 @@ func TestLoadJSONC(t *testing.T) {
 	// JSONC with comments
 	configContent := `{
 		// This is a comment
-		"mounts": ["/test/mount"],
+		"mounts_rw": ["/test/mount"],
 		/* Multi-line
 		   comment */
 		"env": ["TEST_VAR"]
@@ -123,8 +133,8 @@ func TestLoadJSONC(t *testing.T) {
 		t.Fatalf("failed to load JSONC config: %v", err)
 	}
 
-	if len(cfg.Mounts) != 1 || cfg.Mounts[0] != "/test/mount" {
-		t.Errorf("expected mounts [/test/mount], got %v", cfg.Mounts)
+	if len(cfg.MountsRW) != 1 || cfg.MountsRW[0] != "/test/mount" {
+		t.Errorf("expected mounts_rw [/test/mount], got %v", cfg.MountsRW)
 	}
 
 	if len(cfg.Env) != 1 || cfg.Env[0] != "TEST_VAR" {
@@ -134,26 +144,28 @@ func TestLoadJSONC(t *testing.T) {
 
 func TestMerge(t *testing.T) {
 	base := Config{
-		Mounts:      []string{"/base/mount"},
+		MountsRO:    []string{"/base/mount/ro"},
+		MountsRW:    []string{"/base/mount/rw"},
 		Env:         []string{"BASE_VAR", "BASE=1"},
 		SourceFiles: []string{"/base/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
-				Mounts: []string{"/tool1/base"},
+				MountsRW: []string{"/tool1/base"},
 			},
 		},
 	}
 
 	overlay := Config{
-		Mounts:      []string{"/overlay/mount"},
+		MountsRO:    []string{"/overlay/mount/ro"},
+		MountsRW:    []string{"/overlay/mount/rw"},
 		Env:         []string{"OVERLAY_VAR", "OVERLAY=1"},
 		SourceFiles: []string{"/overlay/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
-				Mounts: []string{"/tool1/overlay"},
+				MountsRW: []string{"/tool1/overlay"},
 			},
 			"tool2": {
-				Mounts: []string{"/tool2"},
+				MountsRW: []string{"/tool2"},
 			},
 		},
 	}
@@ -161,11 +173,18 @@ func TestMerge(t *testing.T) {
 	result := Merge(base, overlay)
 
 	// Check arrays are appended
-	if len(result.Mounts) != 2 {
-		t.Errorf("expected 2 mounts, got %d", len(result.Mounts))
+	if len(result.MountsRO) != 2 {
+		t.Errorf("expected 2 mounts_ro, got %d", len(result.MountsRO))
 	}
-	if result.Mounts[0] != "/base/mount" || result.Mounts[1] != "/overlay/mount" {
-		t.Errorf("unexpected mounts: %v", result.Mounts)
+	if result.MountsRO[0] != "/base/mount/ro" || result.MountsRO[1] != "/overlay/mount/ro" {
+		t.Errorf("unexpected mounts_ro: %v", result.MountsRO)
+	}
+
+	if len(result.MountsRW) != 2 {
+		t.Errorf("expected 2 mounts_rw, got %d", len(result.MountsRW))
+	}
+	if result.MountsRW[0] != "/base/mount/rw" || result.MountsRW[1] != "/overlay/mount/rw" {
+		t.Errorf("unexpected mounts_rw: %v", result.MountsRW)
 	}
 
 	if len(result.Env) != 4 {
@@ -177,29 +196,29 @@ func TestMerge(t *testing.T) {
 	if !ok {
 		t.Fatal("expected tool1 to exist")
 	}
-	if len(tool1.Mounts) != 2 {
-		t.Errorf("expected tool1 to have 2 mounts, got %d", len(tool1.Mounts))
+	if len(tool1.MountsRW) != 2 {
+		t.Errorf("expected tool1 to have 2 mounts_rw, got %d", len(tool1.MountsRW))
 	}
 
 	tool2, ok := result.Tools["tool2"]
 	if !ok {
 		t.Fatal("expected tool2 to exist")
 	}
-	if len(tool2.Mounts) != 1 || tool2.Mounts[0] != "/tool2" {
-		t.Errorf("unexpected tool2 mounts: %v", tool2.Mounts)
+	if len(tool2.MountsRW) != 1 || tool2.MountsRW[0] != "/tool2" {
+		t.Errorf("unexpected tool2 mounts_rw: %v", tool2.MountsRW)
 	}
 }
 
 func TestMergeWithNilTools(t *testing.T) {
 	base := Config{
-		Mounts: []string{"/base"},
-		Tools:  nil,
+		MountsRW: []string{"/base"},
+		Tools:    nil,
 	}
 
 	overlay := Config{
-		Mounts: []string{"/overlay"},
+		MountsRW: []string{"/overlay"},
 		Tools: map[string]ToolConfig{
-			"tool1": {Mounts: []string{"/tool1"}},
+			"tool1": {MountsRW: []string{"/tool1"}},
 		},
 	}
 
@@ -225,7 +244,7 @@ func TestLoadAll(t *testing.T) {
 	}
 
 	// Create global config
-	globalConfig := `{"mounts": ["/global"]}`
+	globalConfig := `{"mounts_rw": ["/global"]}`
 	if err := os.WriteFile(filepath.Join(xdgConfigDir, "silo.jsonc"), []byte(globalConfig), 0644); err != nil {
 		t.Fatalf("failed to write global config: %v", err)
 	}
@@ -237,7 +256,7 @@ func TestLoadAll(t *testing.T) {
 	}
 
 	// Create local config in project
-	localConfig := `{"mounts": ["/local"]}`
+	localConfig := `{"mounts_rw": ["/local"]}`
 	if err := os.WriteFile(filepath.Join(projectDir, "silo.jsonc"), []byte(localConfig), 0644); err != nil {
 		t.Fatalf("failed to write local config: %v", err)
 	}
@@ -263,7 +282,7 @@ func TestLoadAll(t *testing.T) {
 	// Check that both global and local mounts are present
 	hasGlobal := false
 	hasLocal := false
-	for _, m := range cfg.Mounts {
+	for _, m := range cfg.MountsRW {
 		if m == "/global" {
 			hasGlobal = true
 		}

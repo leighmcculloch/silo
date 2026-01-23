@@ -80,8 +80,12 @@ func TestConfigCommand(t *testing.T) {
 	}
 
 	// Check that output is valid JSONC with expected fields
-	if !strings.Contains(stdout, `"mounts"`) {
-		t.Error("expected mounts field in JSONC output")
+	if !strings.Contains(stdout, `"mounts_ro"`) {
+		t.Error("expected mounts_ro field in JSONC output")
+	}
+
+	if !strings.Contains(stdout, `"mounts_rw"`) {
+		t.Error("expected mounts_rw field in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"env"`) {
@@ -145,8 +149,12 @@ func TestInitCommand(t *testing.T) {
 		t.Fatalf("failed to read config file: %v", err)
 	}
 
-	if !strings.Contains(string(content), "mounts") {
-		t.Error("expected mounts field in config")
+	if !strings.Contains(string(content), "mounts_ro") {
+		t.Error("expected mounts_ro field in config")
+	}
+
+	if !strings.Contains(string(content), "mounts_rw") {
+		t.Error("expected mounts_rw field in config")
 	}
 
 	if !strings.Contains(string(content), `"env"`) {

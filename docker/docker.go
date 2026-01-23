@@ -109,7 +109,8 @@ type RunOptions struct {
 	Image           string
 	Name            string
 	WorkDir         string
-	Mounts          []string
+	MountsRO        []string
+	MountsRW        []string
 	Env             []string
 	Args            []string
 	Stdin           io.Reader
@@ -124,7 +125,19 @@ type RunOptions struct {
 func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 	// Convert mounts
 	var mounts []mount.Mount
-	for _, m := range opts.Mounts {
+	for _, m := range opts.MountsRO {
+		// Check if path exists before mounting
+		if _, err := os.Stat(m); err != nil {
+			continue // Skip non-existent paths
+		}
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   m,
+			Target:   m,
+			ReadOnly: true,
+		})
+	}
+	for _, m := range opts.MountsRW {
 		// Check if path exists before mounting
 		if _, err := os.Stat(m); err != nil {
 			continue // Skip non-existent paths
