@@ -11,8 +11,8 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
-	if len(cfg.EnvPassthrough) == 0 {
-		t.Error("expected default env passthrough to not be empty")
+	if len(cfg.Env) == 0 {
+		t.Error("expected default env to not be empty")
 	}
 
 	if _, ok := cfg.Tools["claude"]; !ok {
@@ -35,14 +35,12 @@ func TestLoad(t *testing.T) {
 
 	configContent := `{
 		"mounts": ["/test/mount"],
-		"env_passthrough": ["TEST_VAR"],
-		"env_set": ["FOO=bar"],
+		"env": ["TEST_VAR", "FOO=bar"],
 		"source_files": ["/test/source"],
 		"tools": {
 			"test-tool": {
 				"mounts": ["/tool/mount"],
-				"env_passthrough": ["TOOL_VAR"],
-				"env_set": ["TOOL_FOO=bar"]
+				"env": ["TOOL_VAR", "TOOL_FOO=bar"]
 			}
 		}
 	}`
@@ -60,12 +58,8 @@ func TestLoad(t *testing.T) {
 		t.Errorf("expected mounts [/test/mount], got %v", cfg.Mounts)
 	}
 
-	if len(cfg.EnvPassthrough) != 1 || cfg.EnvPassthrough[0] != "TEST_VAR" {
-		t.Errorf("expected env passthrough [TEST_VAR], got %v", cfg.EnvPassthrough)
-	}
-
-	if len(cfg.EnvSet) != 1 || cfg.EnvSet[0] != "FOO=bar" {
-		t.Errorf("expected env set [FOO=bar], got %v", cfg.EnvSet)
+	if len(cfg.Env) != 2 || cfg.Env[0] != "TEST_VAR" || cfg.Env[1] != "FOO=bar" {
+		t.Errorf("expected env [TEST_VAR, FOO=bar], got %v", cfg.Env)
 	}
 
 	if len(cfg.SourceFiles) != 1 || cfg.SourceFiles[0] != "/test/source" {
@@ -79,6 +73,10 @@ func TestLoad(t *testing.T) {
 
 	if len(toolCfg.Mounts) != 1 || toolCfg.Mounts[0] != "/tool/mount" {
 		t.Errorf("expected tool mounts [/tool/mount], got %v", toolCfg.Mounts)
+	}
+
+	if len(toolCfg.Env) != 2 || toolCfg.Env[0] != "TOOL_VAR" || toolCfg.Env[1] != "TOOL_FOO=bar" {
+		t.Errorf("expected tool env [TOOL_VAR, TOOL_FOO=bar], got %v", toolCfg.Env)
 	}
 }
 
@@ -113,7 +111,7 @@ func TestLoadJSONC(t *testing.T) {
 		"mounts": ["/test/mount"],
 		/* Multi-line
 		   comment */
-		"env_passthrough": ["TEST_VAR"]
+		"env": ["TEST_VAR"]
 	}`
 
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
@@ -129,17 +127,16 @@ func TestLoadJSONC(t *testing.T) {
 		t.Errorf("expected mounts [/test/mount], got %v", cfg.Mounts)
 	}
 
-	if len(cfg.EnvPassthrough) != 1 || cfg.EnvPassthrough[0] != "TEST_VAR" {
-		t.Errorf("expected env passthrough [TEST_VAR], got %v", cfg.EnvPassthrough)
+	if len(cfg.Env) != 1 || cfg.Env[0] != "TEST_VAR" {
+		t.Errorf("expected env [TEST_VAR], got %v", cfg.Env)
 	}
 }
 
 func TestMerge(t *testing.T) {
 	base := Config{
-		Mounts:         []string{"/base/mount"},
-		EnvPassthrough: []string{"BASE_VAR"},
-		EnvSet:         []string{"BASE=1"},
-		SourceFiles:    []string{"/base/source"},
+		Mounts:      []string{"/base/mount"},
+		Env:         []string{"BASE_VAR", "BASE=1"},
+		SourceFiles: []string{"/base/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				Mounts: []string{"/tool1/base"},
@@ -148,10 +145,9 @@ func TestMerge(t *testing.T) {
 	}
 
 	overlay := Config{
-		Mounts:         []string{"/overlay/mount"},
-		EnvPassthrough: []string{"OVERLAY_VAR"},
-		EnvSet:         []string{"OVERLAY=1"},
-		SourceFiles:    []string{"/overlay/source"},
+		Mounts:      []string{"/overlay/mount"},
+		Env:         []string{"OVERLAY_VAR", "OVERLAY=1"},
+		SourceFiles: []string{"/overlay/source"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				Mounts: []string{"/tool1/overlay"},
@@ -172,12 +168,8 @@ func TestMerge(t *testing.T) {
 		t.Errorf("unexpected mounts: %v", result.Mounts)
 	}
 
-	if len(result.EnvPassthrough) != 2 {
-		t.Errorf("expected 2 env passthrough, got %d", len(result.EnvPassthrough))
-	}
-
-	if len(result.EnvSet) != 2 {
-		t.Errorf("expected 2 env set, got %d", len(result.EnvSet))
+	if len(result.Env) != 4 {
+		t.Errorf("expected 4 env, got %d", len(result.Env))
 	}
 
 	// Check tools are merged

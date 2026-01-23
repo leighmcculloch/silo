@@ -115,12 +115,10 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
   "mounts": [
     "/path/to/mount"
   ],
-  // Environment variable names to pass from host to container
-  "env_passthrough": [
-    "MY_API_KEY"
-  ],
-  // Environment variables to set explicitly (KEY=VALUE format)
-  "env_set": [
+  // Environment variables: names without '=' pass through from host,
+  // names with '=' set explicitly (e.g., "FOO=bar")
+  "env": [
+    "MY_API_KEY",
     "FOO=bar"
   ],
   // Files to source before running (to load exports)
@@ -131,8 +129,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
   "tools": {
     "claude": {
       "mounts": [],
-      "env_passthrough": [],
-      "env_set": []
+      "env": []
     }
   }
 }
@@ -143,8 +140,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 | Option | Description |
 |--------|-------------|
 | `mounts` | Additional directories or files to mount into the container |
-| `env_passthrough` | Environment variable names to pass from host to container |
-| `env_set` | Environment variables to set explicitly (`KEY=VALUE` format) |
+| `env` | Environment variables: names without `=` pass through from host, with `=` set explicitly |
 | `source_files` | Files to source before running (to load environment variables with `export KEY=value`) |
 | `tools` | Tool-specific configuration overrides |
 
@@ -154,7 +150,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 
 ```json
 {
-  "env_passthrough": [
+  "env": [
     "GITHUB_TOKEN",
     "ANTHROPIC_API_KEY"
   ],
@@ -171,12 +167,12 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
   "mounts": [
     "/path/to/shared/libraries"
   ],
-  "env_set": [
+  "env": [
     "PROJECT_ENV=development"
   ],
   "tools": {
     "claude": {
-      "env_passthrough": [
+      "env": [
         "CUSTOM_CLAUDE_TOKEN"
       ]
     }

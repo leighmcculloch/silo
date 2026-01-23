@@ -291,25 +291,25 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
-	// Pass through environment variables
-	for _, varName := range cfg.EnvPassthrough {
-		if val := os.Getenv(varName); val != "" {
-			envVars = append(envVars, varName+"="+val)
+	// Process env vars (passthrough if no '=', explicit if has '=')
+	for _, e := range cfg.Env {
+		if strings.Contains(e, "=") {
+			envVars = append(envVars, e)
+		} else if val := os.Getenv(e); val != "" {
+			envVars = append(envVars, e+"="+val)
 		}
 	}
 
-	// Tool-specific passthrough
+	// Tool-specific env vars
 	if toolCfg, ok := cfg.Tools[tool]; ok {
-		for _, varName := range toolCfg.EnvPassthrough {
-			if val := os.Getenv(varName); val != "" {
-				envVars = append(envVars, varName+"="+val)
+		for _, e := range toolCfg.Env {
+			if strings.Contains(e, "=") {
+				envVars = append(envVars, e)
+			} else if val := os.Getenv(e); val != "" {
+				envVars = append(envVars, e+"="+val)
 			}
 		}
-		envVars = append(envVars, toolCfg.EnvSet...)
 	}
-
-	// Explicit env vars
-	envVars = append(envVars, cfg.EnvSet...)
 
 	// Generate container name
 	baseName := filepath.Base(cwd)
@@ -375,25 +375,14 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "  ],")
 
-	// EnvPassthrough
-	fmt.Fprintln(stdout, "  \"env_passthrough\": [")
-	for i, v := range cfg.EnvPassthrough {
+	// Env
+	fmt.Fprintln(stdout, "  \"env\": [")
+	for i, v := range cfg.Env {
 		comma := ","
-		if i == len(cfg.EnvPassthrough)-1 {
+		if i == len(cfg.Env)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.EnvPassthrough[v])
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// EnvSet
-	fmt.Fprintln(stdout, "  \"env_set\": [")
-	for i, v := range cfg.EnvSet {
-		comma := ","
-		if i == len(cfg.EnvSet)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.EnvSet[v])
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Env[v])
 	}
 	fmt.Fprintln(stdout, "  ],")
 
@@ -432,26 +421,14 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		}
 		fmt.Fprintln(stdout, "      ],")
 
-		// Tool env passthrough
-		fmt.Fprintln(stdout, "      \"env_passthrough\": [")
-		for i, v := range toolCfg.EnvPassthrough {
+		// Tool env
+		fmt.Fprintln(stdout, "      \"env\": [")
+		for i, v := range toolCfg.Env {
 			comma := ","
-			if i == len(toolCfg.EnvPassthrough)-1 {
+			if i == len(toolCfg.Env)-1 {
 				comma = ""
 			}
-			source := sources.ToolEnvPass[toolName][v]
-			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Tool env set
-		fmt.Fprintln(stdout, "      \"env_set\": [")
-		for i, v := range toolCfg.EnvSet {
-			comma := ","
-			if i == len(toolCfg.EnvSet)-1 {
-				comma = ""
-			}
-			source := sources.ToolEnvSet[toolName][v]
+			source := sources.ToolEnv[toolName][v]
 			fmt.Fprintf(stdout, "        %q%s // %s\n", v, comma, source)
 		}
 		fmt.Fprintln(stdout, "      ]")
@@ -514,18 +491,16 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 	sampleConfig := `{
   // Additional directories or files to mount into the container
   "mounts": [],
-  // Environment variable names to pass from host to container
-  "env_passthrough": [],
-  // Environment variables to set explicitly (KEY=VALUE format)
-  "env_set": [],
+  // Environment variables: names without '=' pass through from host,
+  // names with '=' set explicitly (e.g., "FOO=bar")
+  "env": [],
   // Files to source before running (to load exports)
   "source_files": [],
   // Tool-specific configuration
   "tools": {
     "claude": {
       "mounts": [],
-      "env_passthrough": [],
-      "env_set": []
+      "env": []
     }
   }
 }

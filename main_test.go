@@ -84,8 +84,8 @@ func TestConfigCommand(t *testing.T) {
 		t.Error("expected mounts field in JSONC output")
 	}
 
-	if !strings.Contains(stdout, `"env_passthrough"`) {
-		t.Error("expected env_passthrough field in JSONC output")
+	if !strings.Contains(stdout, `"env"`) {
+		t.Error("expected env field in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"tools"`) {
@@ -149,8 +149,8 @@ func TestInitCommand(t *testing.T) {
 		t.Error("expected mounts field in config")
 	}
 
-	if !strings.Contains(string(content), "env_passthrough") {
-		t.Error("expected env_passthrough field in config")
+	if !strings.Contains(string(content), `"env"`) {
+		t.Error("expected env field in config")
 	}
 }
 
