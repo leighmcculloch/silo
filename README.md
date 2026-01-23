@@ -125,9 +125,9 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
     "MY_API_KEY",
     "FOO=bar"
   ],
-  // Files to source before running (to load exports)
-  "source_files": [
-    "/path/to/file/to/source"
+  // Shell commands to run before starting the container
+  "prehook": [
+    "source ~/.env_api_keys"
   ],
   // Tool-specific configuration
   "tools": {
@@ -147,7 +147,7 @@ Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */
 | `mounts_ro` | Read-only directories or files to mount into the container |
 | `mounts_rw` | Read-write directories or files to mount into the container |
 | `env` | Environment variables: names without `=` pass through from host, with `=` set explicitly |
-| `source_files` | Files to source before running (to load environment variables with `export KEY=value`) |
+| `prehook` | Shell commands to run before starting the container |
 | `tools` | Tool-specific configuration overrides |
 
 ### Example Configurations

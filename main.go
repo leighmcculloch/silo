@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -300,17 +301,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		)
 	}
 
-	// Source files and add their exports
-	for _, sf := range cfg.SourceFiles {
-		if data, err := os.ReadFile(expandPath(sf)); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				line = strings.TrimSpace(line)
-				if rest, found := strings.CutPrefix(line, "export "); found {
-					if parts := strings.SplitN(rest, "=", 2); len(parts) == 2 {
-						envVars = append(envVars, parts[0]+"="+strings.Trim(parts[1], "\"'"))
-					}
-				}
-			}
+	// Run prehook commands if configured
+	for _, hook := range cfg.Prehook {
+		cli.LogTo(stderr, "Running prehook: %s", hook)
+		cmd := exec.Command("sh", "-c", hook)
+		cmd.Stdout = stderr
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("prehook failed: %w", err)
 		}
 	}
 
@@ -434,14 +432,14 @@ func runConfig(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "  ],")
 
-	// SourceFiles
-	fmt.Fprintln(stdout, "  \"source_files\": [")
-	for i, v := range cfg.SourceFiles {
+	// Prehook
+	fmt.Fprintln(stdout, "  \"prehook\": [")
+	for i, v := range cfg.Prehook {
 		comma := ","
-		if i == len(cfg.SourceFiles)-1 {
+		if i == len(cfg.Prehook)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.SourceFiles[v])
+		fmt.Fprintf(stdout, "    %q%s // %s\n", v, comma, sources.Prehook[v])
 	}
 	fmt.Fprintln(stdout, "  ],")
 
@@ -556,8 +554,8 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
-  // Files to source before running (to load exports)
-  "source_files": [],
+  // Shell commands to run before starting the container
+  "prehook": [],
   // Tool-specific configuration
   "tools": {
     "claude": {

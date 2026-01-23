@@ -15,10 +15,11 @@
     "GITHUB_TOKEN",
     "COPILOT_GITHUB_TOKEN"
   ],
-  // Files to source before running (to load exports like GITHUB_TOKEN)
-  "source_files": [
-    "~/.zenv_apikey_github_ro",
-    "~/.zenv_apikey_github_copilot"
+  // Shell commands to run before starting the container
+  // (e.g., to source files that set environment variables)
+  "prehook": [
+    "source ~/.zenv_apikey_github_ro",
+    "source ~/.zenv_apikey_github_copilot"
   ],
   // Tool-specific configuration
   "tools": {}
