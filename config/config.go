@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
+	"github.com/tidwall/jsonc"
 )
 
 // Config represents the silo configuration
@@ -79,15 +80,18 @@ func XDGConfigHome() string {
 	return xdg.ConfigHome
 }
 
-// Load loads configuration from the given path
+// Load loads configuration from the given path (supports JSONC with comments)
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}
 
+	// Strip comments from JSONC to get valid JSON
+	jsonData := jsonc.ToJSON(data)
+
 	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	if err := json.Unmarshal(jsonData, &cfg); err != nil {
 		return Config{}, err
 	}
 

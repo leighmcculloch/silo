@@ -103,6 +103,37 @@ func TestLoadInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestLoadJSONC(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.json")
+
+	// JSONC with comments
+	configContent := `{
+		// This is a comment
+		"mounts": ["/test/mount"],
+		/* Multi-line
+		   comment */
+		"env_passthrough": ["TEST_VAR"]
+	}`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("failed to load JSONC config: %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 || cfg.Mounts[0] != "/test/mount" {
+		t.Errorf("expected mounts [/test/mount], got %v", cfg.Mounts)
+	}
+
+	if len(cfg.EnvPassthrough) != 1 || cfg.EnvPassthrough[0] != "TEST_VAR" {
+		t.Errorf("expected env passthrough [TEST_VAR], got %v", cfg.EnvPassthrough)
+	}
+}
+
 func TestMerge(t *testing.T) {
 	base := Config{
 		Mounts:         []string{"/base/mount"},

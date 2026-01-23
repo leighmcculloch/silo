@@ -418,10 +418,15 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 	}
 
 	sampleConfig := `{
+  // Additional directories or files to mount into the container
   "mounts": [],
+  // Environment variable names to pass from host to container
   "env_passthrough": [],
+  // Environment variables to set explicitly (KEY=VALUE format)
   "env_set": [],
+  // Files to source before running (to load exports)
   "source_files": [],
+  // Tool-specific configuration
   "tools": {
     "claude": {
       "mounts": [],

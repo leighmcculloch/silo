@@ -105,22 +105,29 @@ Silo uses a hierarchical configuration system that merges settings from multiple
 1. **Global config**: `~/.config/silo/config.json` (or `$XDG_CONFIG_HOME/silo/config.json`)
 2. **Local configs**: `.silo.json` files from root to current directory (closer files override)
 
+Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */` style comments.
+
 ### Configuration Schema
 
-```json
+```jsonc
 {
+  // Additional directories or files to mount into the container
   "mounts": [
     "/path/to/mount"
   ],
+  // Environment variable names to pass from host to container
   "env_passthrough": [
     "MY_API_KEY"
   ],
+  // Environment variables to set explicitly (KEY=VALUE format)
   "env_set": [
     "FOO=bar"
   ],
+  // Files to source before running (to load exports)
   "source_files": [
     "/path/to/file/to/source"
   ],
+  // Tool-specific configuration
   "tools": {
     "claude": {
       "mounts": [],
