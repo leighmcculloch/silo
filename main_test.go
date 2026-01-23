@@ -140,20 +140,24 @@ func TestConfigHelp(t *testing.T) {
 }
 
 func TestConfigPathsCommand(t *testing.T) {
+	// Create a temp dir with a config file
+	tmpDir := testcli.MkdirTemp(t)
+	testcli.Chdir(t, tmpDir)
+
+	configPath := filepath.Join(tmpDir, "silo.jsonc")
+	if err := os.WriteFile(configPath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
 	exitCode, stdout, _ := testcli.Main(t, []string{"config", "paths"}, nil, mainFunc)
 
 	if exitCode != 0 {
 		t.Fatalf("expected exit code 0, got %d", exitCode)
 	}
 
-	// Should show global config path
-	if !strings.Contains(stdout, "silo.jsonc") {
-		t.Error("expected silo.jsonc in paths output")
-	}
-
-	// Should show status indicators
-	if !strings.Contains(stdout, "✓") && !strings.Contains(stdout, "✗") {
-		t.Error("expected status indicators in paths output")
+	// Should show the config path we created
+	if !strings.Contains(stdout, configPath) {
+		t.Errorf("expected %s in paths output, got: %s", configPath, stdout)
 	}
 }
 

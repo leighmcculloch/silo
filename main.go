@@ -530,11 +530,9 @@ func runConfigPaths(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	paths := config.GetConfigPaths()
 
 	for _, p := range paths {
-		status := "✓"
-		if !p.Exists {
-			status = "✗"
+		if p.Exists {
+			fmt.Fprintln(stdout, p.Path)
 		}
-		fmt.Fprintf(stdout, "%s %s\n", status, p.Path)
 	}
 
 	return nil
