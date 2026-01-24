@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
@@ -79,13 +80,14 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		buildArgs[k] = &v
 	}
 
-	// Build the image
+	// Build the image using BuildKit for advanced Dockerfile features
 	resp, err := c.cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
 		Target:     opts.Target,
 		BuildArgs:  buildArgs,
 		Tags:       []string{opts.Target},
 		Remove:     true,
+		Version:    build.BuilderBuildKit,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to build image: %w", err)
