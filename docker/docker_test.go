@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/leighmcculloch/silo/backend"
 )
 
 func TestGetGitWorktreeRoots(t *testing.T) {
@@ -45,7 +47,7 @@ func TestGetGitIdentity(t *testing.T) {
 }
 
 func TestBuildOptions(t *testing.T) {
-	opts := BuildOptions{
+	opts := backend.BuildOptions{
 		Dockerfile: "FROM alpine",
 		Target:     "test",
 		BuildArgs: map[string]string{
@@ -65,8 +67,8 @@ func TestBuildOptions(t *testing.T) {
 }
 
 func TestRunOptions(t *testing.T) {
-	opts := RunOptions{
-		Image:        "test-image",
+	opts := backend.RunOptions{
+		Tool:         "test-image",
 		Name:         "test-container",
 		WorkDir:      "/app",
 		MountsRO:     []string{"/host/ro:/container/ro"},
@@ -80,8 +82,8 @@ func TestRunOptions(t *testing.T) {
 		},
 	}
 
-	if opts.Image != "test-image" {
-		t.Error("unexpected image")
+	if opts.Tool != "test-image" {
+		t.Error("unexpected tool")
 	}
 	if opts.Name != "test-container" {
 		t.Error("unexpected name")

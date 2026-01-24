@@ -9,12 +9,15 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"syscall"
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/leighmcculloch/silo/avf"
+	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/docker"
@@ -26,14 +29,16 @@ var (
 )
 
 const sampleConfig = `{
-  // Read-only directories or files to mount into the container
+  // Backend to use: "docker" (default) or "avf" (Apple Virtualization Framework)
+  // "backend": "docker",
+  // Read-only directories or files to mount into the container/VM
   "mounts_ro": [],
-  // Read-write directories or files to mount into the container
+  // Read-write directories or files to mount into the container/VM
   "mounts_rw": [],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
-  // Shell commands to run inside the container before the tool
+  // Shell commands to run inside the container/VM before the tool
   "prehooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
@@ -51,6 +56,14 @@ func expandPath(path string) string {
 		return os.Getenv("HOME")
 	}
 	return path
+}
+
+// titleCase returns the string with the first letter capitalized
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func main() {
@@ -273,22 +286,40 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		cancel()
 	}()
 
-	// Create Docker client
-	cli.LogTo(stderr, "Connecting to Docker...")
-	dockerClient, err := docker.NewClient()
-	if err != nil {
-		return fmt.Errorf("failed to connect to Docker: %w", err)
+	// Create backend based on configuration
+	var b backend.Backend
+	var err error
+
+	backendType := cfg.GetBackend()
+	switch backendType {
+	case config.BackendAVF:
+		if runtime.GOOS != "darwin" {
+			return fmt.Errorf("AVF backend is only available on macOS")
+		}
+		cli.LogTo(stderr, "Connecting to Apple Virtualization Framework...")
+		b, err = avf.NewBackend()
+		if err != nil {
+			return fmt.Errorf("failed to create AVF backend: %w", err)
+		}
+	case config.BackendDocker:
+		fallthrough
+	default:
+		cli.LogTo(stderr, "Connecting to Docker...")
+		b, err = docker.NewBackend()
+		if err != nil {
+			return fmt.Errorf("failed to connect to Docker: %w", err)
+		}
 	}
-	defer dockerClient.Close()
+	defer b.Close()
 
 	// Get current user info
 	home := os.Getenv("HOME")
 	user := os.Getenv("USER")
 	uid := os.Getuid()
 
-	// Build the image
-	cli.LogTo(stderr, "Preparing image for %s...", tool)
-	_, err = dockerClient.Build(ctx, docker.BuildOptions{
+	// Build the image/VM
+	cli.LogTo(stderr, "Preparing %s for %s...", b.Name(), tool)
+	err = b.Build(ctx, backend.BuildOptions{
 		Dockerfile: Dockerfile(),
 		Target:     tool,
 		BuildArgs: map[string]string{
@@ -301,9 +332,9 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to build image: %w", err)
+		return fmt.Errorf("failed to build: %w", err)
 	}
-	cli.LogSuccessTo(stderr, "Image ready")
+	cli.LogSuccessTo(stderr, "%s ready", titleCase(b.Name()))
 
 	// Collect mounts
 	cwd, _ := os.Getwd()
@@ -413,9 +444,9 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		"copilot":  {"copilot", "--allow-all"},
 	}
 
-	// Run the container
-	err = dockerClient.Run(ctx, docker.RunOptions{
-		Image:        tool,
+	// Run the container/VM
+	err = b.Run(ctx, backend.RunOptions{
+		Tool:         tool,
 		Name:         containerName,
 		WorkDir:      cwd,
 		MountsRO:     mountsRO,
@@ -435,7 +466,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	})
 
 	if err != nil {
-		return fmt.Errorf("container error: %w", err)
+		return fmt.Errorf("%s error: %w", b.Name(), err)
 	}
 
 	return nil
@@ -483,6 +514,14 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 
 	// Output JSONC with source comments
 	fmt.Fprintln(stdout, "{")
+
+	// Backend
+	backendValue := string(cfg.GetBackend())
+	backendSource := sources.Backend
+	if backendSource == "" {
+		backendSource = "default"
+	}
+	fmt.Fprintf(stdout, "  %s: %s, %s\n", key("backend"), str(backendValue), comment(backendSource))
 
 	// MountsRO
 	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_ro"))
@@ -605,6 +644,9 @@ func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
 
 	// Output as JSON
 	fmt.Fprintln(stdout, "{")
+
+	// Backend
+	fmt.Fprintf(stdout, "  \"backend\": %q,\n", cfg.GetBackend())
 
 	// MountsRO
 	fmt.Fprintln(stdout, "  \"mounts_ro\": [")

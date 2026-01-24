@@ -19,38 +19,36 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/kballard/go-shellquote"
+	"github.com/leighmcculloch/silo/backend"
 	"github.com/moby/term"
 )
 
-// Client wraps the Docker client with silo-specific functionality
-type Client struct {
+// Backend implements the backend.Backend interface using Docker
+type Backend struct {
 	cli *client.Client
 }
 
-// NewClient creates a new Docker client
-func NewClient() (*Client, error) {
+// NewBackend creates a new Docker backend
+func NewBackend() (*Backend, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
-	return &Client{cli: cli}, nil
+	return &Backend{cli: cli}, nil
+}
+
+// Name returns the backend name
+func (b *Backend) Name() string {
+	return "docker"
 }
 
 // Close closes the Docker client
-func (c *Client) Close() error {
-	return c.cli.Close()
+func (b *Backend) Close() error {
+	return b.cli.Close()
 }
 
-// BuildOptions contains options for building an image
-type BuildOptions struct {
-	Dockerfile string
-	Target     string
-	BuildArgs  map[string]string
-	OnProgress func(string)
-}
-
-// Build builds a Docker image and returns the image ID
-func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
+// Build builds a Docker image
+func (b *Backend) Build(ctx context.Context, opts backend.BuildOptions) error {
 	// Create a tar archive with the Dockerfile
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -61,15 +59,15 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		Size: int64(len(dockerfileContent)),
 		Mode: 0644,
 	}); err != nil {
-		return "", fmt.Errorf("failed to write tar header: %w", err)
+		return fmt.Errorf("failed to write tar header: %w", err)
 	}
 
 	if _, err := tw.Write(dockerfileContent); err != nil {
-		return "", fmt.Errorf("failed to write Dockerfile to tar: %w", err)
+		return fmt.Errorf("failed to write Dockerfile to tar: %w", err)
 	}
 
 	if err := tw.Close(); err != nil {
-		return "", fmt.Errorf("failed to close tar: %w", err)
+		return fmt.Errorf("failed to close tar: %w", err)
 	}
 
 	// Convert build args
@@ -80,7 +78,7 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	}
 
 	// Build the image
-	resp, err := c.cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
+	resp, err := b.cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
 		Target:     opts.Target,
 		BuildArgs:  buildArgs,
@@ -88,44 +86,25 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 		Remove:     true,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to build image: %w", err)
+		return fmt.Errorf("failed to build image: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Read and parse the build output
 	output, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read build output: %w", err)
+		return fmt.Errorf("failed to read build output: %w", err)
 	}
 
 	if opts.OnProgress != nil {
 		opts.OnProgress(string(output))
 	}
 
-	return opts.Target, nil
-}
-
-// RunOptions contains options for running a container
-type RunOptions struct {
-	Image           string
-	Name            string
-	WorkDir         string
-	MountsRO        []string
-	MountsRW        []string
-	Env             []string
-	Command         []string // Base command to run (e.g., ["claude", "--flag"])
-	Args            []string // Additional args appended to command
-	Prehooks        []string // Shell commands to run before the main command
-	Stdin           io.Reader
-	Stdout          io.Writer
-	Stderr          io.Writer
-	TTY             bool
-	RemoveOnExit    bool
-	SecurityOptions []string
+	return nil
 }
 
 // Run runs a container with the given options
-func (c *Client) Run(ctx context.Context, opts RunOptions) error {
+func (b *Backend) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Convert mounts
 	var mounts []mount.Mount
 	for _, m := range opts.MountsRO {
@@ -186,7 +165,7 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 
 	// Create container configuration
 	config := &container.Config{
-		Image:        opts.Image,
+		Image:        opts.Tool,
 		WorkingDir:   opts.WorkDir,
 		Env:          opts.Env,
 		Entrypoint:   entrypoint,
@@ -208,13 +187,13 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	// Create the container
-	resp, err := c.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, opts.Name)
+	resp, err := b.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, opts.Name)
 	if err != nil {
 		return fmt.Errorf("failed to create container: %w", err)
 	}
 
 	// Attach to the container
-	attachResp, err := c.cli.ContainerAttach(ctx, resp.ID, container.AttachOptions{
+	attachResp, err := b.cli.ContainerAttach(ctx, resp.ID, container.AttachOptions{
 		Stream: true,
 		Stdin:  true,
 		Stdout: true,
@@ -226,7 +205,7 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 	defer attachResp.Close()
 
 	// Start the container
-	if err := c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if err := b.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -242,10 +221,10 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 				defer term.RestoreTerminal(fd, oldState)
 
 				// Set initial terminal size
-				c.resizeContainerTTY(ctx, resp.ID, fd)
+				b.resizeContainerTTY(ctx, resp.ID, fd)
 
 				// Handle terminal resize signals
-				go c.monitorTTYSize(ctx, resp.ID, fd)
+				go b.monitorTTYSize(ctx, resp.ID, fd)
 			}
 		}
 	}
@@ -266,7 +245,7 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 	}
 
 	// Wait for the container to finish
-	statusCh, errCh := c.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := b.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		if err != nil {
@@ -282,20 +261,20 @@ func (c *Client) Run(ctx context.Context, opts RunOptions) error {
 }
 
 // resizeContainerTTY resizes the container's TTY to match the terminal size
-func (c *Client) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
+func (b *Backend) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
 	winsize, err := term.GetWinsize(fd)
 	if err != nil {
 		return
 	}
 
-	c.cli.ContainerResize(ctx, containerID, container.ResizeOptions{
+	b.cli.ContainerResize(ctx, containerID, container.ResizeOptions{
 		Height: uint(winsize.Height),
 		Width:  uint(winsize.Width),
 	})
 }
 
 // monitorTTYSize monitors for terminal resize signals and updates the container
-func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uintptr) {
+func (b *Backend) monitorTTYSize(ctx context.Context, containerID string, fd uintptr) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGWINCH)
 	defer signal.Stop(sigchan)
@@ -305,7 +284,7 @@ func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uint
 		case <-ctx.Done():
 			return
 		case <-sigchan:
-			c.resizeContainerTTY(ctx, containerID, fd)
+			b.resizeContainerTTY(ctx, containerID, fd)
 		}
 	}
 }

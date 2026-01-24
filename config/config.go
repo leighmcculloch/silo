@@ -10,8 +10,23 @@ import (
 	"github.com/tidwall/jsonc"
 )
 
+// BackendType represents the type of backend to use
+type BackendType string
+
+const (
+	// BackendDocker uses Docker containers
+	BackendDocker BackendType = "docker"
+
+	// BackendAVF uses Apple Virtualization Framework
+	BackendAVF BackendType = "avf"
+)
+
 // Config represents the silo configuration
 type Config struct {
+	// Backend specifies which backend to use ("docker" or "avf")
+	// Defaults to "docker" if not specified
+	Backend BackendType `json:"backend,omitempty"`
+
 	// MountsRO are read-only directories or files to mount into the container
 	MountsRO []string `json:"mounts_ro,omitempty"`
 
@@ -86,6 +101,14 @@ func XDGConfigHome() string {
 	return xdg.ConfigHome
 }
 
+// GetBackend returns the effective backend, defaulting to Docker if not specified
+func (c Config) GetBackend() BackendType {
+	if c.Backend == "" {
+		return BackendDocker
+	}
+	return c.Backend
+}
+
 // Load loads configuration from the given path (supports JSONC with comments)
 func Load(path string) (Config, error) {
 	data, err := os.ReadFile(path)
@@ -107,6 +130,11 @@ func Load(path string) (Config, error) {
 // Merge merges two configs, with the overlay taking precedence for arrays (append) and maps (merge)
 func Merge(base, overlay Config) Config {
 	result := base
+
+	// Backend: overlay wins if specified
+	if overlay.Backend != "" {
+		result.Backend = overlay.Backend
+	}
 
 	// Append arrays
 	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
@@ -134,10 +162,11 @@ func Merge(base, overlay Config) Config {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
+	Backend       string                       // source path for backend
 	MountsRO      map[string]string            // value -> source path
 	MountsRW      map[string]string            // value -> source path
 	Env           map[string]string            // value -> source path
-	Prehooks       map[string]string            // value -> source path
+	Prehooks      map[string]string            // value -> source path
 	ToolMountsRO  map[string]map[string]string // tool -> value -> source
 	ToolMountsRW  map[string]map[string]string // tool -> value -> source
 	ToolEnv       map[string]map[string]string // tool -> value -> source
@@ -250,6 +279,9 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 
 // trackConfigSources records the source for each value in the config
 func trackConfigSources(cfg Config, source string, info *SourceInfo) {
+	if cfg.Backend != "" {
+		info.Backend = source
+	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source
 	}
