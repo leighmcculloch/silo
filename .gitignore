@@ -6,6 +6,10 @@ silo
 *.so
 *.dylib
 
+# Zig
+.zig-cache/
+zig-out/
+
 # Test binary, built with `go test -c`
 *.test
 
