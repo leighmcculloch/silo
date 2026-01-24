@@ -56,6 +56,22 @@ type ToolConfig struct {
 	Env []string `json:"env,omitempty"`
 }
 
+// xdgConfigHome returns XDG_CONFIG_HOME or the default ~/.config
+func xdgConfigHome() string {
+	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".config")
+}
+
+// xdgDataHome returns XDG_DATA_HOME or the default ~/.local/share
+func xdgDataHome() string {
+	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".local", "share")
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	// Helper to replace home dir with ~
@@ -80,13 +96,13 @@ func DefaultConfig() Config {
 			},
 			"opencode": {
 				MountsRW: []string{
-					tildePath(filepath.Join(xdg.ConfigHome, "opencode")),
-					tildePath(filepath.Join(xdg.DataHome, "opencode")),
+					tildePath(filepath.Join(xdgConfigHome(), "opencode")),
+					tildePath(filepath.Join(xdgDataHome(), "opencode")),
 				},
 			},
 			"copilot": {
 				MountsRW: []string{
-					tildePath(filepath.Join(xdg.ConfigHome, ".copilot")),
+					tildePath(filepath.Join(xdgConfigHome(), ".copilot")),
 				},
 				Env: []string{
 					"COPILOT_GITHUB_TOKEN",
@@ -162,14 +178,14 @@ func Merge(base, overlay Config) Config {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
-	Backend       string                       // source path for backend
-	MountsRO      map[string]string            // value -> source path
-	MountsRW      map[string]string            // value -> source path
-	Env           map[string]string            // value -> source path
-	Prehooks      map[string]string            // value -> source path
-	ToolMountsRO  map[string]map[string]string // tool -> value -> source
-	ToolMountsRW  map[string]map[string]string // tool -> value -> source
-	ToolEnv       map[string]map[string]string // tool -> value -> source
+	Backend      string                       // source path for backend
+	MountsRO     map[string]string            // value -> source path
+	MountsRW     map[string]string            // value -> source path
+	Env          map[string]string            // value -> source path
+	Prehooks     map[string]string            // value -> source path
+	ToolMountsRO map[string]map[string]string // tool -> value -> source
+	ToolMountsRW map[string]map[string]string // tool -> value -> source
+	ToolEnv      map[string]map[string]string // tool -> value -> source
 }
 
 // NewSourceInfo creates a new empty SourceInfo
@@ -178,7 +194,7 @@ func NewSourceInfo() *SourceInfo {
 		MountsRO:     make(map[string]string),
 		MountsRW:     make(map[string]string),
 		Env:          make(map[string]string),
-		Prehooks:      make(map[string]string),
+		Prehooks:     make(map[string]string),
 		ToolMountsRO: make(map[string]map[string]string),
 		ToolMountsRW: make(map[string]map[string]string),
 		ToolEnv:      make(map[string]map[string]string),

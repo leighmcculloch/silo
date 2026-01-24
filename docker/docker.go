@@ -2,8 +2,10 @@ package docker
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"syscall"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
@@ -53,7 +56,15 @@ func (b *Backend) Build(ctx context.Context, opts backend.BuildOptions) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
-	dockerfileContent := []byte(opts.Dockerfile)
+	// Strip the syntax directive from Dockerfile - it requires session management
+	// that the Docker API client doesn't provide, but BuildKit features still work without it
+	dockerfile := opts.Dockerfile
+	if strings.HasPrefix(dockerfile, "# syntax=") {
+		if idx := strings.Index(dockerfile, "\n"); idx != -1 {
+			dockerfile = dockerfile[idx+1:]
+		}
+	}
+	dockerfileContent := []byte(dockerfile)
 	if err := tw.WriteHeader(&tar.Header{
 		Name: "Dockerfile",
 		Size: int64(len(dockerfileContent)),
@@ -77,27 +88,53 @@ func (b *Backend) Build(ctx context.Context, opts backend.BuildOptions) error {
 		buildArgs[k] = &v
 	}
 
-	// Build the image
+	// Build the image using BuildKit for advanced Dockerfile features
 	resp, err := b.cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
 		Target:     opts.Target,
 		BuildArgs:  buildArgs,
 		Tags:       []string{opts.Target},
 		Remove:     true,
+		Version:    build.BuilderBuildKit,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build image: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read and parse the build output
-	output, err := io.ReadAll(resp.Body)
-	if err != nil {
+	// Read and parse the build output line by line to detect errors
+	// Docker's build API returns JSON messages, one per line
+	scanner := bufio.NewScanner(resp.Body)
+	var buildOutput strings.Builder
+	for scanner.Scan() {
+		line := scanner.Text()
+		buildOutput.WriteString(line)
+		buildOutput.WriteString("\n")
+
+		// Parse each line as JSON to check for errors
+		var msg struct {
+			Error       string `json:"error"`
+			ErrorDetail struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+		}
+		if err := json.Unmarshal([]byte(line), &msg); err == nil {
+			if msg.Error != "" {
+				errMsg := msg.Error
+				if msg.ErrorDetail.Message != "" {
+					errMsg = msg.ErrorDetail.Message
+				}
+				return fmt.Errorf("build error: %s", errMsg)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("failed to read build output: %w", err)
 	}
 
 	if opts.OnProgress != nil {
-		opts.OnProgress(string(output))
+		opts.OnProgress(buildOutput.String())
 	}
 
 	return nil

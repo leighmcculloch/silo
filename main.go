@@ -318,7 +318,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	uid := os.Getuid()
 
 	// Build the image/VM
-	cli.LogTo(stderr, "Preparing %s for %s...", b.Name(), tool)
+	cli.LogTo(stderr, "Building %s for %s...", b.Name(), tool)
 	err = b.Build(ctx, backend.BuildOptions{
 		Dockerfile: Dockerfile(),
 		Target:     tool,
@@ -328,7 +328,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 			"UID":  fmt.Sprintf("%d", uid),
 		},
 		OnProgress: func(msg string) {
-			// Could parse and display build progress here
+			fmt.Fprint(stderr, msg)
 		},
 	})
 	if err != nil {
@@ -487,8 +487,8 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	stringStyle := lipgloss.NewStyle()
 	commentStyle := lipgloss.NewStyle()
 	if isTTY {
-		keyStyle = keyStyle.Foreground(lipgloss.Color("6"))   // Cyan
-		stringStyle = stringStyle.Foreground(lipgloss.Color("2")) // Green
+		keyStyle = keyStyle.Foreground(lipgloss.Color("6"))         // Cyan
+		stringStyle = stringStyle.Foreground(lipgloss.Color("2"))   // Green
 		commentStyle = commentStyle.Foreground(lipgloss.Color("8")) // Gray
 	}
 

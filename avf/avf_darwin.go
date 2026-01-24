@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/Code-Hex/vz/v3"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/kballard/go-shellquote"
@@ -101,7 +101,15 @@ func (b *Backend) buildDockerImage(ctx context.Context, opts backend.BuildOption
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
-	dockerfileContent := []byte(opts.Dockerfile)
+	// Strip the syntax directive from Dockerfile - it requires session management
+	// that the Docker API client doesn't provide, but BuildKit features still work without it
+	dockerfile := opts.Dockerfile
+	if strings.HasPrefix(dockerfile, "# syntax=") {
+		if idx := strings.Index(dockerfile, "\n"); idx != -1 {
+			dockerfile = dockerfile[idx+1:]
+		}
+	}
+	dockerfileContent := []byte(dockerfile)
 	if err := tw.WriteHeader(&tar.Header{
 		Name: "Dockerfile",
 		Size: int64(len(dockerfileContent)),
@@ -125,7 +133,7 @@ func (b *Backend) buildDockerImage(ctx context.Context, opts backend.BuildOption
 		buildArgs[k] = &v
 	}
 
-	// Build the image with AVF-specific tag
+	// Build the image with AVF-specific tag using BuildKit for advanced Dockerfile features
 	imageName := "silo-avf-" + opts.Target
 	resp, err := b.dockerCli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
@@ -133,6 +141,7 @@ func (b *Backend) buildDockerImage(ctx context.Context, opts backend.BuildOption
 		BuildArgs:  buildArgs,
 		Tags:       []string{imageName},
 		Remove:     true,
+		Version:    build.BuilderBuildKit,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build image: %w", err)
@@ -172,8 +181,8 @@ func (b *Backend) exportRootfs(ctx context.Context, target, rootfsPath string) e
 	}
 	defer reader.Close()
 
-	// Remove old rootfs if exists
-	os.RemoveAll(rootfsPath)
+	// Remove old rootfs if exists - must fix permissions first since some dirs may be read-only
+	forceRemoveAll(rootfsPath)
 	if err := os.MkdirAll(rootfsPath, 0755); err != nil {
 		return fmt.Errorf("failed to create rootfs directory: %w", err)
 	}
@@ -189,6 +198,39 @@ func (b *Backend) exportRootfs(ctx context.Context, target, rootfsPath string) e
 	}
 
 	return nil
+}
+
+// forceRemoveAll removes a directory tree, first fixing permissions on read-only directories
+func forceRemoveAll(path string) {
+	// Walk the tree and make all directories writable so they can be removed
+	filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Ignore errors, just try to continue
+		}
+		if info.IsDir() {
+			os.Chmod(p, 0755)
+		}
+		return nil
+	})
+	os.RemoveAll(path)
+}
+
+// mkdirAllWritable creates directories and ensures they're writable, even if they already exist
+func mkdirAllWritable(path string) error {
+	if err := os.MkdirAll(path, 0755); err != nil {
+		// If it failed, try to fix parent permissions and retry
+		parent := filepath.Dir(path)
+		if parent != path {
+			os.Chmod(parent, 0755)
+			if err := os.MkdirAll(path, 0755); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	// Ensure the directory itself is writable
+	return os.Chmod(path, 0755)
 }
 
 // extractTar extracts a tar archive to a directory
@@ -212,12 +254,12 @@ func extractTar(reader io.Reader, dest string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
+			if err := mkdirAllWritable(target); err != nil {
 				return err
 			}
 		case tar.TypeReg:
 			dir := filepath.Dir(target)
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := mkdirAllWritable(dir); err != nil {
 				return err
 			}
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
@@ -231,7 +273,7 @@ func extractTar(reader io.Reader, dest string) error {
 			f.Close()
 		case tar.TypeSymlink:
 			dir := filepath.Dir(target)
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := mkdirAllWritable(dir); err != nil {
 				return err
 			}
 			os.Remove(target) // Remove if exists
@@ -241,7 +283,7 @@ func extractTar(reader io.Reader, dest string) error {
 			}
 		case tar.TypeLink:
 			dir := filepath.Dir(target)
-			if err := os.MkdirAll(dir, 0755); err != nil {
+			if err := mkdirAllWritable(dir); err != nil {
 				return err
 			}
 			linkTarget := filepath.Join(dest, header.Linkname)
@@ -395,7 +437,7 @@ func (b *Backend) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Create VM configuration
-	vmConfig, err := b.createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline.String(), opts)
+	vmConfig, err := b.createVMConfig(ctx, kernelPath, initrdPath, rootfsPath, cmdline.String(), opts)
 	if err != nil {
 		return fmt.Errorf("failed to create VM config: %w", err)
 	}
@@ -446,7 +488,7 @@ func (b *Backend) Run(ctx context.Context, opts backend.RunOptions) error {
 }
 
 // createVMConfig creates the VM configuration
-func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline string, opts backend.RunOptions) (*vz.VirtualMachineConfiguration, error) {
+func (b *Backend) createVMConfig(ctx context.Context, kernelPath, initrdPath, rootfsPath, cmdline string, opts backend.RunOptions) (*vz.VirtualMachineConfiguration, error) {
 	// Create boot loader
 	bootLoader, err := vz.NewLinuxBootLoader(kernelPath,
 		vz.WithCommandLine(cmdline),
@@ -463,27 +505,21 @@ func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline str
 	}
 
 	// Create virtio console for terminal
-	serialPort, err := vz.NewVirtioConsoleDeviceSerialPortConfiguration(
-		vz.NewFileHandleSerialPortAttachment(os.Stdin, os.Stdout),
-	)
+	serialAttachment, err := vz.NewFileHandleSerialPortAttachment(os.Stdin, os.Stdout)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create serial port attachment: %w", err)
+	}
+
+	serialPort, err := vz.NewVirtioConsoleDeviceSerialPortConfiguration(serialAttachment)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create serial port: %w", err)
 	}
 
-	consoleConfig, err := vz.NewVirtioConsoleDeviceConfiguration()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create console config: %w", err)
-	}
-	consoleConfig.SetPorts(
-		vz.NewVirtioConsolePortConfigurationArray(serialPort),
-	)
-	config.SetConsoleDevices(
-		vz.NewVirtioConsoleDeviceConfigurationArray(consoleConfig),
-	)
+	config.SetSerialPortsVirtualMachineConfiguration([]*vz.VirtioConsoleDeviceSerialPortConfiguration{serialPort})
 
 	// Create root disk from rootfs
 	diskPath := filepath.Join(b.cacheDir, opts.Tool+"-disk.img")
-	if err := b.createDiskImage(rootfsPath, diskPath); err != nil {
+	if err := b.createDiskImage(ctx, rootfsPath, diskPath); err != nil {
 		return nil, fmt.Errorf("failed to create disk image: %w", err)
 	}
 
@@ -496,9 +532,7 @@ func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline str
 	if err != nil {
 		return nil, fmt.Errorf("failed to create block device: %w", err)
 	}
-	config.SetStorageDevices(
-		vz.NewVirtioBlockDeviceConfigurationArray(blockDevice),
-	)
+	config.SetStorageDevicesVirtualMachineConfiguration([]vz.StorageDeviceConfiguration{blockDevice})
 
 	// Create 9p shares for mounts
 	var shares []*vz.VirtioFileSystemDeviceConfiguration
@@ -542,9 +576,11 @@ func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline str
 	}
 
 	if len(shares) > 0 {
-		config.SetDirectorySharingDevices(
-			vz.NewVirtioFileSystemDeviceConfigurationArray(shares...),
-		)
+		dirSharingConfigs := make([]vz.DirectorySharingDeviceConfiguration, len(shares))
+		for i, s := range shares {
+			dirSharingConfigs[i] = s
+		}
+		config.SetDirectorySharingDevicesVirtualMachineConfiguration(dirSharingConfigs)
 	}
 
 	// Create entropy device for random numbers
@@ -552,9 +588,7 @@ func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline str
 	if err != nil {
 		return nil, fmt.Errorf("failed to create entropy device: %w", err)
 	}
-	config.SetEntropyDevices(
-		vz.NewVirtioEntropyDeviceConfigurationArray(entropyConfig),
-	)
+	config.SetEntropyDevicesVirtualMachineConfiguration([]*vz.VirtioEntropyDeviceConfiguration{entropyConfig})
 
 	// Validate configuration
 	valid, err := config.Validate()
@@ -569,7 +603,8 @@ func (b *Backend) createVMConfig(kernelPath, initrdPath, rootfsPath, cmdline str
 }
 
 // createDiskImage creates an ext4 disk image from a rootfs directory
-func (b *Backend) createDiskImage(rootfsPath, diskPath string) error {
+// Since mkfs.ext4 isn't available on macOS, we use Docker to run it
+func (b *Backend) createDiskImage(ctx context.Context, rootfsPath, diskPath string) error {
 	// Calculate approximate size needed (rootfs size + 500MB overhead)
 	var size int64 = 2 * 1024 * 1024 * 1024 // 2GB default
 
@@ -594,10 +629,53 @@ func (b *Backend) createDiskImage(rootfsPath, diskPath string) error {
 	}
 	f.Close()
 
-	// Format as ext4
-	cmd := exec.Command("mkfs.ext4", "-F", "-d", rootfsPath, diskPath)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("mkfs.ext4 failed: %w: %s", err, output)
+	// Use Docker to run mkfs.ext4 since it's not available on macOS
+	// We mount the rootfs and disk image into a Linux container
+	containerConfig := &container.Config{
+		Image: "ubuntu:24.04",
+		Cmd: []string{
+			"mkfs.ext4", "-F", "-d", "/rootfs", "/disk.img",
+		},
+	}
+
+	hostConfig := &container.HostConfig{
+		Binds: []string{
+			rootfsPath + ":/rootfs:ro",
+			diskPath + ":/disk.img",
+		},
+		AutoRemove: true,
+	}
+
+	// Create the container
+	resp, err := b.dockerCli.ContainerCreate(ctx, containerConfig, hostConfig, nil, nil, "")
+	if err != nil {
+		return fmt.Errorf("failed to create mkfs container: %w", err)
+	}
+
+	// Start the container
+	if err := b.dockerCli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		b.dockerCli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		return fmt.Errorf("failed to start mkfs container: %w", err)
+	}
+
+	// Wait for it to finish
+	statusCh, errCh := b.dockerCli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return fmt.Errorf("error waiting for mkfs container: %w", err)
+		}
+	case status := <-statusCh:
+		if status.StatusCode != 0 {
+			// Get logs to see what went wrong
+			logs, _ := b.dockerCli.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true, ShowStderr: true})
+			if logs != nil {
+				logBytes, _ := io.ReadAll(logs)
+				logs.Close()
+				return fmt.Errorf("mkfs.ext4 failed with status %d: %s", status.StatusCode, string(logBytes))
+			}
+			return fmt.Errorf("mkfs.ext4 failed with status %d", status.StatusCode)
+		}
 	}
 
 	return nil
