@@ -2,8 +2,10 @@ package docker
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -94,14 +96,39 @@ func (c *Client) Build(ctx context.Context, opts BuildOptions) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Read and parse the build output
-	output, err := io.ReadAll(resp.Body)
-	if err != nil {
+	// Read and parse the build output line by line to detect errors
+	// Docker's build API returns JSON messages, one per line
+	scanner := bufio.NewScanner(resp.Body)
+	var buildOutput strings.Builder
+	for scanner.Scan() {
+		line := scanner.Text()
+		buildOutput.WriteString(line)
+		buildOutput.WriteString("\n")
+
+		// Parse each line as JSON to check for errors
+		var msg struct {
+			Error       string `json:"error"`
+			ErrorDetail struct {
+				Message string `json:"message"`
+			} `json:"errorDetail"`
+		}
+		if err := json.Unmarshal([]byte(line), &msg); err == nil {
+			if msg.Error != "" {
+				errMsg := msg.Error
+				if msg.ErrorDetail.Message != "" {
+					errMsg = msg.ErrorDetail.Message
+				}
+				return "", fmt.Errorf("build error: %s", errMsg)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
 		return "", fmt.Errorf("failed to read build output: %w", err)
 	}
 
 	if opts.OnProgress != nil {
-		opts.OnProgress(string(output))
+		opts.OnProgress(buildOutput.String())
 	}
 
 	return opts.Target, nil
