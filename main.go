@@ -15,9 +15,11 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/docker"
+	"github.com/leighmcculloch/silo/lima"
 	"github.com/spf13/cobra"
 )
 
@@ -26,14 +28,17 @@ var (
 )
 
 const sampleConfig = `{
-  // Read-only directories or files to mount into the container
+  // Backend to use: "docker" (default) or "lima"
+  // Docker uses containers, Lima uses macOS VMs with Apple Virtualization Framework
+  "backend": "docker",
+  // Read-only directories or files to mount into the container/VM
   "mounts_ro": [],
-  // Read-write directories or files to mount into the container
+  // Read-write directories or files to mount into the container/VM
   "mounts_rw": [],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
-  // Shell commands to run inside the container before the tool
+  // Shell commands to run inside the container/VM before the tool
   "prehooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
@@ -273,22 +278,41 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		cancel()
 	}()
 
-	// Create Docker client
-	cli.LogTo(stderr, "Connecting to Docker...")
-	dockerClient, err := docker.NewClient()
-	if err != nil {
-		return fmt.Errorf("failed to connect to Docker: %w", err)
+	// Select and create backend
+	var backendClient backend.Backend
+	var err error
+
+	backendType := cfg.Backend
+	if backendType == "" {
+		backendType = "docker" // default
 	}
-	defer dockerClient.Close()
+
+	switch backendType {
+	case "docker":
+		cli.LogTo(stderr, "Connecting to Docker...")
+		backendClient, err = docker.NewClient()
+		if err != nil {
+			return fmt.Errorf("failed to connect to Docker: %w", err)
+		}
+	case "lima":
+		cli.LogTo(stderr, "Initializing Lima...")
+		backendClient, err = lima.NewClient()
+		if err != nil {
+			return fmt.Errorf("failed to initialize Lima: %w", err)
+		}
+	default:
+		return fmt.Errorf("unknown backend: %s (valid: docker, lima)", backendType)
+	}
+	defer backendClient.Close()
 
 	// Get current user info
 	home := os.Getenv("HOME")
 	user := os.Getenv("USER")
 	uid := os.Getuid()
 
-	// Build the image
-	cli.LogTo(stderr, "Building image for %s...", tool)
-	_, err = dockerClient.Build(ctx, docker.BuildOptions{
+	// Build the image/VM
+	cli.LogTo(stderr, "Building environment for %s...", tool)
+	_, err = backendClient.Build(ctx, backend.BuildOptions{
 		Dockerfile: Dockerfile(),
 		Target:     tool,
 		BuildArgs: map[string]string{
@@ -301,9 +325,9 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to build image: %w", err)
+		return fmt.Errorf("failed to build environment: %w", err)
 	}
-	cli.LogSuccessTo(stderr, "Image ready")
+	cli.LogSuccessTo(stderr, "Environment ready")
 
 	// Collect mounts
 	cwd, _ := os.Getwd()
@@ -329,14 +353,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	}
 
 	// Add git worktree roots (read-write for git operations)
-	worktreeRoots, _ := docker.GetGitWorktreeRoots(cwd)
+	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
 	// Collect environment variables
 	var envVars []string
 
 	// Get git identity
-	gitName, gitEmail := docker.GetGitIdentity()
+	gitName, gitEmail := backend.GetGitIdentity()
 	if gitName != "" {
 		envVars = append(envVars,
 			"GIT_AUTHOR_NAME="+gitName,
@@ -413,8 +437,8 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		"copilot":  {"copilot", "--allow-all"},
 	}
 
-	// Run the container
-	err = dockerClient.Run(ctx, docker.RunOptions{
+	// Run the container/VM
+	err = backendClient.Run(ctx, backend.RunOptions{
 		Image:        tool,
 		Name:         containerName,
 		WorkDir:      cwd,
@@ -435,7 +459,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	})
 
 	if err != nil {
-		return fmt.Errorf("container error: %w", err)
+		return fmt.Errorf("run error: %w", err)
 	}
 
 	return nil

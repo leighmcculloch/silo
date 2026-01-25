@@ -12,6 +12,9 @@ import (
 
 // Config represents the silo configuration
 type Config struct {
+	// Backend specifies which backend to use: "docker" (default) or "lima"
+	Backend string `json:"backend,omitempty"`
+
 	// MountsRO are read-only directories or files to mount into the container
 	MountsRO []string `json:"mounts_ro,omitempty"`
 
@@ -124,6 +127,11 @@ func Load(path string) (Config, error) {
 func Merge(base, overlay Config) Config {
 	result := base
 
+	// Backend: overlay takes precedence if set
+	if overlay.Backend != "" {
+		result.Backend = overlay.Backend
+	}
+
 	// Append arrays
 	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
 	result.MountsRW = append(result.MountsRW, overlay.MountsRW...)
@@ -150,6 +158,7 @@ func Merge(base, overlay Config) Config {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
+	Backend      string                       // source path for backend setting
 	MountsRO     map[string]string            // value -> source path
 	MountsRW     map[string]string            // value -> source path
 	Env          map[string]string            // value -> source path
@@ -266,6 +275,9 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 
 // trackConfigSources records the source for each value in the config
 func trackConfigSources(cfg Config, source string, info *SourceInfo) {
+	if cfg.Backend != "" {
+		info.Backend = source
+	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source
 	}
