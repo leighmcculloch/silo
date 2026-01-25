@@ -10,12 +10,14 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -43,8 +45,70 @@ func (c *Client) Close() error {
 	return c.cli.Close()
 }
 
+// extractImages parses a Dockerfile and returns all images that need to be pulled.
+// This includes the syntax directive image and all base images from FROM instructions.
+func extractImages(dockerfile string) []string {
+	var images []string
+	seen := make(map[string]bool)
+
+	// Check for syntax directive: # syntax=docker/dockerfile:1
+	syntaxRegex := regexp.MustCompile(`(?m)^#\s*syntax\s*=\s*([^\s]+)`)
+	if match := syntaxRegex.FindStringSubmatch(dockerfile); len(match) >= 2 {
+		img := match[1]
+		if !seen[img] {
+			seen[img] = true
+			images = append(images, img)
+		}
+	}
+
+	// Match FROM instructions, capturing the image reference
+	// Handles: FROM image, FROM image AS name, FROM image:tag, FROM image@digest
+	fromRegex := regexp.MustCompile(`(?m)^FROM\s+([^\s]+)`)
+	matches := fromRegex.FindAllStringSubmatch(dockerfile, -1)
+
+	for _, match := range matches {
+		if len(match) >= 2 {
+			img := match[1]
+			// Skip build stage references (e.g., FROM base AS builder)
+			// These start with a lowercase letter and don't contain : or @
+			if !strings.Contains(img, ":") && !strings.Contains(img, "@") && !strings.Contains(img, "/") {
+				// Could be a stage reference, skip if it's a simple name
+				// But keep it if it looks like a Docker Hub official image
+				if strings.Contains(img, ".") || strings.ToLower(img) != img {
+					// Likely a real image
+				} else {
+					// Check if this name was defined as a stage earlier
+					stageRegex := regexp.MustCompile(`(?i)FROM\s+\S+\s+AS\s+` + regexp.QuoteMeta(img))
+					if stageRegex.MatchString(dockerfile) {
+						continue // It's a stage reference, skip
+					}
+				}
+			}
+			if !seen[img] {
+				seen[img] = true
+				images = append(images, img)
+			}
+		}
+	}
+
+	return images
+}
+
 // Build builds a Docker image and returns the image ID
 func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, error) {
+	// Pull all required images first to avoid BuildKit session issues
+	// This includes the syntax directive image and base images from FROM instructions
+	images := extractImages(opts.Dockerfile)
+	for _, img := range images {
+		reader, err := c.cli.ImagePull(ctx, img, image.PullOptions{})
+		if err != nil {
+			return "", fmt.Errorf("failed to pull image %s: %w", img, err)
+		}
+		// Drain the reader to complete the pull
+		io.Copy(io.Discard, reader)
+		reader.Close()
+	}
+
 	// Create a tar archive with the Dockerfile
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
