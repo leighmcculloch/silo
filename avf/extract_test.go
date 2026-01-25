@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -502,6 +503,59 @@ func TestCreateDiskImage(t *testing.T) {
 	// Should be a reasonable size (at least the minimum we set)
 	if info.Size() < 100*1024*1024 {
 		t.Errorf("disk image too small: %d bytes", info.Size())
+	}
+
+	t.Logf("Created disk image: %s (%d bytes)", diskPath, info.Size())
+}
+
+func TestCreateDiskImageFromRealRootfs(t *testing.T) {
+	// This test uses the actual rootfs from the cache if it exists
+	// to test with a realistic scenario
+
+	cacheDir := filepath.Join(os.Getenv("HOME"), ".cache", "silo", "avf")
+
+	// Check for any existing rootfs
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Skipf("No cache directory, skipping: %v", err)
+	}
+
+	var rootfsPath string
+	for _, e := range entries {
+		if e.IsDir() && strings.HasSuffix(e.Name(), "-rootfs") {
+			rootfsPath = filepath.Join(cacheDir, e.Name())
+			break
+		}
+	}
+
+	if rootfsPath == "" {
+		t.Skip("No rootfs found in cache, skipping")
+	}
+
+	t.Logf("Testing with rootfs: %s", rootfsPath)
+
+	backend, err := NewBackend()
+	if err != nil {
+		t.Skipf("Docker not available: %v", err)
+	}
+	defer backend.Close()
+
+	tmpDir, err := os.MkdirTemp("", "disk-test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	diskPath := filepath.Join(tmpDir, "test.img")
+
+	ctx := context.Background()
+	if err := backend.createDiskImage(ctx, rootfsPath, diskPath); err != nil {
+		t.Fatalf("createDiskImage failed: %v", err)
+	}
+
+	info, err := os.Stat(diskPath)
+	if err != nil {
+		t.Fatalf("disk image not created: %v", err)
 	}
 
 	t.Logf("Created disk image: %s (%d bytes)", diskPath, info.Size())

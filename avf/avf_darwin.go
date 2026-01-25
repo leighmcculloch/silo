@@ -629,12 +629,22 @@ func (b *Backend) createDiskImage(ctx context.Context, rootfsPath, diskPath stri
 	}
 	f.Close()
 
-	// Use Docker to run mkfs.ext4 since it's not available on macOS
-	// We mount the rootfs and disk image into a Linux container
+	// Use Docker to create ext4 filesystem and copy files
+	// We use a privileged container to mount the disk image and copy files with tar
+	// This is more robust than mkfs.ext4 -d which has issues with symlinks and xattrs
+	script := `#!/bin/bash
+set -e
+/usr/sbin/mkfs.ext4 -F /disk.img
+mkdir -p /mnt/disk
+mount /disk.img /mnt/disk
+cd /rootfs && tar cf - . | (cd /mnt/disk && tar xf - --no-same-owner 2>/dev/null || true)
+umount /mnt/disk
+`
+
 	containerConfig := &container.Config{
 		Image: "ubuntu:24.04",
 		Cmd: []string{
-			"mkfs.ext4", "-F", "-d", "/rootfs", "/disk.img",
+			"/bin/bash", "-c", script,
 		},
 	}
 
@@ -643,6 +653,7 @@ func (b *Backend) createDiskImage(ctx context.Context, rootfsPath, diskPath stri
 			rootfsPath + ":/rootfs:ro",
 			diskPath + ":/disk.img",
 		},
+		Privileged: true, // Needed for mount
 		AutoRemove: true,
 	}
 
