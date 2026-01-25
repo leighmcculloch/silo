@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"text/template"
@@ -122,6 +123,10 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 	// Create the VM (--tty=false avoids interactive prompts)
 	createCmd := exec.CommandContext(ctx, "limactl", "create", "--tty=false", "--name", vmName, configPath)
+	if opts.OnProgress != nil {
+		createCmd.Stdout = &progressWriter{onProgress: opts.OnProgress}
+		createCmd.Stderr = &progressWriter{onProgress: opts.OnProgress}
+	}
 	if err := createCmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to create VM: %w", err)
 	}
@@ -132,6 +137,10 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 	// Start the VM (this runs provisioning scripts)
 	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", vmName)
+	if opts.OnProgress != nil {
+		startCmd.Stdout = &progressWriter{onProgress: opts.OnProgress}
+		startCmd.Stderr = &progressWriter{onProgress: opts.OnProgress}
+	}
 	if err := startCmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to start VM: %w", err)
 	}
@@ -226,7 +235,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	return nil
 }
 
-// computeCacheKey generates a hash from the silo binary and template
+// computeCacheKey generates a hash from the silo binary, template, and build args
 // The cache key is NOT tool-specific since all tools are installed in one VM
 func (c *Client) computeCacheKey(opts backend.BuildOptions) (string, error) {
 	h := sha256.New()
@@ -246,8 +255,16 @@ func (c *Client) computeCacheKey(opts backend.BuildOptions) (string, error) {
 	// Hash the template (contains all provisioning logic)
 	h.Write([]byte(templateYAML))
 
-	// Note: We intentionally do NOT hash opts.Target or opts.Dockerfile
-	// because we create one VM with all tools installed
+	// Hash build args (USER, UID, HOME) in sorted order for consistency
+	var keys []string
+	for k := range opts.BuildArgs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		h.Write([]byte(k))
+		h.Write([]byte(opts.BuildArgs[k]))
+	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
@@ -384,6 +401,16 @@ func (c *Client) ListVMs() ([]string, error) {
 		}
 	}
 	return vms, nil
+}
+
+// progressWriter wraps an OnProgress callback as an io.Writer
+type progressWriter struct {
+	onProgress func(string)
+}
+
+func (w *progressWriter) Write(p []byte) (n int, err error) {
+	w.onProgress(string(p))
+	return len(p), nil
 }
 
 // Compile-time interface check
