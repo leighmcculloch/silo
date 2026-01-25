@@ -20,6 +20,12 @@ images:
   - location: https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img
     arch: aarch64
 
+# User configuration - match macOS user and paths
+user:
+  name: {{.User}}
+  uid: {{.UID}}
+  home: {{.Home}}
+
 # Mounts configured at runtime via --mount flag or YAML override
 mounts: []
 
@@ -71,21 +77,8 @@ provision:
       #!/bin/bash
       set -eux -o pipefail
 
-      # Get the Lima user (UID 1000)
-      LIMA_USER=$(getent passwd 1000 | cut -d: -f1 || echo "")
-      if [ -z "$LIMA_USER" ]; then
-        echo "No user with UID 1000 found"
-        exit 1
-      fi
-
-      # Add user to docker group
-      usermod -aG docker "$LIMA_USER"
-
-      # Change home directory to /Users/username to match macOS paths
-      # This allows files mounted from macOS to be accessed at the same paths
-      # -m moves existing home directory contents to the new location
-      mkdir -p /Users
-      usermod -m -d "/Users/$LIMA_USER" "$LIMA_USER"
+      # Add the configured user to the docker group
+      usermod -aG docker "{{.User}}"
 
   - mode: user
     script: |

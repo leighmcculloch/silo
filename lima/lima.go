@@ -313,6 +313,9 @@ func (c *Client) ensureRunning(ctx context.Context) error {
 type templateData struct {
 	CPUs   int
 	Memory string // e.g., "8GiB"
+	User   string // username
+	UID    string // user ID
+	Home   string // home directory path (e.g., "/Users/username")
 }
 
 // generateConfig generates a Lima YAML config with mounts and settings
@@ -332,6 +335,9 @@ func (c *Client) generateConfig(opts backend.BuildOptions) (string, error) {
 	data := templateData{
 		CPUs:   cpus,
 		Memory: fmt.Sprintf("%dGiB", memoryGiB),
+		User:   opts.BuildArgs["USER"],
+		UID:    opts.BuildArgs["UID"],
+		Home:   opts.BuildArgs["HOME"],
 	}
 
 	// Parse the template
