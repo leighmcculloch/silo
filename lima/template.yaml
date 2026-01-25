@@ -95,104 +95,57 @@ provision:
       export TERM="xterm-256color"
       ENVEOF
 
-      # Source it for this session
       source ~/.bashrc
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install Go
       mkdir -p ~/.local ~/.local/bin
+
       ARCH=$(dpkg --print-architecture)
-      GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
-      curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz"
-      tar -C ~/.local -xzf /tmp/go.tar.gz
-      rm /tmp/go.tar.gz
+      ARCH_UNAME=$(uname -m)
 
-      # Install Go tools
-      go install golang.org/x/tools/gopls@latest
+      # Download Go, Deno, and gh in parallel
+      echo "Downloading tools in parallel..."
+      (
+        GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//')
+        curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz"
+      ) &
+      (
+        DENO_VERSION=$(curl -fsSL https://api.github.com/repos/denoland/deno/releases/latest | jq -r '.tag_name | ltrimstr("v")')
+        curl -fsSL -o /tmp/deno.zip "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${ARCH_UNAME}-unknown-linux-gnu.zip"
+      ) &
+      (
+        GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")')
+        curl -fsSL -o /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz"
+      ) &
+      wait
 
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
+      # Extract in parallel
+      echo "Extracting tools..."
+      tar -C ~/.local -xzf /tmp/go.tar.gz &
+      unzip -o /tmp/deno.zip -d ~/.local/bin &
+      tar -C ~/.local -xzf /tmp/gh.tar.gz --strip-components=1 &
+      wait
+      rm -f /tmp/go.tar.gz /tmp/deno.zip /tmp/gh.tar.gz
 
-      # Install Deno
-      ARCH=$(uname -m)
-      DENO_VERSION=$(curl -fsSL https://api.github.com/repos/denoland/deno/releases/latest | jq -r '.tag_name | ltrimstr("v")')
-      curl -fsSL -o /tmp/deno.zip "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${ARCH}-unknown-linux-gnu.zip"
-      unzip -o /tmp/deno.zip -d ~/.local/bin
-      rm /tmp/deno.zip
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install Rust (stable + nightly)
+      # Install Rust (stable + nightly) - runs its own parallel downloads
+      echo "Installing Rust..."
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
       source "$HOME/.cargo/env"
-      rustup toolchain install stable
-      rustup toolchain install nightly
+      rustup toolchain install stable nightly
       rustup target add wasm32v1-none --toolchain stable
       rustup target add wasm32v1-none --toolchain nightly
       rustup component add rust-analyzer
 
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
+      # Install MCP servers and CLI tools in parallel
+      echo "Installing MCP servers and CLI tools..."
+      go install golang.org/x/tools/gopls@latest &
+      go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest &
+      deno install --global --deny-read --allow-env --allow-net npm:server-perplexity-ask &
+      deno install --global --allow-env --allow-net --allow-read=$HOME/.cache/deno/npm/registry.npmjs.org/@upstash/context7-mcp npm:@upstash/context7-mcp &
+      curl -fsSL https://claude.ai/install.sh | bash &
+      curl -fsSL https://opencode.ai/install | bash &
+      curl -fsSL https://gh.io/copilot-install | bash &
+      wait
 
-      # Install GitHub CLI
-      ARCH=$(dpkg --print-architecture)
-      GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")')
-      curl -fsSL -o /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz"
-      tar -C ~/.local -xzf /tmp/gh.tar.gz --strip-components=1
-      rm /tmp/gh.tar.gz
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install MCP servers
-      go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
-      deno install --global --deny-read --allow-env --allow-net npm:server-perplexity-ask
-      deno install --global --allow-env --allow-net --allow-read=$HOME/.cache/deno/npm/registry.npmjs.org/@upstash/context7-mcp npm:@upstash/context7-mcp
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install Claude Code
-      curl -fsSL https://claude.ai/install.sh | bash
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install OpenCode
-      curl -fsSL https://opencode.ai/install | bash
-
-  - mode: user
-    script: |
-      #!/bin/bash
-      set -eux -o pipefail
-      source ~/.bashrc
-
-      # Install GitHub Copilot CLI
-      curl -fsSL https://gh.io/copilot-install | bash
+      echo "Provisioning complete!"
 
 # Environment variables passed to the VM
 env:
