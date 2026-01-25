@@ -120,22 +120,18 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		opts.OnProgress(fmt.Sprintf("Creating VM: %s (this may take a while on first run)...\n", vmName))
 	}
 
-	// Create the VM
-	createCmd := exec.CommandContext(ctx, "limactl", "create", "--name", vmName, configPath)
-	createCmd.Stdout = os.Stderr
-	createCmd.Stderr = os.Stderr
+	// Create the VM (--tty=false avoids interactive prompts)
+	createCmd := exec.CommandContext(ctx, "limactl", "create", "--tty=false", "--name", vmName, configPath)
 	if err := createCmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to create VM: %w", err)
 	}
 
 	if opts.OnProgress != nil {
-		opts.OnProgress(fmt.Sprintf("Starting VM: %s\n", vmName))
+		opts.OnProgress(fmt.Sprintf("Starting VM: %s...\n", vmName))
 	}
 
 	// Start the VM (this runs provisioning scripts)
-	startCmd := exec.CommandContext(ctx, "limactl", "start", vmName)
-	startCmd.Stdout = os.Stderr
-	startCmd.Stderr = os.Stderr
+	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", vmName)
 	if err := startCmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to start VM: %w", err)
 	}
@@ -163,39 +159,33 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		return err
 	}
 
-	// Build environment variables
-	var envArgs []string
+	// Build the shell script
+	var scriptParts []string
+
+	// Export environment variables
 	for _, e := range opts.Env {
-		envArgs = append(envArgs, "--env", e)
+		scriptParts = append(scriptParts, fmt.Sprintf("export %q", e))
 	}
 
-	// Build the command
-	// Use bash -l (login shell) to source .bashrc/.profile for PATH setup
-	var cmdParts []string
-
 	// Add prehooks if any
-	if len(opts.Prehooks) > 0 {
-		for _, hook := range opts.Prehooks {
-			cmdParts = append(cmdParts, hook+" &&")
-		}
+	for _, hook := range opts.Prehooks {
+		scriptParts = append(scriptParts, hook)
 	}
 
 	// Add working directory
 	if opts.WorkDir != "" {
-		cmdParts = append(cmdParts, fmt.Sprintf("cd %q &&", opts.WorkDir))
+		scriptParts = append(scriptParts, fmt.Sprintf("cd %q", opts.WorkDir))
 	}
 
-	// Add the main command
+	// Add the main command with exec
 	fullCmd := append(opts.Command, opts.Args...)
-	cmdParts = append(cmdParts, strings.Join(fullCmd, " "))
+	scriptParts = append(scriptParts, "exec "+strings.Join(fullCmd, " "))
 
-	shellScript := strings.Join(cmdParts, " ")
+	shellScript := strings.Join(scriptParts, " && ")
 
 	// Build limactl shell command
 	// Use bash -l -c to get a login shell that sources .bashrc
-	args := []string{"shell"}
-	args = append(args, envArgs...)
-	args = append(args, c.vmName, "bash", "-l", "-c", shellScript)
+	args := []string{"shell", c.vmName, "bash", "-l", "-c", shellScript}
 
 	cmd := exec.CommandContext(ctx, "limactl", args...)
 

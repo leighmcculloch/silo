@@ -72,8 +72,11 @@ provision:
       set -eux -o pipefail
 
       # Add the default Lima user to the docker group
-      # LIMA_CIDATA_USER is set by Lima to the username
-      usermod -aG docker "$LIMA_CIDATA_USER"
+      # Use the first non-root user with a home directory
+      LIMA_USER=$(getent passwd 1000 | cut -d: -f1 || echo "")
+      if [ -n "$LIMA_USER" ]; then
+        usermod -aG docker "$LIMA_USER"
+      fi
 
   - mode: user
     script: |
