@@ -310,26 +310,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	user := os.Getenv("USER")
 	uid := os.Getuid()
 
-	// Build the image/VM
-	cli.LogTo(stderr, "Building environment for %s...", tool)
-	_, err = backendClient.Build(ctx, backend.BuildOptions{
-		Dockerfile: Dockerfile(),
-		Target:     tool,
-		BuildArgs: map[string]string{
-			"HOME": home,
-			"USER": user,
-			"UID":  fmt.Sprintf("%d", uid),
-		},
-		OnProgress: func(msg string) {
-			fmt.Fprint(stderr, msg)
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to build environment: %w", err)
-	}
-	cli.LogSuccessTo(stderr, "Environment ready")
-
-	// Collect mounts
+	// Collect mounts (needed for Lima VM configuration at build time)
 	cwd, _ := os.Getwd()
 	mountsRW := []string{cwd}
 	var mountsRO []string
@@ -355,6 +336,27 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	// Add git worktree roots (read-write for git operations)
 	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
+
+	// Build the image/VM
+	cli.LogTo(stderr, "Building environment for %s...", tool)
+	_, err = backendClient.Build(ctx, backend.BuildOptions{
+		Dockerfile: Dockerfile(),
+		Target:     tool,
+		BuildArgs: map[string]string{
+			"HOME": home,
+			"USER": user,
+			"UID":  fmt.Sprintf("%d", uid),
+		},
+		MountsRO: mountsRO,
+		MountsRW: mountsRW,
+		OnProgress: func(msg string) {
+			fmt.Fprint(stderr, msg)
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build environment: %w", err)
+	}
+	cli.LogSuccessTo(stderr, "Environment ready")
 
 	// Collect environment variables
 	var envVars []string

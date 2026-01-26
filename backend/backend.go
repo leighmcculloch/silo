@@ -28,6 +28,12 @@ type BuildOptions struct {
 	// BuildArgs are variables passed to the build process
 	BuildArgs map[string]string
 
+	// MountsRO are read-only mount paths (used by Lima for VM configuration)
+	MountsRO []string
+
+	// MountsRW are read-write mount paths (used by Lima for VM configuration)
+	MountsRW []string
+
 	// OnProgress is called with build progress messages
 	OnProgress func(string)
 }

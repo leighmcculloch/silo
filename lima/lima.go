@@ -38,8 +38,9 @@ var templateYAML string
 
 // Client wraps the Lima CLI (limactl) with silo-specific functionality
 type Client struct {
-	cacheDir string
-	vmName   string
+	cacheDir  string
+	vmName    string
+	fileLinks map[string]string // map of original path -> VM temp path for file mounts
 }
 
 // NewClient creates a new Lima client
@@ -171,6 +172,14 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Build the shell script
 	var scriptParts []string
 
+	// Create symlinks for file mounts (files are mounted to /tmp/silo-mounts/... and need symlinks)
+	for origPath, vmTempPath := range c.fileLinks {
+		// Create parent directory and symlink
+		parentDir := filepath.Dir(origPath)
+		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %q", parentDir))
+		scriptParts = append(scriptParts, fmt.Sprintf("ln -sf %q %q", vmTempPath, origPath))
+	}
+
 	// Export environment variables
 	for _, e := range opts.Env {
 		scriptParts = append(scriptParts, fmt.Sprintf("export %q", e))
@@ -266,6 +275,23 @@ func (c *Client) computeCacheKey(opts backend.BuildOptions) (string, error) {
 		h.Write([]byte(opts.BuildArgs[k]))
 	}
 
+	// Hash mounts (sorted for consistency)
+	mountsRO := make([]string, len(opts.MountsRO))
+	copy(mountsRO, opts.MountsRO)
+	sort.Strings(mountsRO)
+	for _, m := range mountsRO {
+		h.Write([]byte("RO:"))
+		h.Write([]byte(m))
+	}
+
+	mountsRW := make([]string, len(opts.MountsRW))
+	copy(mountsRW, opts.MountsRW)
+	sort.Strings(mountsRW)
+	for _, m := range mountsRW {
+		h.Write([]byte("RW:"))
+		h.Write([]byte(m))
+	}
+
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
@@ -299,7 +325,7 @@ func (c *Client) ensureRunning(ctx context.Context) error {
 	}
 
 	// Start the VM
-	startCmd := exec.CommandContext(ctx, "limactl", "start", c.vmName)
+	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", c.vmName)
 	startCmd.Stdout = os.Stderr
 	startCmd.Stderr = os.Stderr
 	if err := startCmd.Run(); err != nil {
@@ -309,6 +335,13 @@ func (c *Client) ensureRunning(ctx context.Context) error {
 	return nil
 }
 
+// mountEntry represents a mount configuration for the Lima template
+type mountEntry struct {
+	Source   string // path on host
+	Target   string // path in VM
+	Writable bool
+}
+
 // templateData contains data for the Lima YAML template
 type templateData struct {
 	CPUs   int
@@ -316,6 +349,80 @@ type templateData struct {
 	User   string // username
 	UID    string // user ID
 	Home   string // home directory path (e.g., "/Users/username")
+	Mounts []mountEntry
+}
+
+// mountInfo holds information about a mount and any file links needed
+type mountInfo struct {
+	Source   string            // path on host to mount
+	Target   string            // path in VM to mount at
+	Writable bool              // whether writable
+	Links    map[string]string // map of link target -> link source (for files)
+}
+
+// prepareFileMounts creates mounts for directories and file hardlinks
+// For directories: mount directly to the same path
+// For files: hardlink to temp dir, mount temp dir to /tmp/silo-mounts/..., track links needed
+func prepareFileMounts(paths []string, writable bool) ([]mountInfo, error) {
+	var mounts []mountInfo
+	fileGroups := make(map[string][]string) // parentDir -> list of files
+
+	for _, p := range paths {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue // skip non-existent paths
+		}
+
+		if info.IsDir() {
+			// Directory mounts can be used directly
+			mounts = append(mounts, mountInfo{
+				Source:   p,
+				Target:   p,
+				Writable: writable,
+			})
+		} else {
+			// Group files by parent directory
+			parentDir := filepath.Dir(p)
+			fileGroups[parentDir] = append(fileGroups[parentDir], p)
+		}
+	}
+
+	// Process file groups - create temp dirs with hardlinks
+	for parentDir, files := range fileGroups {
+		// Create temp directory on host
+		tempDir := filepath.Join(os.TempDir(), "claude", "silo-mounts", parentDir)
+		if err := os.MkdirAll(tempDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create temp mount dir: %w", err)
+		}
+
+		links := make(map[string]string)
+		for _, f := range files {
+			basename := filepath.Base(f)
+			linkPath := filepath.Join(tempDir, basename)
+
+			// Remove existing link if present
+			os.Remove(linkPath)
+
+			// Create hardlink
+			if err := os.Link(f, linkPath); err != nil {
+				return nil, fmt.Errorf("failed to hardlink %s: %w", f, err)
+			}
+
+			// Track: original path -> path in mounted temp dir
+			// In VM: /tmp/silo-mounts/<parentDir>/<basename> -> <parentDir>/<basename>
+			vmTempPath := filepath.Join("/tmp/silo-mounts", parentDir, basename)
+			links[f] = vmTempPath
+		}
+
+		mounts = append(mounts, mountInfo{
+			Source:   tempDir,
+			Target:   filepath.Join("/tmp/silo-mounts", parentDir),
+			Writable: writable,
+			Links:    links,
+		})
+	}
+
+	return mounts, nil
 }
 
 // generateConfig generates a Lima YAML config with mounts and settings
@@ -332,12 +439,40 @@ func (c *Client) generateConfig(opts backend.BuildOptions) (string, error) {
 		}
 	}
 
+	// Lima only supports directory mounts, not files
+	// For files, create hardlinks in a temp directory and track symlinks needed
+	var mounts []mountEntry
+	c.fileLinks = make(map[string]string)
+
+	mountInfosRO, err := prepareFileMounts(opts.MountsRO, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare read-only mounts: %w", err)
+	}
+	for _, mi := range mountInfosRO {
+		mounts = append(mounts, mountEntry{Source: mi.Source, Target: mi.Target, Writable: mi.Writable})
+		for origPath, vmTempPath := range mi.Links {
+			c.fileLinks[origPath] = vmTempPath
+		}
+	}
+
+	mountInfosRW, err := prepareFileMounts(opts.MountsRW, true)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare read-write mounts: %w", err)
+	}
+	for _, mi := range mountInfosRW {
+		mounts = append(mounts, mountEntry{Source: mi.Source, Target: mi.Target, Writable: mi.Writable})
+		for origPath, vmTempPath := range mi.Links {
+			c.fileLinks[origPath] = vmTempPath
+		}
+	}
+
 	data := templateData{
 		CPUs:   cpus,
 		Memory: fmt.Sprintf("%dGiB", memoryGiB),
 		User:   opts.BuildArgs["USER"],
 		UID:    opts.BuildArgs["UID"],
 		Home:   opts.BuildArgs["HOME"],
+		Mounts: mounts,
 	}
 
 	// Parse the template
