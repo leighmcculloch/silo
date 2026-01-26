@@ -357,15 +357,14 @@ type mountInfo struct {
 	Source   string            // path on host to mount
 	Target   string            // path in VM to mount at
 	Writable bool              // whether writable
-	Links    map[string]string // map of link target -> link source (for files)
+	Links    map[string]string // map of original path -> VM path (for files needing symlinks)
 }
 
 // prepareFileMounts creates mounts for directories and file hardlinks
 // For directories: mount directly to the same path
-// For files: hardlink to temp dir, mount temp dir to /tmp/silo-mounts/..., track links needed
+// For files: each file gets its own mount directory (named by hash) to avoid conflicts
 func prepareFileMounts(paths []string, writable bool) ([]mountInfo, error) {
 	var mounts []mountInfo
-	fileGroups := make(map[string][]string) // parentDir -> list of files
 
 	for _, p := range paths {
 		info, err := os.Stat(p)
@@ -381,45 +380,34 @@ func prepareFileMounts(paths []string, writable bool) ([]mountInfo, error) {
 				Writable: writable,
 			})
 		} else {
-			// Group files by parent directory
-			parentDir := filepath.Dir(p)
-			fileGroups[parentDir] = append(fileGroups[parentDir], p)
-		}
-	}
+			// Each file gets its own mount directory named by hash of the original path
+			pathHash := fmt.Sprintf("%x", sha256.Sum256([]byte(p)))
+			basename := filepath.Base(p)
 
-	// Process file groups - create temp dirs with hardlinks
-	for parentDir, files := range fileGroups {
-		// Create temp directory on host
-		tempDir := filepath.Join(os.TempDir(), "claude", "silo-mounts", parentDir)
-		if err := os.MkdirAll(tempDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create temp mount dir: %w", err)
-		}
+			// Create temp directory on host using XDG state
+			tempDir := filepath.Join(xdg.StateHome, "silo", "mounts", pathHash)
+			if err := os.MkdirAll(tempDir, 0755); err != nil {
+				return nil, fmt.Errorf("failed to create temp mount dir: %w", err)
+			}
 
-		links := make(map[string]string)
-		for _, f := range files {
-			basename := filepath.Base(f)
+			// Create hardlink in the temp directory
 			linkPath := filepath.Join(tempDir, basename)
-
-			// Remove existing link if present
-			os.Remove(linkPath)
-
-			// Create hardlink
-			if err := os.Link(f, linkPath); err != nil {
-				return nil, fmt.Errorf("failed to hardlink %s: %w", f, err)
+			os.Remove(linkPath) // Remove existing link if present
+			if err := os.Link(p, linkPath); err != nil {
+				return nil, fmt.Errorf("failed to hardlink %s: %w", p, err)
 			}
 
 			// Track: original path -> path in mounted temp dir
-			// In VM: /tmp/silo-mounts/<parentDir>/<basename> -> <parentDir>/<basename>
-			vmTempPath := filepath.Join("/tmp/silo-mounts", parentDir, basename)
-			links[f] = vmTempPath
-		}
+			vmMountDir := filepath.Join("/silo/mounts", pathHash)
+			vmFilePath := filepath.Join(vmMountDir, basename)
 
-		mounts = append(mounts, mountInfo{
-			Source:   tempDir,
-			Target:   filepath.Join("/tmp/silo-mounts", parentDir),
-			Writable: writable,
-			Links:    links,
-		})
+			mounts = append(mounts, mountInfo{
+				Source:   tempDir,
+				Target:   vmMountDir,
+				Writable: writable,
+				Links:    map[string]string{p: vmFilePath},
+			})
+		}
 	}
 
 	return mounts, nil

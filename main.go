@@ -510,6 +510,17 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	// Output JSONC with source comments
 	fmt.Fprintln(stdout, "{")
 
+	// Backend
+	backendValue := cfg.Backend
+	if backendValue == "" {
+		backendValue = "docker"
+	}
+	backendSource := sources.Backend
+	if backendSource == "" {
+		backendSource = "default"
+	}
+	fmt.Fprintf(stdout, "  %s: %s, %s\n", key("backend"), str(backendValue), comment(backendSource))
+
 	// MountsRO
 	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_ro"))
 	for i, v := range cfg.MountsRO {
