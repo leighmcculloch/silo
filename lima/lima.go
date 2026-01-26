@@ -88,6 +88,13 @@ func (c *Client) Close() error {
 
 // Build creates or reuses a cached Lima VM with all tools installed
 func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, error) {
+	// Prepare file mounts (hardlinks on host, populate fileLinks for Run)
+	// This must happen regardless of whether VM exists
+	mounts, err := c.prepareMounts(opts)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare mounts: %w", err)
+	}
+
 	// Compute cache key hash (same VM for all tools)
 	cacheKey, err := c.computeCacheKey(opts)
 	if err != nil {
@@ -107,7 +114,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	}
 
 	// Generate Lima YAML config
-	yamlConfig, err := c.generateConfig(opts)
+	yamlConfig, err := c.generateConfig(opts, mounts)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate Lima config: %w", err)
 	}
@@ -413,28 +420,15 @@ func prepareFileMounts(paths []string, writable bool) ([]mountInfo, error) {
 	return mounts, nil
 }
 
-// generateConfig generates a Lima YAML config with mounts and settings
-func (c *Client) generateConfig(opts backend.BuildOptions) (string, error) {
-	// Get host resources: 100% of CPUs
-	cpus := runtime.NumCPU()
-
-	// Get total memory and calculate 50%
-	memoryGiB := 8 // default fallback
-	if totalBytes, err := getSystemMemoryBytes(); err == nil {
-		memoryGiB = int(totalBytes / 2 / (1024 * 1024 * 1024)) // 50% in GiB
-		if memoryGiB < 4 {
-			memoryGiB = 4 // minimum 4GiB
-		}
-	}
-
-	// Lima only supports directory mounts, not files
-	// For files, create hardlinks in a temp directory and track symlinks needed
+// prepareMounts creates hardlinks for file mounts and populates fileLinks for Run()
+// Returns mount entries for the Lima config
+func (c *Client) prepareMounts(opts backend.BuildOptions) ([]mountEntry, error) {
 	var mounts []mountEntry
 	c.fileLinks = make(map[string]string)
 
 	mountInfosRO, err := prepareFileMounts(opts.MountsRO, false)
 	if err != nil {
-		return "", fmt.Errorf("failed to prepare read-only mounts: %w", err)
+		return nil, fmt.Errorf("failed to prepare read-only mounts: %w", err)
 	}
 	for _, mi := range mountInfosRO {
 		mounts = append(mounts, mountEntry{Source: mi.Source, Target: mi.Target, Writable: mi.Writable})
@@ -445,12 +439,29 @@ func (c *Client) generateConfig(opts backend.BuildOptions) (string, error) {
 
 	mountInfosRW, err := prepareFileMounts(opts.MountsRW, true)
 	if err != nil {
-		return "", fmt.Errorf("failed to prepare read-write mounts: %w", err)
+		return nil, fmt.Errorf("failed to prepare read-write mounts: %w", err)
 	}
 	for _, mi := range mountInfosRW {
 		mounts = append(mounts, mountEntry{Source: mi.Source, Target: mi.Target, Writable: mi.Writable})
 		for origPath, vmTempPath := range mi.Links {
 			c.fileLinks[origPath] = vmTempPath
+		}
+	}
+
+	return mounts, nil
+}
+
+// generateConfig generates a Lima YAML config with mounts and settings
+func (c *Client) generateConfig(opts backend.BuildOptions, mounts []mountEntry) (string, error) {
+	// Get host resources: 100% of CPUs
+	cpus := runtime.NumCPU()
+
+	// Get total memory and calculate 50%
+	memoryGiB := 8 // default fallback
+	if totalBytes, err := getSystemMemoryBytes(); err == nil {
+		memoryGiB = int(totalBytes / 2 / (1024 * 1024 * 1024)) // 50% in GiB
+		if memoryGiB < 4 {
+			memoryGiB = 4 // minimum 4GiB
 		}
 	}
 
