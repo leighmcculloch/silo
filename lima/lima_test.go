@@ -78,7 +78,7 @@ func TestGenerateConfig(t *testing.T) {
 		t.Error("generateConfig returned empty config")
 	}
 
-	// Check for key configuration values
+	// Check for key configuration values (no mounts in base config)
 	expectedStrings := []string{
 		"vmType: vz",
 		"arch: aarch64",
@@ -89,6 +89,11 @@ func TestGenerateConfig(t *testing.T) {
 		"claude.ai/install.sh",
 		"opencode.ai/install",
 		"gh.io/copilot-install",
+	}
+
+	// Ensure mounts are NOT in the base config
+	if strings.Contains(config, "mounts:") {
+		t.Error("base config should not contain mounts section")
 	}
 
 	for _, s := range expectedStrings {

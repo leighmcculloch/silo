@@ -3,6 +3,7 @@ package lima
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
@@ -38,9 +39,11 @@ var templateYAML string
 
 // Client wraps the Lima CLI (limactl) with silo-specific functionality
 type Client struct {
-	cacheDir  string
-	vmName    string
-	fileLinks map[string]string // map of original path -> VM temp path for file mounts
+	cacheDir     string
+	baseVMName   string
+	instanceName string
+	fileLinks    map[string]string // map of original path -> VM temp path for file mounts
+	mounts       []mountEntry      // mounts prepared during Build, applied to clone in Run
 }
 
 // NewClient creates a new Lima client
@@ -60,77 +63,71 @@ func NewClient() (*Client, error) {
 	}, nil
 }
 
-// Close stops the VM if running (but preserves the cached image)
+// Close stops and deletes the instance VM (clone), leaving the base VM intact
 func (c *Client) Close() error {
-	if c.vmName == "" {
+	if c.instanceName == "" {
 		return nil
 	}
 
-	// Check if VM is running
-	cmd := exec.Command("limactl", "list", "--format", "{{.Status}}", c.vmName)
-	out, err := cmd.Output()
-	if err != nil {
-		// VM doesn't exist, nothing to stop
-		return nil
-	}
+	// Stop the instance VM if running
+	stopCmd := exec.Command("limactl", "stop", c.instanceName)
+	stopCmd.Run() // Ignore error, VM might not be running
 
-	status := strings.TrimSpace(string(out))
-	if status == "Running" {
-		// Stop the VM
-		stopCmd := exec.Command("limactl", "stop", c.vmName)
-		if err := stopCmd.Run(); err != nil {
-			return fmt.Errorf("failed to stop VM: %w", err)
-		}
+	// Delete the instance VM
+	deleteCmd := exec.Command("limactl", "delete", c.instanceName)
+	if err := deleteCmd.Run(); err != nil {
+		return fmt.Errorf("failed to delete instance VM: %w", err)
 	}
 
 	return nil
 }
 
-// Build creates or reuses a cached Lima VM with all tools installed
+// Build creates or reuses a cached base Lima VM with all tools installed.
+// The base VM is provisioned and stopped, ready to be cloned for each Run.
 func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, error) {
 	// Prepare file mounts (hardlinks on host, populate fileLinks for Run)
-	// This must happen regardless of whether VM exists
 	mounts, err := c.prepareMounts(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to prepare mounts: %w", err)
 	}
+	c.mounts = mounts
 
-	// Compute cache key hash (same VM for all tools)
+	// Compute cache key hash (excludes mounts, which are per-instance)
 	cacheKey, err := c.computeCacheKey(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to compute cache key: %w", err)
 	}
 
-	// VM name is based on the hash prefix only (not tool-specific)
-	vmName := fmt.Sprintf("silo-%s", cacheKey[:12])
-	c.vmName = vmName
+	// Base VM name
+	baseName := fmt.Sprintf("silo-base-%s", cacheKey[:12])
+	c.baseVMName = baseName
 
-	// Check if VM already exists
-	if c.vmExists(vmName) {
+	// Check if base VM already exists (cached)
+	if c.vmExists(baseName) {
 		if opts.OnProgress != nil {
-			opts.OnProgress(fmt.Sprintf("Using cached VM: %s\n", vmName))
+			opts.OnProgress(fmt.Sprintf("Using cached base VM: %s\n", baseName))
 		}
-		return vmName, nil
+		return baseName, nil
 	}
 
-	// Generate Lima YAML config
-	yamlConfig, err := c.generateConfig(opts, mounts)
+	// Generate Lima YAML config (no mounts — mounts are per-instance)
+	yamlConfig, err := c.generateConfig(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate Lima config: %w", err)
 	}
 
 	// Write config to cache directory
-	configPath := filepath.Join(c.cacheDir, vmName+".yaml")
+	configPath := filepath.Join(c.cacheDir, baseName+".yaml")
 	if err := os.WriteFile(configPath, []byte(yamlConfig), 0644); err != nil {
 		return "", fmt.Errorf("failed to write config: %w", err)
 	}
 
 	if opts.OnProgress != nil {
-		opts.OnProgress(fmt.Sprintf("Creating VM: %s (this may take a while on first run)...\n", vmName))
+		opts.OnProgress(fmt.Sprintf("Creating base VM: %s (this may take a while on first run)...\n", baseName))
 	}
 
 	// Create the VM (--tty=false avoids interactive prompts)
-	createCmd := exec.CommandContext(ctx, "limactl", "create", "--tty=false", "--name", vmName, configPath)
+	createCmd := exec.CommandContext(ctx, "limactl", "create", "--tty=false", "--name", baseName, configPath)
 	if opts.OnProgress != nil {
 		createCmd.Stdout = &progressWriter{onProgress: opts.OnProgress}
 		createCmd.Stderr = &progressWriter{onProgress: opts.OnProgress}
@@ -140,11 +137,11 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	}
 
 	if opts.OnProgress != nil {
-		opts.OnProgress(fmt.Sprintf("Starting VM: %s...\n", vmName))
+		opts.OnProgress(fmt.Sprintf("Provisioning base VM: %s...\n", baseName))
 	}
 
-	// Start the VM (this runs provisioning scripts)
-	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", vmName)
+	// Start the VM (runs provisioning scripts)
+	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", baseName)
 	if opts.OnProgress != nil {
 		startCmd.Stdout = &progressWriter{onProgress: opts.OnProgress}
 		startCmd.Stderr = &progressWriter{onProgress: opts.OnProgress}
@@ -153,35 +150,47 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		return "", fmt.Errorf("failed to start VM: %w", err)
 	}
 
+	// Stop the base VM — it will be cloned for each Run
+	if opts.OnProgress != nil {
+		opts.OnProgress(fmt.Sprintf("Stopping base VM: %s...\n", baseName))
+	}
+	stopCmd := exec.CommandContext(ctx, "limactl", "stop", baseName)
+	if opts.OnProgress != nil {
+		stopCmd.Stdout = &progressWriter{onProgress: opts.OnProgress}
+		stopCmd.Stderr = &progressWriter{onProgress: opts.OnProgress}
+	}
+	if err := stopCmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to stop base VM: %w", err)
+	}
+
 	// Store cache key for verification
-	keyPath := filepath.Join(c.cacheDir, vmName+".key")
+	keyPath := filepath.Join(c.cacheDir, baseName+".key")
 	if err := os.WriteFile(keyPath, []byte(cacheKey), 0644); err != nil {
-		// Non-fatal, just log
 		if opts.OnProgress != nil {
 			opts.OnProgress(fmt.Sprintf("Warning: failed to write cache key: %v\n", err))
 		}
 	}
 
-	return vmName, nil
+	return baseName, nil
 }
 
-// Run executes a command in the Lima VM
+// Run clones the base VM, adds mounts, starts the clone, and executes a command in it.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
-	if c.vmName == "" {
-		return fmt.Errorf("no VM created, call Build first")
+	if c.baseVMName == "" {
+		return fmt.Errorf("no base VM created, call Build first")
 	}
 
-	// Ensure VM is running
-	if err := c.ensureRunning(ctx); err != nil {
+	// Create instance by cloning the base VM
+	instanceName, err := c.createInstance(ctx)
+	if err != nil {
 		return err
 	}
 
 	// Build the shell script
 	var scriptParts []string
 
-	// Create symlinks for file mounts (files are mounted to /tmp/silo-mounts/... and need symlinks)
+	// Create symlinks for file mounts (files are mounted to /silo/mounts/... and need symlinks)
 	for origPath, vmTempPath := range c.fileLinks {
-		// Create parent directory and symlink
 		parentDir := filepath.Dir(origPath)
 		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %q", parentDir))
 		scriptParts = append(scriptParts, fmt.Sprintf("ln -sf %q %q", vmTempPath, origPath))
@@ -209,8 +218,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	shellScript := strings.Join(scriptParts, " && ")
 
 	// Build limactl shell command
-	// Use bash -l -c to get a login shell that sources .bashrc
-	args := []string{"shell", c.vmName, "bash", "-l", "-c", shellScript}
+	args := []string{"shell", instanceName, "bash", "-l", "-c", shellScript}
 
 	cmd := exec.CommandContext(ctx, "limactl", args...)
 
@@ -230,7 +238,6 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 				}
 				defer term.RestoreTerminal(fd, oldState)
 
-				// Handle terminal resize signals
 				go c.monitorTTYSize(ctx, fd)
 			}
 		}
@@ -249,6 +256,79 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	return nil
+}
+
+// createInstance clones the base VM, injects mounts into the clone config, and starts it.
+func (c *Client) createInstance(ctx context.Context) (string, error) {
+	// Generate a unique instance name
+	instanceName := fmt.Sprintf("silo-run-%s-%s", c.baseVMName[len("silo-base-"):], randomHex(4))
+	c.instanceName = instanceName
+
+	// Clone the base VM
+	cloneCmd := exec.CommandContext(ctx, "limactl", "clone", "--tty=false", c.baseVMName, instanceName)
+	cloneCmd.Stdout = os.Stderr
+	cloneCmd.Stderr = os.Stderr
+	if err := cloneCmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to clone base VM: %w", err)
+	}
+
+	// Inject mounts into the clone's lima.yaml config
+	if len(c.mounts) > 0 {
+		if err := c.addMountsToInstance(instanceName); err != nil {
+			return "", fmt.Errorf("failed to add mounts to instance: %w", err)
+		}
+	}
+
+	// Start the cloned instance
+	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", instanceName)
+	startCmd.Stdout = os.Stderr
+	startCmd.Stderr = os.Stderr
+	if err := startCmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to start instance VM: %w", err)
+	}
+
+	return instanceName, nil
+}
+
+// addMountsToInstance appends mount configuration to a cloned instance's lima.yaml
+func (c *Client) addMountsToInstance(instanceName string) error {
+	configPath := filepath.Join(limaHome(), instanceName, "lima.yaml")
+
+	var mountsYAML strings.Builder
+	mountsYAML.WriteString("\nmounts:\n")
+	for _, m := range c.mounts {
+		mountsYAML.WriteString(fmt.Sprintf("  - location: %q\n", m.Source))
+		mountsYAML.WriteString(fmt.Sprintf("    mountPoint: %q\n", m.Target))
+		mountsYAML.WriteString(fmt.Sprintf("    writable: %v\n", m.Writable))
+	}
+
+	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open instance config: %w", err)
+	}
+	defer f.Close()
+
+	if _, err := f.WriteString(mountsYAML.String()); err != nil {
+		return fmt.Errorf("failed to write mounts to config: %w", err)
+	}
+
+	return nil
+}
+
+// limaHome returns the Lima home directory
+func limaHome() string {
+	if h := os.Getenv("LIMA_HOME"); h != "" {
+		return h
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".lima")
+}
+
+// randomHex returns n random bytes as a hex string
+func randomHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 // computeCacheKey generates a hash from the silo binary, template, and build args
@@ -282,23 +362,6 @@ func (c *Client) computeCacheKey(opts backend.BuildOptions) (string, error) {
 		h.Write([]byte(opts.BuildArgs[k]))
 	}
 
-	// Hash mounts (sorted for consistency)
-	mountsRO := make([]string, len(opts.MountsRO))
-	copy(mountsRO, opts.MountsRO)
-	sort.Strings(mountsRO)
-	for _, m := range mountsRO {
-		h.Write([]byte("RO:"))
-		h.Write([]byte(m))
-	}
-
-	mountsRW := make([]string, len(opts.MountsRW))
-	copy(mountsRW, opts.MountsRW)
-	sort.Strings(mountsRW)
-	for _, m := range mountsRW {
-		h.Write([]byte("RW:"))
-		h.Write([]byte(m))
-	}
-
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
@@ -318,30 +381,6 @@ func (c *Client) vmExists(name string) bool {
 	return false
 }
 
-// ensureRunning ensures the VM is in a running state
-func (c *Client) ensureRunning(ctx context.Context) error {
-	cmd := exec.Command("limactl", "list", "--format", "{{.Status}}", c.vmName)
-	out, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to check VM status: %w", err)
-	}
-
-	status := strings.TrimSpace(string(out))
-	if status == "Running" {
-		return nil
-	}
-
-	// Start the VM
-	startCmd := exec.CommandContext(ctx, "limactl", "start", "--tty=false", c.vmName)
-	startCmd.Stdout = os.Stderr
-	startCmd.Stderr = os.Stderr
-	if err := startCmd.Run(); err != nil {
-		return fmt.Errorf("failed to start VM: %w", err)
-	}
-
-	return nil
-}
-
 // mountEntry represents a mount configuration for the Lima template
 type mountEntry struct {
 	Source   string // path on host
@@ -356,7 +395,6 @@ type templateData struct {
 	User   string // username
 	UID    string // user ID
 	Home   string // home directory path (e.g., "/Users/username")
-	Mounts []mountEntry
 }
 
 // mountInfo holds information about a mount and any file links needed
@@ -451,8 +489,8 @@ func (c *Client) prepareMounts(opts backend.BuildOptions) ([]mountEntry, error) 
 	return mounts, nil
 }
 
-// generateConfig generates a Lima YAML config with mounts and settings
-func (c *Client) generateConfig(opts backend.BuildOptions, mounts []mountEntry) (string, error) {
+// generateConfig generates a Lima YAML config for the base VM (no mounts)
+func (c *Client) generateConfig(opts backend.BuildOptions) (string, error) {
 	// Get host resources: 100% of CPUs
 	cpus := runtime.NumCPU()
 
@@ -471,7 +509,6 @@ func (c *Client) generateConfig(opts backend.BuildOptions, mounts []mountEntry) 
 		User:   opts.BuildArgs["USER"],
 		UID:    opts.BuildArgs["UID"],
 		Home:   opts.BuildArgs["HOME"],
-		Mounts: mounts,
 	}
 
 	// Parse the template

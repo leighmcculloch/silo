@@ -26,14 +26,6 @@ user:
   uid: {{.UID}}
   home: {{.Home}}
 
-# Mount macOS paths into the VM at the same locations
-mounts:
-{{- range .Mounts}}
-  - location: "{{.Source}}"
-    mountPoint: "{{.Target}}"
-    writable: {{.Writable}}
-{{- end}}
-
 # SSH settings
 ssh:
   localPort: 0
