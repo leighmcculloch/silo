@@ -499,6 +499,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
+	// Log prehooks
+	if len(cfg.Prehooks) > 0 {
+		cli.LogTo(stderr, "Prehooks:")
+		for _, hook := range cfg.Prehooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+
 	cli.LogTo(stderr, "Container name: %s", containerName)
 	cli.LogTo(stderr, "Running %s...", tool)
 
