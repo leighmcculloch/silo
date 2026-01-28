@@ -9,6 +9,9 @@ type Backend interface {
 	// Build prepares an environment for running tools (builds an image or creates a VM)
 	Build(ctx context.Context, opts BuildOptions) (string, error)
 
+	// ImageExists returns true if an image with the given name exists locally.
+	ImageExists(ctx context.Context, name string) (bool, error)
+
 	// Run executes a command in the prepared environment
 	Run(ctx context.Context, opts RunOptions) error
 
@@ -23,6 +26,9 @@ type BuildOptions struct {
 
 	// Target specifies which tool to build (e.g., "claude", "opencode", "copilot")
 	Target string
+
+	// Tag is the image tag to apply. If empty, Target is used as the tag.
+	Tag string
 
 	// BuildArgs are variables passed to the build process
 	BuildArgs map[string]string

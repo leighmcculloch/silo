@@ -41,6 +41,15 @@ func (c *Client) Close() error {
 	return c.cli.Close()
 }
 
+// ImageExists returns true if an image with the given name exists locally.
+func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
+	_, _, err := c.cli.ImageInspectWithRaw(ctx, name)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Build builds a Docker image and returns the image ID
 func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, error) {
 	// Create a tar archive with the Dockerfile
@@ -71,12 +80,18 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		buildArgs[k] = &v
 	}
 
+	// Determine the image tag
+	tag := opts.Tag
+	if tag == "" {
+		tag = opts.Target
+	}
+
 	// Build the image
 	resp, err := c.cli.ImageBuild(ctx, &buf, types.ImageBuildOptions{
 		Dockerfile: "Dockerfile",
 		Target:     opts.Target,
 		BuildArgs:  buildArgs,
-		Tags:       []string{opts.Target},
+		Tags:       []string{tag},
 		Remove:     true,
 	})
 	if err != nil {
@@ -115,7 +130,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		return "", fmt.Errorf("failed to read build output: %w", err)
 	}
 
-	return opts.Target, nil
+	return tag, nil
 }
 
 // Run runs a container with the given options

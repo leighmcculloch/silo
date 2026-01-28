@@ -51,6 +51,15 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// ImageExists returns true if an image with the given name exists locally.
+func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "container", "image", "inspect", name)
+	if err := cmd.Run(); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Build builds a container image using the container CLI.
 func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, error) {
 	// Write Dockerfile to a temp dir as the build context
@@ -65,9 +74,14 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		return "", fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
 
+	tag := opts.Tag
+	if tag == "" {
+		tag = opts.Target
+	}
+
 	args := []string{"build",
 		"-f", dockerfilePath,
-		"-t", opts.Target,
+		"-t", tag,
 		"--progress", "plain",
 	}
 	args = append(args, resourceArgs()...)
@@ -106,7 +120,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		return "", fmt.Errorf("build failed: %w", err)
 	}
 
-	return opts.Target, nil
+	return tag, nil
 }
 
 // Run runs a container using the container CLI.

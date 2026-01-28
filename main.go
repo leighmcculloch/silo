@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"math/rand"
@@ -10,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -343,26 +345,41 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
-	// Build the image/VM
-	cli.LogTo(stderr, "Building environment for %s...", tool)
-	_, err = backendClient.Build(ctx, backend.BuildOptions{
-		Dockerfile: Dockerfile(),
-		Target:     tool,
-		BuildArgs: map[string]string{
-			"HOME": home,
-			"USER": user,
-			"UID":  fmt.Sprintf("%d", uid),
-		},
-		MountsRO: mountsRO,
-		MountsRW: mountsRW,
-		OnProgress: func(msg string) {
-			fmt.Fprint(stderr, msg)
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to build environment: %w", err)
+	// Compute content-addressed tag for caching
+	dockerfile := Dockerfile()
+	buildArgs := map[string]string{
+		"HOME": home,
+		"USER": user,
+		"UID":  fmt.Sprintf("%d", uid),
 	}
-	cli.LogSuccessTo(stderr, "Environment ready")
+	imageTag := buildImageTag(tool, dockerfile, buildArgs)
+
+	// Check if image already exists
+	exists, err := backendClient.ImageExists(ctx, imageTag)
+	if err != nil {
+		exists = false
+	}
+
+	if exists {
+		cli.LogSuccessTo(stderr, "Environment cached")
+	} else {
+		cli.LogTo(stderr, "Building environment for %s...", tool)
+		_, err = backendClient.Build(ctx, backend.BuildOptions{
+			Dockerfile: dockerfile,
+			Target:     tool,
+			Tag:        imageTag,
+			BuildArgs:  buildArgs,
+			MountsRO:   mountsRO,
+			MountsRW:   mountsRW,
+			OnProgress: func(msg string) {
+				fmt.Fprint(stderr, msg)
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to build environment: %w", err)
+		}
+		cli.LogSuccessTo(stderr, "Environment ready")
+	}
 
 	// Collect environment variables
 	var envVars []string
@@ -447,7 +464,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Run the container/VM
 	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:    tool,
+		Image:    imageTag,
 		Name:     containerName,
 		WorkDir:  cwd,
 		MountsRO: mountsRO,
@@ -857,4 +874,28 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 
 	cli.LogSuccessTo(stderr, "Created %s", configPath)
 	return nil
+}
+
+// buildImageTag returns a content-addressed image tag encoding the build inputs.
+func buildImageTag(target, dockerfile string, buildArgs map[string]string) string {
+	h := sha256.New()
+	h.Write([]byte(dockerfile))
+	h.Write([]byte{0})
+	h.Write([]byte(target))
+	h.Write([]byte{0})
+
+	keys := make([]string, 0, len(buildArgs))
+	for k := range buildArgs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		h.Write([]byte(k))
+		h.Write([]byte("="))
+		h.Write([]byte(buildArgs[k]))
+		h.Write([]byte{0})
+	}
+
+	sum := fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("silo-%s-%s", target, sum[:16])
 }
