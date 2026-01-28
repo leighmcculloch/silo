@@ -64,8 +64,6 @@ RUN ARCH=$(dpkg --print-architecture) \
 
 # Install MCP servers
 RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
-RUN deno install --global --deny-read --allow-env --allow-net npm:server-perplexity-ask
-RUN deno install --global --allow-env --allow-net --allow-read=$HOME/.cache/deno/npm/registry.npmjs.org/@upstash/context7-mcp npm:@upstash/context7-mcp
 
 ENV TERM="xterm-256color"
 

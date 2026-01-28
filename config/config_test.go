@@ -33,7 +33,7 @@ func TestLoad(t *testing.T) {
 		"mounts_ro": ["/test/mount/ro"],
 		"mounts_rw": ["/test/mount/rw"],
 		"env": ["TEST_VAR", "FOO=bar"],
-		"prehooks": ["echo hello"],
+		"pre_run_hooks": ["echo hello"],
 		"tools": {
 			"test-tool": {
 				"mounts_ro": ["/tool/mount/ro"],
@@ -64,8 +64,8 @@ func TestLoad(t *testing.T) {
 		t.Errorf("expected env [TEST_VAR, FOO=bar], got %v", cfg.Env)
 	}
 
-	if len(cfg.Prehooks) != 1 || cfg.Prehooks[0] != "echo hello" {
-		t.Errorf("expected prehooks [echo hello], got %v", cfg.Prehooks)
+	if len(cfg.PreRunHooks) != 1 || cfg.PreRunHooks[0] != "echo hello" {
+		t.Errorf("expected pre_run_hooks [echo hello], got %v", cfg.PreRunHooks)
 	}
 
 	toolCfg, ok := cfg.Tools["test-tool"]
@@ -140,10 +140,10 @@ func TestLoadJSONC(t *testing.T) {
 
 func TestMerge(t *testing.T) {
 	base := Config{
-		MountsRO: []string{"/base/mount/ro"},
-		MountsRW: []string{"/base/mount/rw"},
-		Env:      []string{"BASE_VAR", "BASE=1"},
-		Prehooks:  []string{"echo base"},
+		MountsRO:    []string{"/base/mount/ro"},
+		MountsRW:    []string{"/base/mount/rw"},
+		Env:         []string{"BASE_VAR", "BASE=1"},
+		PreRunHooks: []string{"echo base"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				MountsRW: []string{"/tool1/base"},
@@ -152,10 +152,10 @@ func TestMerge(t *testing.T) {
 	}
 
 	overlay := Config{
-		MountsRO: []string{"/overlay/mount/ro"},
-		MountsRW: []string{"/overlay/mount/rw"},
-		Env:      []string{"OVERLAY_VAR", "OVERLAY=1"},
-		Prehooks:  []string{"echo overlay"},
+		MountsRO:    []string{"/overlay/mount/ro"},
+		MountsRW:    []string{"/overlay/mount/rw"},
+		Env:         []string{"OVERLAY_VAR", "OVERLAY=1"},
+		PreRunHooks: []string{"echo overlay"},
 		Tools: map[string]ToolConfig{
 			"tool1": {
 				MountsRW: []string{"/tool1/overlay"},
@@ -187,12 +187,12 @@ func TestMerge(t *testing.T) {
 		t.Errorf("expected 4 env, got %d", len(result.Env))
 	}
 
-	// Check prehooks arrays are appended
-	if len(result.Prehooks) != 2 {
-		t.Errorf("expected 2 prehooks commands, got %d", len(result.Prehooks))
+	// Check pre_run_hooks arrays are appended
+	if len(result.PreRunHooks) != 2 {
+		t.Errorf("expected 2 pre_run_hooks commands, got %d", len(result.PreRunHooks))
 	}
-	if result.Prehooks[0] != "echo base" || result.Prehooks[1] != "echo overlay" {
-		t.Errorf("unexpected prehooks: %v", result.Prehooks)
+	if result.PreRunHooks[0] != "echo base" || result.PreRunHooks[1] != "echo overlay" {
+		t.Errorf("unexpected pre_run_hooks: %v", result.PreRunHooks)
 	}
 
 	// Check tools are merged
@@ -213,34 +213,34 @@ func TestMerge(t *testing.T) {
 	}
 }
 
-func TestMergePrehooksAppend(t *testing.T) {
-	// Test that prehooks arrays are appended
+func TestMergePreRunHooksAppend(t *testing.T) {
+	// Test that pre_run_hooks arrays are appended
 	base := Config{
-		Prehooks: []string{"echo base"},
+		PreRunHooks: []string{"echo base"},
 	}
 	overlay := Config{
-		Prehooks: []string{"echo overlay"},
+		PreRunHooks: []string{"echo overlay"},
 	}
 
 	result := Merge(base, overlay)
-	if len(result.Prehooks) != 2 {
-		t.Errorf("expected 2 prehooks commands, got %d", len(result.Prehooks))
+	if len(result.PreRunHooks) != 2 {
+		t.Errorf("expected 2 pre_run_hooks commands, got %d", len(result.PreRunHooks))
 	}
-	if result.Prehooks[0] != "echo base" || result.Prehooks[1] != "echo overlay" {
-		t.Errorf("expected [echo base, echo overlay], got %v", result.Prehooks)
+	if result.PreRunHooks[0] != "echo base" || result.PreRunHooks[1] != "echo overlay" {
+		t.Errorf("expected [echo base, echo overlay], got %v", result.PreRunHooks)
 	}
 
 	// Test that empty overlay doesn't add anything
 	base2 := Config{
-		Prehooks: []string{"echo base"},
+		PreRunHooks: []string{"echo base"},
 	}
 	overlay2 := Config{
-		Prehooks: []string{},
+		PreRunHooks: []string{},
 	}
 
 	result2 := Merge(base2, overlay2)
-	if len(result2.Prehooks) != 1 || result2.Prehooks[0] != "echo base" {
-		t.Errorf("expected [echo base], got %v", result2.Prehooks)
+	if len(result2.PreRunHooks) != 1 || result2.PreRunHooks[0] != "echo base" {
+		t.Errorf("expected [echo base], got %v", result2.PreRunHooks)
 	}
 }
 

@@ -162,7 +162,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		})
 	}
 
-	// Build the entrypoint script if we have prehooks or a command
+	// Build the entrypoint script if we have pre-run hooks or a command
 	var entrypoint []string
 	var cmd []string
 
@@ -170,10 +170,10 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		// Build full command: Command + Args
 		fullCmd := append(opts.Command, opts.Args...)
 
-		if len(opts.Prehooks) > 0 {
-			// Create a bash script that runs prehooks then execs the command
+		if len(opts.PreRunHooks) > 0 {
+			// Create a bash script that runs pre-run hooks then execs the command
 			var script strings.Builder
-			for _, hook := range opts.Prehooks {
+			for _, hook := range opts.PreRunHooks {
 				script.WriteString(hook)
 				script.WriteString(" && ")
 			}
@@ -182,7 +182,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 			entrypoint = []string{"/bin/bash", "-c", script.String()}
 			cmd = nil
 		} else {
-			// No prehooks, just run the command directly
+			// No pre-run hooks, just run the command directly
 			entrypoint = []string{fullCmd[0]}
 			if len(fullCmd) > 1 {
 				cmd = fullCmd[1:]

@@ -39,8 +39,10 @@ const sampleConfig = `{
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   // "env": [],
+  // Shell commands to run inside the container after building the image
+  // "post_build_hooks": [],
   // Shell commands to run inside the container before the tool
-  // "prehooks": [],
+  // "pre_run_hooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
   // "tools": {}
@@ -401,6 +403,24 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 			return fmt.Errorf("failed to build environment: %w", err)
 		}
 		cli.LogSuccessTo(stderr, "Environment ready")
+
+		// Run post-build hooks if any
+		if len(cfg.PostBuildHooks) > 0 {
+			cli.LogTo(stderr, "Running post-build hooks...")
+			for _, hook := range cfg.PostBuildHooks {
+				cli.LogBulletTo(stderr, "%s", hook)
+			}
+			err = backendClient.Run(ctx, backend.RunOptions{
+				Image:       imageTag,
+				Name:        backendClient.NextContainerName(ctx, "silo-postbuild"),
+				WorkDir:     home,
+				Command:     []string{"/bin/bash", "-c", strings.Join(cfg.PostBuildHooks, " && ")},
+			})
+			if err != nil {
+				return fmt.Errorf("post-build hooks failed: %w", err)
+			}
+			cli.LogSuccessTo(stderr, "Post-build hooks complete")
+		}
 	}
 
 	// Collect environment variables
@@ -512,10 +532,10 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
-	// Log prehooks
-	if len(cfg.Prehooks) > 0 {
-		cli.LogTo(stderr, "Prehooks:")
-		for _, hook := range cfg.Prehooks {
+	// Log pre-run hooks
+	if len(cfg.PreRunHooks) > 0 {
+		cli.LogTo(stderr, "Pre-run hooks:")
+		for _, hook := range cfg.PreRunHooks {
 			cli.LogBulletTo(stderr, "%s", hook)
 		}
 	}
@@ -540,7 +560,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		Env:      envVars,
 		Command:  toolCommands[tool],
 		Args:     toolArgs,
-		Prehooks: cfg.Prehooks,
+		PreRunHooks: cfg.PreRunHooks,
 	})
 
 	if err != nil {
@@ -628,14 +648,25 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "  ],")
 
-	// Prehooks
-	fmt.Fprintf(stdout, "  %s: [\n", key("prehooks"))
-	for i, v := range cfg.Prehooks {
+	// PostBuildHooks
+	fmt.Fprintf(stdout, "  %s: [\n", key("post_build_hooks"))
+	for i, v := range cfg.PostBuildHooks {
 		comma := ","
-		if i == len(cfg.Prehooks)-1 {
+		if i == len(cfg.PostBuildHooks)-1 {
 			comma = ""
 		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.Prehooks[v]))
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.PostBuildHooks[v]))
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// PreRunHooks
+	fmt.Fprintf(stdout, "  %s: [\n", key("pre_run_hooks"))
+	for i, v := range cfg.PreRunHooks {
+		comma := ","
+		if i == len(cfg.PreRunHooks)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.PreRunHooks[v]))
 	}
 	fmt.Fprintln(stdout, "  ],")
 
@@ -750,11 +781,22 @@ func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	}
 	fmt.Fprintln(stdout, "  ],")
 
-	// Prehooks
-	fmt.Fprintln(stdout, "  \"prehooks\": [")
-	for i, v := range cfg.Prehooks {
+	// PostBuildHooks
+	fmt.Fprintln(stdout, "  \"post_build_hooks\": [")
+	for i, v := range cfg.PostBuildHooks {
 		comma := ","
-		if i == len(cfg.Prehooks)-1 {
+		if i == len(cfg.PostBuildHooks)-1 {
+			comma = ""
+		}
+		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
+	}
+	fmt.Fprintln(stdout, "  ],")
+
+	// PreRunHooks
+	fmt.Fprintln(stdout, "  \"pre_run_hooks\": [")
+	for i, v := range cfg.PreRunHooks {
+		comma := ","
+		if i == len(cfg.PreRunHooks)-1 {
 			comma = ""
 		}
 		fmt.Fprintf(stdout, "    %q%s\n", v, comma)

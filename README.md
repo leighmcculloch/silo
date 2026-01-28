@@ -152,8 +152,13 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
     "MY_VAR=custom_value"
   ],
 
-  // Shell commands to run inside the container before the tool
-  "prehooks": [
+  // Shell commands to run inside the container after building the image (once per build)
+  "post_build_hooks": [
+    "deno install --global --allow-env --allow-net npm:some-mcp-server"
+  ],
+
+  // Shell commands to run inside the container before the tool (every run)
+  "pre_run_hooks": [
     "source ~/.env_api_keys"
   ],
 
@@ -243,7 +248,7 @@ Git identity is configured automatically from your host:
 ## Container Environment
 
 The container environment includes a development toolchain. This is not
-configurable today, other than through the prehooks.
+configurable today, other than through the hooks.
 
 ### Pre-installed Software
 
@@ -260,26 +265,43 @@ configurable today, other than through the prehooks.
 | Server | Description |
 |--------|-------------|
 | `github-mcp-server` | GitHub integration for AI tools |
-| `server-perplexity-ask` | Perplexity AI search |
-| `@upstash/context7-mcp` | Context7 documentation search |
 
 
 ## Advanced Usage
 
-### Prehooks
+### Hooks
 
-Prehooks are shell commands that run inside the container before the AI tool starts. Use them to set up environment variables, run initialization scripts, or install tools:
+Silo supports two types of hooks for customizing the container environment:
+
+#### Post-build Hooks
+
+Post-build hooks run once after the image is built. Use them to install additional software or MCP servers:
 
 ```jsonc
 {
-  "prehooks": [
+  "post_build_hooks": [
+    "deno install --global --allow-env --allow-net npm:server-perplexity-ask",
+    "go install github.com/example/my-mcp-server@latest"
+  ]
+}
+```
+
+Post-build hooks are chained with `&&`, so if any fails, the build will fail.
+
+#### Pre-run Hooks
+
+Pre-run hooks run every time before the AI tool starts. Use them to set up environment variables or run initialization scripts:
+
+```jsonc
+{
+  "pre_run_hooks": [
     "source ~/.env_api_keys",
     "export CUSTOM_VAR=$(cat /secrets/key)"
   ]
 }
 ```
 
-Prehooks are chained with `&&`, so if any fails, the tool won't start.
+Pre-run hooks are chained with `&&`, so if any fails, the tool won't start.
 
 ### Image Caching
 
@@ -365,7 +387,7 @@ These will be passed through from your host environment.
   "mounts_ro": [
     "~/.env_api_keys"
   ],
-  "prehooks": [
+  "pre_run_hooks": [
     "source ~/.env_api_keys"
   ]
 }

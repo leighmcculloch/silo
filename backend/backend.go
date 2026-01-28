@@ -90,6 +90,6 @@ type RunOptions struct {
 	// Args are additional arguments appended to Command
 	Args []string
 
-	// Prehooks are shell commands to run before the main command
-	Prehooks []string
+	// PreRunHooks are shell commands to run before the main command
+	PreRunHooks []string
 }

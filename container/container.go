@@ -144,10 +144,10 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	var runArgs []string
 
 	if len(fullCmd) > 0 {
-		if len(opts.Prehooks) > 0 {
-			// Create a bash script that runs prehooks then execs the command
+		if len(opts.PreRunHooks) > 0 {
+			// Create a bash script that runs pre-run hooks then execs the command
 			var script strings.Builder
-			for _, hook := range opts.Prehooks {
+			for _, hook := range opts.PreRunHooks {
 				script.WriteString(hook)
 				script.WriteString(" && ")
 			}
@@ -236,13 +236,13 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 
-	// Prepend symlink commands into prehooks so they run before the main command.
+	// Prepend symlink commands into pre-run hooks so they run before the main command.
 	if len(symlinkCmds) > 0 {
-		allPrehooks := append(symlinkCmds, opts.Prehooks...)
+		allPreRunHooks := append(symlinkCmds, opts.PreRunHooks...)
 		// Rebuild entrypoint to include symlink setup.
 		if len(fullCmd) > 0 {
 			var script strings.Builder
-			for _, hook := range allPrehooks {
+			for _, hook := range allPreRunHooks {
 				script.WriteString(hook)
 				script.WriteString(" && ")
 			}
