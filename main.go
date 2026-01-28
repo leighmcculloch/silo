@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -438,7 +437,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	// Generate container name
 	baseName := filepath.Base(cwd)
 	baseName = strings.ReplaceAll(baseName, ".", "")
-	containerName := fmt.Sprintf("%s-%02d", baseName, rand.Intn(100))
+	containerName := backendClient.NextContainerName(ctx, baseName)
 
 	// Log mounts
 	seen := make(map[string]bool)

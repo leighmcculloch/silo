@@ -306,6 +306,34 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	return nil
 }
 
+// NextContainerName returns the next sequential container name for the given
+// base name. It lists existing containers with the same prefix and returns
+// baseName-N where N is one more than the highest existing suffix.
+func (c *Client) NextContainerName(ctx context.Context, baseName string) string {
+	// List all containers (running and stopped)
+	cmd := exec.CommandContext(ctx, "container", "ps", "-a", "--format", "{{.Names}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Sprintf("%s-1", baseName)
+	}
+
+	maxNum := 0
+	prefix := baseName + "-"
+	for _, line := range strings.Split(string(output), "\n") {
+		name := strings.TrimSpace(line)
+		if suffix, ok := strings.CutPrefix(name, prefix); ok {
+			var num int
+			if _, err := fmt.Sscanf(suffix, "%d", &num); err == nil {
+				if num > maxNum {
+					maxNum = num
+				}
+			}
+		}
+	}
+
+	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
+}
+
 // stageFileMount creates a staging directory containing a hard link to the
 // given file. It returns the host staging directory path and the corresponding
 // container-side mount target path.

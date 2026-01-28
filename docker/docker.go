@@ -324,3 +324,30 @@ func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uint
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// NextContainerName returns the next sequential container name for the given
+// base name. It lists existing containers with the same prefix and returns
+// baseName-N where N is one more than the highest existing suffix.
+func (c *Client) NextContainerName(ctx context.Context, baseName string) string {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return fmt.Sprintf("%s-1", baseName)
+	}
+
+	maxNum := 0
+	prefix := "/" + baseName + "-"
+	for _, ctr := range containers {
+		for _, name := range ctr.Names {
+			if suffix, ok := strings.CutPrefix(name, prefix); ok {
+				var num int
+				if _, err := fmt.Sscanf(suffix, "%d", &num); err == nil {
+					if num > maxNum {
+						maxNum = num
+					}
+				}
+			}
+		}
+	}
+
+	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
+}

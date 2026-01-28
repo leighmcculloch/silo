@@ -12,6 +12,11 @@ type Backend interface {
 	// ImageExists returns true if an image with the given name exists locally.
 	ImageExists(ctx context.Context, name string) (bool, error)
 
+	// NextContainerName returns the next sequential container name for the given
+	// base name. It lists existing containers with the same prefix and returns
+	// baseName-N where N is one more than the highest existing suffix.
+	NextContainerName(ctx context.Context, baseName string) string
+
 	// Run executes a command in the prepared environment
 	Run(ctx context.Context, opts RunOptions) error
 
