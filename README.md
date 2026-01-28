@@ -101,8 +101,6 @@ Docker on macOS runs all containers inside a single shared Linux VM that typical
 
 Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See [apple/container#technical-overview](https://github.com/apple/container/blob/main/docs/technical-overview.md) and [youtube](https://www.youtube.com/watch?v=JvQtvbhtXmo) for more details.
 
----
-
 ## Configuration
 
 Silo uses a hierarchical configuration system. Settings are merged from multiple files, with later files overriding earlier ones.
@@ -216,8 +214,6 @@ Example output from `silo config show`:
 }
 ```
 
----
-
 ## Default Behavior
 
 ### What Gets Mounted Automatically
@@ -244,8 +240,6 @@ Git identity is configured automatically from your host:
 - `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`
 - `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_EMAIL`
 
----
-
 ## Container Environment
 
 The container environment includes a development toolchain. This is not
@@ -269,7 +263,6 @@ configurable today, other than through the prehooks.
 | `server-perplexity-ask` | Perplexity AI search |
 | `@upstash/context7-mcp` | Context7 documentation search |
 
----
 
 ## Advanced Usage
 
@@ -327,8 +320,6 @@ silo destroy
 silo destroy --backend docker
 silo destroy --backend container
 ```
-
----
 
 ## Examples
 
