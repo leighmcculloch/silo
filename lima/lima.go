@@ -107,6 +107,8 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		if opts.OnProgress != nil {
 			opts.OnProgress(fmt.Sprintf("Using cached base VM: %s\n", baseName))
 		}
+		// Ensure the base VM is stopped (it may still be running if a previous run was interrupted)
+		_ = exec.CommandContext(ctx, "limactl", "stop", baseName).Run()
 		return baseName, nil
 	}
 
