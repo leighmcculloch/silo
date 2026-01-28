@@ -1,6 +1,6 @@
 # Silo
 
-Run AI coding assistants (Claude Code, OpenCode, GitHub Copilot CLI) in isolated Docker containers with proper security sandboxing.
+Run AI coding assistants in containers/vms.
 
 ```
 ███████╗██╗██╗      ██████╗
@@ -11,227 +11,420 @@ Run AI coding assistants (Claude Code, OpenCode, GitHub Copilot CLI) in isolated
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-## Features
+Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers or Apple containers (lightweight VMs). The coding tools are configured to run in yolo mode.
 
-- **Isolated Execution**: Run AI coding tools in Docker containers with security sandboxing
-- **Multiple Tools**: Support for Claude Code, OpenCode, and GitHub Copilot CLI
-- **Automatic Setup**: Builds Docker images with all required development tools (Go, Rust, Deno, GitHub CLI)
-- **Git Integration**: Automatically configures git identity in the container
-- **Worktree Support**: Detects and mounts git worktree common directories
-- **Configurable**: Flexible configuration system for mounts, environment variables, and API keys
-- **Beautiful CLI**: Interactive tool selection with colorful, informative output
+> ![WARNING]
+> This is a side-project and the isolation and sandboxing is best effort. No sandbox is perfect. Use at your own risk.
+
+## Quick Start
+
+```bash
+# Install
+go install github.com/leighmcculloch/silo@latest
+
+# Run (interactive tool selection)
+silo
+
+# Or run a specific tool
+silo claude
+```
+
+That's it. Silo builds the environment automatically on first run.
+
+## Why Silo?
+
+AI coding assistants need broad access to work effectively—they read files, run commands, and modify code. This creates a tension: give them access and accept the risk, or restrict them and lose capability.
+
+Silo resolves this by running AI tools in isolated containers with:
+
+- **Security isolation**: No privileged access, all capabilities dropped, IPC isolation
+- **Controlled access**: Only your project directory and configured paths are mounted
+- **Full functionality**: Tools work exactly as they would on your host system
+- **Git integration**: Your git identity is automatically configured inside the container
+
+## Supported Tools
+
+| Tool | Command | Description |
+|------|---------|-------------|
+| Claude Code | `silo claude` | Anthropic's CLI for Claude |
+| OpenCode | `silo opencode` | AI coding CLI |
+| GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 
 ## Installation
-
-### From Source
 
 ```bash
 go install github.com/leighmcculloch/silo@latest
 ```
 
-### Build Locally
+### Prerequisites
 
-```bash
-git clone https://github.com/leighmcculloch/silo.git
-cd silo
-go build -o silo .
-```
-
-## Prerequisites
-
-- **Docker**: Silo requires Docker to be installed and running
-- **Go 1.21+**: Required if building from source
+- **Go 1.25+**: To install
+- **Docker or any compatible container runtime**: Required for the `docker` backend
+- **Apple Container**: Required for the `container` backend (`brew install container`)
 
 ## Usage
 
-### Interactive Mode
-
-Run `silo` without arguments to interactively select a tool:
+### Basic Usage
 
 ```bash
+# Interactive tool selection
 silo
-```
 
-### Run a Specific Tool
-
-```bash
-# Run Claude Code
+# Run a specific tool
 silo claude
-
-# Run OpenCode
 silo opencode
-
-# Run GitHub Copilot CLI
 silo copilot
 ```
 
-### Pass Arguments to the Tool
+### Choosing a Backend
+
+Silo supports two backends:
+
+| Backend | Flag | Description |
+|---------|------|-------------|
+| Docker | `--backend docker` | Default. Uses Docker containers |
+| Container | `--backend container` | Apple lightweight VMs (macOS only) |
 
 ```bash
-silo claude -- --help
+# Use Docker (default)
+silo claude
+
+# Use Apple container backend
+silo --backend container claude
 ```
 
-### Show Current Configuration
+You can also set the backend in your configuration file.
 
-```bash
-silo config
-```
-
-### Create a Local Configuration File
-
-```bash
-silo init
-```
-
-### Shell Completion
-
-Generate shell completion scripts:
-
-```bash
-# Bash
-silo completion bash > /etc/bash_completion.d/silo
-
-# Zsh
-silo completion zsh > "${fpath[1]}/_silo"
-
-# Fish
-silo completion fish > ~/.config/fish/completions/silo.fish
-```
+---
 
 ## Configuration
 
-Silo uses a hierarchical configuration system that merges settings from multiple sources:
+Silo uses a hierarchical configuration system. Settings are merged from multiple files, with later files overriding earlier ones.
 
-1. **Global config**: `~/.config/silo/silo.jsonc` (or `$XDG_CONFIG_HOME/silo/silo.jsonc`)
-2. **Local configs**: `silo.jsonc` files from root to current directory (closer files override)
+### Configuration Files
 
-Configuration files support JSONC (JSON with Comments), allowing `//` and `/* */` style comments.
+Configuration is loaded in this order (later overrides earlier):
 
-### Configuration Schema
+1. **Built-in defaults** — Defaults for each tool
+2. **Global config** — `~/.config/silo/silo.jsonc`, respecting `XDG_CONFIG_HOME`
+3. **Local configs** — `silo.jsonc` files from filesystem root to current directory
+
+### Quick Setup
+
+```bash
+# Create a configuration file interactively
+silo config init
+
+# Or specify directly
+silo config init --global  # ~/.config/silo/silo.jsonc
+silo config init --local   # ./silo.jsonc
+```
+
+### Configuration Format
+
+Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Read-only directories or files to mount into the container
+  // Backend: "docker" (default) or "container" (Apple VMs)
+  "backend": "docker",
+
+  // Read-only mounts (paths visible to the AI but not writable)
   "mounts_ro": [
-    "/path/to/readonly/mount"
+    "/path/to/reference/docs"
   ],
-  // Read-write directories or files to mount into the container
+
+  // Read-write mounts (paths the AI can modify)
   "mounts_rw": [
-    "/path/to/readwrite/mount"
+    "/path/to/shared/libraries"
   ],
-  // Environment variables: names without '=' pass through from host,
-  // names with '=' set explicitly (e.g., "FOO=bar")
+
+  // Environment variables
+  // - Without '=': Pass through from host (e.g., "GITHUB_TOKEN")
+  // - With '=': Set explicitly (e.g., "DEBUG=true")
   "env": [
-    "MY_API_KEY",
-    "FOO=bar"
+    "GITHUB_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "MY_VAR=custom_value"
   ],
+
   // Shell commands to run inside the container before the tool
   "prehooks": [
     "source ~/.env_api_keys"
   ],
-  // Tool-specific configuration
+
+  // Tool-specific configuration (merged with global settings)
   "tools": {
     "claude": {
-      "mounts_ro": [],
-      "mounts_rw": [],
-      "env": []
+      "mounts_rw": ["~/.claude.json", "~/.claude"],
+      "env": ["CLAUDE_SPECIFIC_VAR"]
     }
   }
 }
 ```
 
-### Configuration Options
+### Configuration Merging
 
-| Option | Description |
-|--------|-------------|
-| `mounts_ro` | Read-only directories or files to mount into the container |
-| `mounts_rw` | Read-write directories or files to mount into the container |
-| `env` | Environment variables: names without `=` pass through from host, with `=` set explicitly |
-| `prehooks` | Shell commands to run inside the container before the tool |
-| `tools` | Tool-specific configuration overrides |
+Arrays are **appended** (not replaced) when configs are merged:
 
-### Example Configurations
+```jsonc
+// ~/.config/silo/silo.jsonc (global)
+{ "env": ["GITHUB_TOKEN"] }
 
-#### Global Configuration (`~/.config/silo/silo.jsonc`)
+// ./silo.jsonc (local)
+{ "env": ["PROJECT_TOKEN"] }
 
-```json
+// Result: env = ["GITHUB_TOKEN", "PROJECT_TOKEN"]
+```
+
+The `backend` setting is replaced (later config wins).
+
+### Managing Configuration
+
+```bash
+# Show merged configuration with source annotations
+silo config show
+
+# List all config file paths being checked
+silo config paths
+
+# Edit a config file in your $EDITOR
+silo config edit
+
+# Show built-in default configuration
+silo config default
+```
+
+Example output from `silo config show`:
+```jsonc
 {
-  "env": [
-    "GITHUB_TOKEN",
-    "ANTHROPIC_API_KEY"
+  "backend": "docker", // ~/.config/silo/silo.jsonc
+  "mounts_rw": [
+    "~/.claude.json", // default
+    "~/.claude" // default
   ],
-  "source_files": [
-    "~/.env_api_keys"
+  "env": [
+    "GITHUB_TOKEN", // ~/.config/silo/silo.jsonc
+    "PROJECT_KEY" // /path/to/project/silo.jsonc
   ]
 }
 ```
 
-#### Project Configuration (`silo.jsonc`)
+---
 
-```json
+## Default Behavior
+
+### What Gets Mounted Automatically
+
+Silo automatically mounts these paths (read-write):
+
+| Tool | Auto-mounted Paths |
+|------|-------------------|
+| All | Current working directory |
+| All | Git worktree common directories (detected automatically) |
+| Claude | `~/.claude.json`, `~/.claude/` |
+| OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/` (respecting XDG env vars) |
+| Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
+
+### Environment Variables
+
+Some environment variables are automatically passed through:
+
+| Tool | Auto-passed Variables |
+|------|----------------------|
+| Copilot | `COPILOT_GITHUB_TOKEN` |
+
+Git identity is configured automatically from your host:
+- `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`
+- `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_EMAIL`
+
+---
+
+## Container Environment
+
+The container environment includes a development toolchain. This is not
+configurable today, other than through the prehooks.
+
+### Pre-installed Software
+
+| Category | Included |
+|----------|----------|
+| **Base** | Ubuntu 24.04, build-essential, pkg-config, libssl-dev |
+| **Languages** | Go (latest), Rust (stable + nightly), Deno |
+| **Tools** | git, curl, jq, zstd, unzip, GitHub CLI |
+| **Go** | gopls (LSP server) |
+| **Rust** | rust-analyzer, wasm32v1-none target |
+
+### Pre-installed MCP Servers
+
+| Server | Description |
+|--------|-------------|
+| `github-mcp-server` | GitHub integration for AI tools |
+| `server-perplexity-ask` | Perplexity AI search |
+| `@upstash/context7-mcp` | Context7 documentation search |
+
+---
+
+## Security
+
+Docker containers run with settings:
+
+| Setting | Value | Purpose |
+|---------|-------|---------|
+| `--privileged` | `false` | No elevated privileges |
+| `--cap-drop` | `ALL` | All Linux capabilities dropped |
+| `--security-opt` | `no-new-privileges:true` | Cannot gain new privileges |
+| `--ipc` | `private` | Isolated IPC namespace |
+| `--init` | `true` | Proper signal handling (tini) |
+| `--rm` | `true` | Container auto-removed on exit |
+
+
+Apple Container VMs run with default settings and minimal mounted directories. See this video for more information:
+https://www.youtube.com/watch?v=JvQtvbhtXmo
+
+---
+
+## Advanced Usage
+
+### Prehooks
+
+Prehooks are shell commands that run inside the container before the AI tool starts. Use them to set up environment variables, run initialization scripts, or install tools:
+
+```jsonc
+{
+  "prehooks": [
+    "source ~/.env_api_keys",
+    "export CUSTOM_VAR=$(cat /secrets/key)"
+  ]
+}
+```
+
+Prehooks are chained with `&&`, so if any fails, the tool won't start.
+
+### Image Caching
+
+Silo uses content-addressed image tagging. Images are tagged with a hash of:
+- Dockerfile content
+- Target tool name
+- Build arguments (HOME, USER, UID)
+
+This means:
+- Images are only rebuilt when something changes
+- Multiple users with the same setup share cached images
+- Different tools have separate images
+
+### Container Naming
+
+Containers are named `<project>-<N>` where:
+- `<project>` is your current directory name
+- `<N>` is auto-incremented based on existing containers
+
+Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp-2`, etc.
+
+### Terminal Handling
+
+- **TTY support**: Full terminal emulation with colors and formatting
+- **Resize handling**: Terminal resize signals (SIGWINCH) are forwarded
+- **Double Ctrl-C**: Press Ctrl-C twice quickly to force-kill a stuck container
+- **Clean exit**: Terminal state is restored on exit
+
+### Cleanup
+
+Remove all silo-created containers:
+
+```bash
+# Remove from all backends
+silo destroy
+
+# Remove from specific backend only
+silo destroy --backend docker
+silo destroy --backend container
+```
+
+---
+
+## Examples
+
+### Minimal Setup
+
+Just run `silo claude` — it works out of the box with defaults.
+
+### API Keys from Environment
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "env": [
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GITHUB_TOKEN"
+  ]
+}
+```
+
+These will be passed through from your host environment.
+
+### API Keys from File
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "mounts_ro": [
+    "~/.env_api_keys"
+  ],
+  "prehooks": [
+    "source ~/.env_api_keys"
+  ]
+}
+```
+
+Where `~/.env_api_keys` contains env vars like:
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+export GITHUB_TOKEN=ghp_...
+```
+
+### Project-specific Configuration
+
+```jsonc
+// ~/Code/my-rust-project/silo.jsonc
 {
   "mounts_rw": [
-    "/path/to/shared/libraries"
+    "~/.cargo/registry"  // Share cargo cache
   ],
   "env": [
-    "PROJECT_ENV=development"
-  ],
+    "RUST_BACKTRACE=1"
+  ]
+}
+```
+
+### Using Apple Container Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "container"
+}
+```
+
+Or per-invocation:
+```bash
+silo --backend container claude
+```
+
+### Multiple Tool Configuration
+
+```jsonc
+{
+  "env": ["GITHUB_TOKEN"],  // Shared by all tools
   "tools": {
     "claude": {
-      "env": [
-        "CUSTOM_CLAUDE_TOKEN"
-      ]
+      "env": ["ANTHROPIC_API_KEY"]
+    },
+    "copilot": {
+      "env": ["COPILOT_GITHUB_TOKEN"]
     }
   }
 }
 ```
 
-## What Gets Mounted
-
-By default, Silo mounts:
-
-- **Current directory**: Your project directory
-- **Tool-specific directories**:
-  - Claude: `~/.claude.json`, `~/.claude/`
-  - OpenCode: `~/.config/opencode/`, `~/.local/share/opencode/`
-  - Copilot: `~/.config/.copilot/`
-- **Git worktree directories**: Automatically detected
-
-## Container Environment
-
-The Docker container includes:
-
-- Ubuntu 24.04 base
-- Go (latest version)
-- Rust (stable + nightly with wasm32v1-none target)
-- Deno
-- GitHub CLI
-- MCP servers (GitHub, Perplexity, Context7)
-
-## Security
-
-Containers run with:
-
-- `--privileged=false`
-- `--cap-drop=ALL`
-- `--security-opt=no-new-privileges:true`
-
-This provides a security boundary between the AI tool and your host system.
-
-## Development
-
-### Running Tests
-
-```bash
-go test ./...
-```
-
-### Building
-
-```bash
-go build -o silo ./cmd/silo
-```
-
-## License
-
-MIT
