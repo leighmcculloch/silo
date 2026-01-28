@@ -260,8 +260,6 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Command arguments
 	args = append(args, runArgs...)
 
-	// Don't use exec.CommandContext — it sends SIGKILL which prevents the
-	// container CLI from cleaning up. We handle cancellation ourselves below.
 	cmd := exec.Command("container", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -271,30 +269,23 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// Forward signals and context cancellation as SIGTERM so the container
-	// CLI can clean up (honouring --rm).
+	// On signal or context cancellation, force-remove the container
+	// immediately. This stops and deletes it in one shot.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 
 	go func() {
 		select {
-		case sig := <-sigCh:
-			cmd.Process.Signal(sig)
+		case <-sigCh:
 		case <-ctx.Done():
-			cmd.Process.Signal(syscall.SIGTERM)
+		}
+		if opts.Name != "" {
+			exec.Command("container", "rm", "-f", opts.Name).Run()
 		}
 	}()
 
 	waitErr := cmd.Wait()
-
-	// If the container CLI was interrupted before it could clean up, try to
-	// remove the container explicitly.
-	if opts.Name != "" {
-		rmCmd := exec.Command("container", "rm", "-f", opts.Name)
-		rmCmd.Run()
-	}
-
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			return fmt.Errorf("container exited with status %d", exitErr.ExitCode())
