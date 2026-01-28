@@ -17,7 +17,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/moby/term"
@@ -186,7 +185,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		Env:          opts.Env,
 		Entrypoint:   entrypoint,
 		Cmd:          cmd,
-		Tty:          opts.TTY,
+		Tty:          true,
 		OpenStdin:    true,
 		StdinOnce:    true,
 		AttachStdin:  true,
@@ -196,9 +195,9 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	hostConfig := &container.HostConfig{
 		Mounts:      mounts,
-		AutoRemove:  opts.RemoveOnExit,
+		AutoRemove:  true,
 		Privileged:  false,
-		SecurityOpt: opts.SecurityOptions,
+		SecurityOpt: []string{"no-new-privileges:true"},
 		CapDrop:     []string{"ALL"},
 	}
 
@@ -225,40 +224,30 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// Set terminal to raw mode if TTY and handle resizing
-	if opts.TTY {
-		if f, ok := opts.Stdin.(*os.File); ok {
-			fd := f.Fd()
-			if term.IsTerminal(fd) {
-				oldState, err := term.MakeRaw(fd)
-				if err != nil {
-					return fmt.Errorf("failed to set raw terminal: %w", err)
-				}
-				defer term.RestoreTerminal(fd, oldState)
-
-				// Set initial terminal size
-				c.resizeContainerTTY(ctx, resp.ID, fd)
-
-				// Handle terminal resize signals
-				go c.monitorTTYSize(ctx, resp.ID, fd)
-			}
+	// Set terminal to raw mode and handle resizing
+	fd := os.Stdin.Fd()
+	if term.IsTerminal(fd) {
+		oldState, err := term.MakeRaw(fd)
+		if err != nil {
+			return fmt.Errorf("failed to set raw terminal: %w", err)
 		}
+		defer term.RestoreTerminal(fd, oldState)
+
+		// Set initial terminal size
+		c.resizeContainerTTY(ctx, resp.ID, fd)
+
+		// Handle terminal resize signals
+		go c.monitorTTYSize(ctx, resp.ID, fd)
 	}
 
 	// Copy stdin to container
-	if opts.Stdin != nil {
-		go func() {
-			io.Copy(attachResp.Conn, opts.Stdin)
-			attachResp.CloseWrite()
-		}()
-	}
+	go func() {
+		io.Copy(attachResp.Conn, os.Stdin)
+		attachResp.CloseWrite()
+	}()
 
-	// Copy container output to stdout/stderr
-	if opts.TTY {
-		_, err = io.Copy(opts.Stdout, attachResp.Reader)
-	} else {
-		_, err = stdcopy.StdCopy(opts.Stdout, opts.Stderr, attachResp.Reader)
-	}
+	// Copy container output to stdout
+	_, err = io.Copy(os.Stdout, attachResp.Reader)
 
 	// Wait for the container to finish
 	statusCh, errCh := c.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)

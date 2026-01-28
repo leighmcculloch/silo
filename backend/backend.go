@@ -2,7 +2,6 @@ package backend
 
 import (
 	"context"
-	"io"
 )
 
 // Backend defines the interface for container/VM backends
@@ -66,22 +65,4 @@ type RunOptions struct {
 
 	// Prehooks are shell commands to run before the main command
 	Prehooks []string
-
-	// Stdin is the input stream
-	Stdin io.Reader
-
-	// Stdout is the output stream
-	Stdout io.Writer
-
-	// Stderr is the error stream
-	Stderr io.Writer
-
-	// TTY enables terminal mode
-	TTY bool
-
-	// RemoveOnExit removes the container/instance after exit
-	RemoveOnExit bool
-
-	// SecurityOptions are security-related options (Docker-specific)
-	SecurityOptions []string
 }

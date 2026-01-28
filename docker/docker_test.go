@@ -28,18 +28,13 @@ func TestBuildOptions(t *testing.T) {
 
 func TestRunOptions(t *testing.T) {
 	opts := backend.RunOptions{
-		Image:        "test-image",
-		Name:         "test-container",
-		WorkDir:      "/app",
-		MountsRO:     []string{"/host/ro:/container/ro"},
-		MountsRW:     []string{"/host/rw:/container/rw"},
-		Env:          []string{"KEY=value"},
-		Args:         []string{"arg1", "arg2"},
-		TTY:          true,
-		RemoveOnExit: true,
-		SecurityOptions: []string{
-			"no-new-privileges:true",
-		},
+		Image:    "test-image",
+		Name:     "test-container",
+		WorkDir:  "/app",
+		MountsRO: []string{"/host/ro:/container/ro"},
+		MountsRW: []string{"/host/rw:/container/rw"},
+		Env:      []string{"KEY=value"},
+		Args:     []string{"arg1", "arg2"},
 	}
 
 	if opts.Image != "test-image" {
@@ -62,14 +57,5 @@ func TestRunOptions(t *testing.T) {
 	}
 	if len(opts.Args) != 2 {
 		t.Error("unexpected args")
-	}
-	if !opts.TTY {
-		t.Error("expected TTY to be true")
-	}
-	if !opts.RemoveOnExit {
-		t.Error("expected RemoveOnExit to be true")
-	}
-	if len(opts.SecurityOptions) != 1 {
-		t.Error("unexpected security options")
 	}
 }

@@ -433,23 +433,15 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Run the container/VM
 	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:        tool,
-		Name:         containerName,
-		WorkDir:      cwd,
-		MountsRO:     mountsRO,
-		MountsRW:     mountsRW,
-		Env:          envVars,
-		Command:      toolCommands[tool],
-		Args:         toolArgs,
-		Prehooks:     cfg.Prehooks,
-		Stdin:        os.Stdin,
-		Stdout:       os.Stdout,
-		Stderr:       os.Stderr,
-		TTY:          true,
-		RemoveOnExit: true,
-		SecurityOptions: []string{
-			"no-new-privileges:true",
-		},
+		Image:    tool,
+		Name:     containerName,
+		WorkDir:  cwd,
+		MountsRO: mountsRO,
+		MountsRW: mountsRW,
+		Env:      envVars,
+		Command:  toolCommands[tool],
+		Args:     toolArgs,
+		Prehooks: cfg.Prehooks,
 	})
 
 	if err != nil {
