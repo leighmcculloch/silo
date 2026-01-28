@@ -99,7 +99,7 @@ You can also set the backend in your configuration file.
 
 Docker on macOS runs all containers inside a single shared Linux VM that typically has broad access to the host filesystem (e.g., your entire home directory). The containers inside that VM share this access.
 
-Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See https://github.com/apple/container/blob/main/docs/technical-overview.md and https://www.youtube.com/watch?v=JvQtvbhtXmo for more details.
+Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See [apple/container#technical-overview](https://github.com/apple/container/blob/main/docs/technical-overview.md) and [youtube](https://www.youtube.com/watch?v=JvQtvbhtXmo) for more details.
 
 ---
 
