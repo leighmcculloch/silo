@@ -65,6 +65,8 @@ RUN ARCH=$(dpkg --print-architecture) \
 # Install MCP servers
 RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
 
+# SILO_POST_BUILD_HOOKS
+
 ENV TERM="xterm-256color"
 
 # ============================================
@@ -80,8 +82,10 @@ ENV PATH="${HOME}/.opencode/bin:${PATH}"
 ENV OPENCODE_PERMISSION='{"edit":"allow","bash":"allow","webfetch":"allow", "websearch":"allow","external_directory":"allow"}'
 ENV OPENCODE_EXPERIMENTAL=true
 
-ENTRYPOINT ["opencode"]
+# SILO_POST_BUILD_HOOKS_OPENCODE
 
+ENTRYPOINT ["opencode"]
+ 
 # ============================================
 # Claude Code stage
 # ============================================
@@ -92,6 +96,8 @@ ARG HOME
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="${HOME}/.claude/bin:${PATH}"
+
+# SILO_POST_BUILD_HOOKS_CLAUDE
 
 ENTRYPOINT ["/bin/sh", "-c", "exec claude --mcp-config=$HOME/.claude/mcp.json --dangerously-skip-permissions"]
 
@@ -105,5 +111,7 @@ ARG HOME
 RUN curl -fsSL https://gh.io/copilot-install | bash
 
 ENV PATH="${HOME}/.local/bin:${PATH}"
+
+# SILO_POST_BUILD_HOOKS_COPILOT
 
 ENTRYPOINT ["/bin/sh", "-c", "exec copilot --allow-all"]

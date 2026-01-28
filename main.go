@@ -369,8 +369,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
+	// Get tool-specific post-build hooks
+	var toolPostBuildHooks []string
+	if toolCfg, ok := cfg.Tools[tool]; ok {
+		toolPostBuildHooks = toolCfg.PostBuildHooks
+	}
+
 	// Compute content-addressed tag for caching
-	dockerfile := Dockerfile()
+	dockerfile := DockerfileWithHooks(cfg.PostBuildHooks, tool, toolPostBuildHooks)
 	buildArgs := map[string]string{
 		"HOME": home,
 		"USER": user,
@@ -403,24 +409,6 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 			return fmt.Errorf("failed to build environment: %w", err)
 		}
 		cli.LogSuccessTo(stderr, "Environment ready")
-
-		// Run post-build hooks if any
-		if len(cfg.PostBuildHooks) > 0 {
-			cli.LogTo(stderr, "Running post-build hooks...")
-			for _, hook := range cfg.PostBuildHooks {
-				cli.LogBulletTo(stderr, "%s", hook)
-			}
-			err = backendClient.Run(ctx, backend.RunOptions{
-				Image:       imageTag,
-				Name:        backendClient.NextContainerName(ctx, "silo-postbuild"),
-				WorkDir:     home,
-				Command:     []string{"/bin/bash", "-c", strings.Join(cfg.PostBuildHooks, " && ")},
-			})
-			if err != nil {
-				return fmt.Errorf("post-build hooks failed: %w", err)
-			}
-			cli.LogSuccessTo(stderr, "Post-build hooks complete")
-		}
 	}
 
 	// Collect environment variables

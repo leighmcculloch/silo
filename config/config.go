@@ -45,6 +45,9 @@ type ToolConfig struct {
 
 	// Env specific to this tool (same format as Config.Env)
 	Env []string `json:"env,omitempty"`
+
+	// PostBuildHooks are shell commands to run in the Dockerfile for this tool's stage
+	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
 }
 
 // xdgConfigHome returns XDG_CONFIG_HOME or the default ~/.config
@@ -153,6 +156,7 @@ func Merge(base, overlay Config) Config {
 			existing.MountsRO = append(existing.MountsRO, tool.MountsRO...)
 			existing.MountsRW = append(existing.MountsRW, tool.MountsRW...)
 			existing.Env = append(existing.Env, tool.Env...)
+			existing.PostBuildHooks = append(existing.PostBuildHooks, tool.PostBuildHooks...)
 			result.Tools[name] = existing
 		} else {
 			result.Tools[name] = tool
@@ -170,9 +174,10 @@ type SourceInfo struct {
 	Env          map[string]string            // value -> source path
 	PreRunHooks    map[string]string            // value -> source path
 	PostBuildHooks map[string]string            // value -> source path
-	ToolMountsRO map[string]map[string]string // tool -> value -> source
-	ToolMountsRW map[string]map[string]string // tool -> value -> source
-	ToolEnv      map[string]map[string]string // tool -> value -> source
+	ToolMountsRO       map[string]map[string]string // tool -> value -> source
+	ToolMountsRW       map[string]map[string]string // tool -> value -> source
+	ToolEnv            map[string]map[string]string // tool -> value -> source
+	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
 }
 
 // NewSourceInfo creates a new empty SourceInfo
@@ -183,9 +188,10 @@ func NewSourceInfo() *SourceInfo {
 		Env:          make(map[string]string),
 		PreRunHooks:    make(map[string]string),
 		PostBuildHooks: make(map[string]string),
-		ToolMountsRO: make(map[string]map[string]string),
-		ToolMountsRW: make(map[string]map[string]string),
-		ToolEnv:      make(map[string]map[string]string),
+		ToolMountsRO:       make(map[string]map[string]string),
+		ToolMountsRW:       make(map[string]map[string]string),
+		ToolEnv:            make(map[string]map[string]string),
+		ToolPostBuildHooks: make(map[string]map[string]string),
 	}
 }
 
@@ -311,6 +317,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		if info.ToolEnv[toolName] == nil {
 			info.ToolEnv[toolName] = make(map[string]string)
 		}
+		if info.ToolPostBuildHooks[toolName] == nil {
+			info.ToolPostBuildHooks[toolName] = make(map[string]string)
+		}
 		for _, v := range toolCfg.MountsRO {
 			info.ToolMountsRO[toolName][v] = source
 		}
@@ -319,6 +328,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 		for _, v := range toolCfg.Env {
 			info.ToolEnv[toolName][v] = source
+		}
+		for _, v := range toolCfg.PostBuildHooks {
+			info.ToolPostBuildHooks[toolName][v] = source
 		}
 	}
 }
