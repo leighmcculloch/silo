@@ -35,11 +35,10 @@ That's it. Silo builds the environment automatically on first run.
 
 AI coding assistants need broad access to work effectively—they read files, run commands, and modify code. This creates a tension: give them access and accept the risk, or restrict them and lose capability.
 
-Silo resolves this by running AI tools in isolated containers with:
+Silo resolves this by running AI tools in isolated containers/vms with:
 
-- **Security isolation**: No privileged access, all capabilities dropped, IPC isolation
-- **Controlled access**: Only your project directory and configured paths are mounted
-- **Full functionality**: Tools work exactly as they would on your host system
+- Limited access to the work directory and tool configs
+- Reusing local configs for moving back and forth from a local agent and a silo agent
 - **Git integration**: Your git identity is automatically configured inside the container
 
 ## Supported Tools
@@ -85,6 +84,7 @@ Silo supports two backends:
 | Docker | `--backend docker` | Default. Uses Docker containers |
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 
+
 ```bash
 # Use Docker (default)
 silo claude
@@ -94,6 +94,12 @@ silo --backend container claude
 ```
 
 You can also set the backend in your configuration file.
+
+#### Why Apple Containers on macOS?
+
+Docker on macOS runs all containers inside a single shared Linux VM that typically has broad access to the host filesystem (e.g., your entire home directory). The containers inside that VM share this access.
+
+Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See https://github.com/apple/container/blob/main/docs/technical-overview.md and https://www.youtube.com/watch?v=JvQtvbhtXmo for more details.
 
 ---
 
@@ -262,25 +268,6 @@ configurable today, other than through the prehooks.
 | `github-mcp-server` | GitHub integration for AI tools |
 | `server-perplexity-ask` | Perplexity AI search |
 | `@upstash/context7-mcp` | Context7 documentation search |
-
----
-
-## Security
-
-Docker containers run with settings:
-
-| Setting | Value | Purpose |
-|---------|-------|---------|
-| `--privileged` | `false` | No elevated privileges |
-| `--cap-drop` | `ALL` | All Linux capabilities dropped |
-| `--security-opt` | `no-new-privileges:true` | Cannot gain new privileges |
-| `--ipc` | `private` | Isolated IPC namespace |
-| `--init` | `true` | Proper signal handling (tini) |
-| `--rm` | `true` | Container auto-removed on exit |
-
-
-Apple Container VMs run with default settings and minimal mounted directories. See this video for more information:
-https://www.youtube.com/watch?v=JvQtvbhtXmo
 
 ---
 
