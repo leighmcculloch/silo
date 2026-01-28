@@ -60,6 +60,14 @@ func xdgDataHome() string {
 	return filepath.Join(xdg.Home, ".local", "share")
 }
 
+// xdgStateHome returns XDG_STATE_HOME or the default ~/.local/state
+func xdgStateHome() string {
+	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".local", "state")
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	// Helper to replace home dir with ~
@@ -86,6 +94,7 @@ func DefaultConfig() Config {
 				MountsRW: []string{
 					tildePath(filepath.Join(xdgConfigHome(), "opencode")),
 					tildePath(filepath.Join(xdgDataHome(), "opencode")),
+					tildePath(filepath.Join(xdgStateHome(), "opencode")),
 				},
 			},
 			"copilot": {
