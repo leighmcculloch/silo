@@ -308,6 +308,21 @@ Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp
 - **Double Ctrl-C**: Press Ctrl-C twice quickly to force-kill a stuck container
 - **Clean exit**: Terminal state is restored on exit
 
+### Listing Containers
+
+See all silo-created containers:
+
+```bash
+# List from all backends
+silo list
+
+# List from specific backend only
+silo list --backend docker
+silo list --backend container
+```
+
+Output shows container name, image, backend, and status.
+
 ### Cleanup
 
 Remove all silo-created containers:

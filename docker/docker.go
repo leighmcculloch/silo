@@ -348,6 +348,32 @@ func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uint
 
 func boolPtr(b bool) *bool { return &b }
 
+// List returns all silo-created containers (those with silo- image prefix)
+func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	var result []backend.ContainerInfo
+	for _, ctr := range containers {
+		// Check if it's a silo container by image name prefix
+		if strings.HasPrefix(ctr.Image, "silo-") {
+			name := ctr.ID[:12]
+			if len(ctr.Names) > 0 {
+				name = strings.TrimPrefix(ctr.Names[0], "/")
+			}
+			result = append(result, backend.ContainerInfo{
+				Name:   name,
+				Image:  ctr.Image,
+				Status: ctr.Status,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // Destroy removes all silo-created containers (those with silo- image prefix)
 func (c *Client) Destroy(ctx context.Context) ([]string, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})

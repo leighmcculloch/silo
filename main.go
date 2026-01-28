@@ -196,6 +196,17 @@ Use --local or --global to skip the prompt.`,
 	destroyCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
 	rootCmd.AddCommand(destroyCmd)
 
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all silo-created containers",
+		Aliases: []string{"ls"},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runList(cmd, args, stdout, stderr)
+		},
+	}
+	listCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rootCmd.AddCommand(listCmd)
+
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
 
@@ -992,5 +1003,58 @@ func runDestroy(cmd *cobra.Command, _ []string, stderr io.Writer) error {
 	}
 
 	cli.LogSuccessTo(stderr, "Done")
+	return nil
+}
+
+func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
+	ctx := context.Background()
+
+	backendFlag, _ := cmd.Flags().GetString("backend")
+
+	var backends []string
+	if backendFlag != "" {
+		backends = []string{backendFlag}
+	} else {
+		backends = []string{"docker", "container"}
+	}
+
+	hasContainers := false
+	for _, backendType := range backends {
+		var backendClient backend.Backend
+		var err error
+
+		switch backendType {
+		case "docker":
+			backendClient, err = docker.NewClient()
+			if err != nil {
+				cli.LogWarningTo(stderr, "Docker not available: %v", err)
+				continue
+			}
+		case "container":
+			backendClient, err = applecontainer.NewClient()
+			if err != nil {
+				cli.LogWarningTo(stderr, "Container backend not available: %v", err)
+				continue
+			}
+		default:
+			return fmt.Errorf("unknown backend: %s", backendType)
+		}
+
+		containers, err := backendClient.List(ctx)
+		backendClient.Close()
+		if err != nil {
+			return fmt.Errorf("failed to list containers (%s): %w", backendType, err)
+		}
+
+		for _, ctr := range containers {
+			hasContainers = true
+			fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %s\n", ctr.Name, ctr.Image, backendType, ctr.Status)
+		}
+	}
+
+	if !hasContainers {
+		cli.LogTo(stderr, "No silo containers found")
+	}
+
 	return nil
 }

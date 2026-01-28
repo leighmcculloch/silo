@@ -414,6 +414,42 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
 }
 
+// List returns all silo-created containers (those with silo- image prefix)
+func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
+	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	var containers []struct {
+		Configuration struct {
+			ID    string `json:"id"`
+			Image struct {
+				Reference string `json:"reference"`
+			} `json:"image"`
+		} `json:"configuration"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(output, &containers); err != nil {
+		return nil, fmt.Errorf("failed to parse container list: %w", err)
+	}
+
+	var result []backend.ContainerInfo
+	for _, ctr := range containers {
+		// Check if it's a silo container by image name prefix
+		if strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
+			result = append(result, backend.ContainerInfo{
+				Name:   ctr.Configuration.ID,
+				Image:  ctr.Configuration.Image.Reference,
+				Status: ctr.Status,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // Destroy removes all silo-created containers (those with silo- image prefix)
 func (c *Client) Destroy(ctx context.Context) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")

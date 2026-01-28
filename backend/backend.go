@@ -20,11 +20,21 @@ type Backend interface {
 	// Run executes a command in the prepared environment
 	Run(ctx context.Context, opts RunOptions) error
 
+	// List returns all silo-created containers
+	List(ctx context.Context) ([]ContainerInfo, error)
+
 	// Destroy removes all silo-created containers
 	Destroy(ctx context.Context) ([]string, error)
 
 	// Close releases any resources held by the backend
 	Close() error
+}
+
+// ContainerInfo holds information about a container
+type ContainerInfo struct {
+	Name   string
+	Image  string
+	Status string
 }
 
 // BuildOptions contains options for building/preparing an environment
