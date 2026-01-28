@@ -96,7 +96,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 	args = append(args, tmpDir)
 
-	cmd := exec.CommandContext(ctx, "container", args...)
+	cmd := exec.Command("container", args...)
 	cmd.Stderr = os.Stderr
 
 	// Stream stdout for progress
@@ -108,6 +108,13 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("failed to start build: %w", err)
 	}
+
+	// Forward context cancellation as SIGTERM so intermediate build
+	// containers are cleaned up gracefully.
+	go func() {
+		<-ctx.Done()
+		cmd.Process.Signal(syscall.SIGTERM)
+	}()
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
@@ -253,33 +260,46 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Command arguments
 	args = append(args, runArgs...)
 
-	cmd := exec.CommandContext(ctx, "container", args...)
+	// Don't use exec.CommandContext — it sends SIGKILL which prevents the
+	// container CLI from cleaning up. We handle cancellation ourselves below.
+	cmd := exec.Command("container", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Forward signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
+
+	// Forward signals and context cancellation as SIGTERM so the container
+	// CLI can clean up (honouring --rm).
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	go func() {
 		select {
 		case sig := <-sigCh:
 			cmd.Process.Signal(sig)
 		case <-ctx.Done():
+			cmd.Process.Signal(syscall.SIGTERM)
 		}
 	}()
 
-	if err := cmd.Wait(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+	waitErr := cmd.Wait()
+
+	// If the container CLI was interrupted before it could clean up, try to
+	// remove the container explicitly.
+	if opts.Name != "" {
+		rmCmd := exec.Command("container", "rm", "-f", opts.Name)
+		rmCmd.Run()
+	}
+
+	if waitErr != nil {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
 			return fmt.Errorf("container exited with status %d", exitErr.ExitCode())
 		}
-		return fmt.Errorf("container error: %w", err)
+		return fmt.Errorf("container error: %w", waitErr)
 	}
 
 	return nil
