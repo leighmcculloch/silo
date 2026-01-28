@@ -520,6 +520,20 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
+	// Log post-build hooks
+	if len(cfg.PostBuildHooks) > 0 {
+		cli.LogTo(stderr, "Post-build hooks:")
+		for _, hook := range cfg.PostBuildHooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+	if len(toolPostBuildHooks) > 0 {
+		cli.LogTo(stderr, "Post-build hooks (%s):", tool)
+		for _, hook := range toolPostBuildHooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+
 	// Log pre-run hooks
 	if len(cfg.PreRunHooks) > 0 {
 		cli.LogTo(stderr, "Pre-run hooks:")

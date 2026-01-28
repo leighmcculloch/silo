@@ -113,6 +113,8 @@ Configuration is loaded in this order (later overrides earlier):
 2. **Global config** — `~/.config/silo/silo.jsonc`, respecting `XDG_CONFIG_HOME`
 3. **Local configs** — `silo.jsonc` files from filesystem root to current directory
 
+For an example config file, see my config file at [leighmcculloch/dotfiles#silo.jsonc](https://github.com/leighmcculloch/dotfiles/blob/main/files/config/silo/silo.jsonc).
+
 ### Quick Setup
 
 ```bash

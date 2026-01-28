@@ -39,6 +39,13 @@ RUN mkdir -p ${HOME}/.local \
     && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz \
     && go install golang.org/x/tools/gopls@latest
 
+# Install Node.js and npm
+ENV PATH="${HOME}/.local/node/bin:${PATH}"
+RUN ARCH=$(dpkg --print-architecture) \
+    && NODE_VERSION=$(curl -fsSL https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
+    && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${ARCH} ${HOME}/.local/node
+
 # Install Deno
 ENV PATH="${HOME}/.deno/bin:${PATH}"
 RUN ARCH=$(uname -m) \
@@ -52,9 +59,7 @@ ENV PATH="${HOME}/.cargo/bin:${PATH}"
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && . ${HOME}/.cargo/env \
     && rustup toolchain install stable \
-    && rustup toolchain install nightly \
     && rustup target add wasm32v1-none --toolchain stable \
-    && rustup target add wasm32v1-none --toolchain nightly \
     && rustup component add rust-analyzer
 
 # Install GitHub CLI
