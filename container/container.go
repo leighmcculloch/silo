@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,10 +15,12 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"golang.org/x/sys/unix"
 
 	"github.com/adrg/xdg"
+	"github.com/creack/pty"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 )
@@ -272,16 +275,37 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	args = append(args, runArgs...)
 
 	cmd := exec.Command("container", args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
-	if err := cmd.Start(); err != nil {
+	// Start command with PTY so container gets a real terminal
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
+	}
+	defer ptmx.Close()
+
+	// Handle terminal resize
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGWINCH)
+	go func() {
+		for range ch {
+			pty.InheritSize(os.Stdin, ptmx)
+		}
+	}()
+	ch <- syscall.SIGWINCH // Initial resize
+	defer signal.Stop(ch)
+
+	// Put our terminal in raw mode
+	fd := int(os.Stdin.Fd())
+	oldState, err := unix.IoctlGetTermios(fd, unix.TIOCGETA)
+	if err == nil {
+		newState := *oldState
+		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG
+		newState.Iflag &^= unix.IXON | unix.ICRNL
+		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
+		defer unix.IoctlSetTermios(fd, unix.TIOCSETA, oldState)
 	}
 
 	// On signal or context cancellation, force-remove the container
-	// immediately. This stops and deletes it in one shot.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
@@ -295,6 +319,38 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 			exec.Command("container", "rm", "-f", opts.Name).Run()
 		}
 	}()
+
+	// Copy container output to stdout
+	go func() {
+		io.Copy(os.Stdout, ptmx)
+	}()
+
+	// Copy stdin to container, intercepting double Ctrl-C to kill
+	var lastCtrlC time.Time
+	buf := make([]byte, 256)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if n > 0 {
+			// Check for Ctrl-C (0x03)
+			for i := 0; i < n; i++ {
+				if buf[i] == 0x03 {
+					now := time.Now()
+					if now.Sub(lastCtrlC) < time.Second {
+						// Double Ctrl-C - kill container
+						if opts.Name != "" {
+							exec.Command("container", "rm", "-f", opts.Name).Run()
+						}
+						return nil
+					}
+					lastCtrlC = now
+				}
+			}
+			ptmx.Write(buf[:n])
+		}
+		if err != nil {
+			break
+		}
+	}
 
 	waitErr := cmd.Wait()
 	if waitErr != nil {
@@ -341,6 +397,41 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 	}
 
 	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
+}
+
+// Destroy removes all silo-created containers (those with silo- image prefix)
+func (c *Client) Destroy(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	var containers []struct {
+		Configuration struct {
+			ID    string `json:"id"`
+			Image struct {
+				Reference string `json:"reference"`
+			} `json:"image"`
+		} `json:"configuration"`
+	}
+	if err := json.Unmarshal(output, &containers); err != nil {
+		return nil, fmt.Errorf("failed to parse container list: %w", err)
+	}
+
+	var removed []string
+	for _, ctr := range containers {
+		// Check if it's a silo container by image name prefix
+		if strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
+			rmCmd := exec.CommandContext(ctx, "container", "rm", "-f", ctr.Configuration.ID)
+			if err := rmCmd.Run(); err != nil {
+				return removed, fmt.Errorf("failed to remove container %s: %w", ctr.Configuration.ID, err)
+			}
+			removed = append(removed, ctr.Configuration.ID)
+		}
+	}
+
+	return removed, nil
 }
 
 // stageFileMount creates a staging directory containing a hard link to the

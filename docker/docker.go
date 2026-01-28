@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -269,9 +270,31 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}()
 
-	// Copy stdin to container
+	// Copy stdin to container, intercepting double Ctrl-C to kill
 	go func() {
-		io.Copy(attachResp.Conn, os.Stdin)
+		var lastCtrlC time.Time
+		buf := make([]byte, 256)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				// Check for Ctrl-C (0x03)
+				for i := 0; i < n; i++ {
+					if buf[i] == 0x03 {
+						now := time.Now()
+						if now.Sub(lastCtrlC) < time.Second {
+							// Double Ctrl-C - kill container
+							c.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
+							return
+						}
+						lastCtrlC = now
+					}
+				}
+				attachResp.Conn.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
 		attachResp.CloseWrite()
 	}()
 
@@ -324,6 +347,31 @@ func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uint
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// Destroy removes all silo-created containers (those with silo- image prefix)
+func (c *Client) Destroy(ctx context.Context) ([]string, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	var removed []string
+	for _, ctr := range containers {
+		// Check if it's a silo container by image name prefix
+		if strings.HasPrefix(ctr.Image, "silo-") {
+			if err := c.cli.ContainerRemove(ctx, ctr.ID, container.RemoveOptions{Force: true}); err != nil {
+				return removed, fmt.Errorf("failed to remove container %s: %w", ctr.ID[:12], err)
+			}
+			name := ctr.ID[:12]
+			if len(ctr.Names) > 0 {
+				name = strings.TrimPrefix(ctr.Names[0], "/")
+			}
+			removed = append(removed, name)
+		}
+	}
+
+	return removed, nil
+}
 
 // NextContainerName returns the next sequential container name for the given
 // base name. It lists existing containers with the same prefix and returns

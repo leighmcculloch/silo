@@ -20,6 +20,9 @@ type Backend interface {
 	// Run executes a command in the prepared environment
 	Run(ctx context.Context, opts RunOptions) error
 
+	// Destroy removes all silo-created containers
+	Destroy(ctx context.Context) ([]string, error)
+
 	// Close releases any resources held by the backend
 	Close() error
 }

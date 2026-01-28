@@ -7,6 +7,7 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/creack/pty v1.1.24
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/moby/term v0.5.2
