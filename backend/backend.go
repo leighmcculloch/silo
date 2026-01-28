@@ -19,7 +19,7 @@ type Backend interface {
 
 // BuildOptions contains options for building/preparing an environment
 type BuildOptions struct {
-	// Dockerfile content (for Docker) or provisioning script (for Lima)
+	// Dockerfile content for building the environment
 	Dockerfile string
 
 	// Target specifies which tool to build (e.g., "claude", "opencode", "copilot")
@@ -28,10 +28,10 @@ type BuildOptions struct {
 	// BuildArgs are variables passed to the build process
 	BuildArgs map[string]string
 
-	// MountsRO are read-only mount paths (used by Lima for VM configuration)
+	// MountsRO are read-only mount paths
 	MountsRO []string
 
-	// MountsRW are read-write mount paths (used by Lima for VM configuration)
+	// MountsRW are read-write mount paths
 	MountsRW []string
 
 	// OnProgress is called with build progress messages

@@ -19,7 +19,6 @@ import (
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/docker"
-	"github.com/leighmcculloch/silo/lima"
 	"github.com/spf13/cobra"
 )
 
@@ -28,17 +27,16 @@ var (
 )
 
 const sampleConfig = `{
-  // Backend to use: "docker" (default) or "lima"
-  // Docker uses containers, Lima uses macOS VMs with Apple Virtualization Framework
+  // Backend to use: "docker" (default)
   "backend": "docker",
-  // Read-only directories or files to mount into the container/VM
+  // Read-only directories or files to mount into the container
   "mounts_ro": [],
-  // Read-write directories or files to mount into the container/VM
+  // Read-write directories or files to mount into the container
   "mounts_rw": [],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
   "env": [],
-  // Shell commands to run inside the container/VM before the tool
+  // Shell commands to run inside the container before the tool
   "prehooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
@@ -294,14 +292,8 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		if err != nil {
 			return fmt.Errorf("failed to connect to Docker: %w", err)
 		}
-	case "lima":
-		cli.LogTo(stderr, "Initializing Lima...")
-		backendClient, err = lima.NewClient()
-		if err != nil {
-			return fmt.Errorf("failed to initialize Lima: %w", err)
-		}
 	default:
-		return fmt.Errorf("unknown backend: %s (valid: docker, lima)", backendType)
+		return fmt.Errorf("unknown backend: %s (valid: docker)", backendType)
 	}
 	defer backendClient.Close()
 

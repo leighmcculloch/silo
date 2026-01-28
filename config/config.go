@@ -12,7 +12,7 @@ import (
 
 // Config represents the silo configuration
 type Config struct {
-	// Backend specifies which backend to use: "docker" (default) or "lima"
+	// Backend specifies which backend to use: "docker" (default)
 	Backend string `json:"backend,omitempty"`
 
 	// MountsRO are read-only directories or files to mount into the container
