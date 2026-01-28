@@ -3,6 +3,8 @@ package container
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +16,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/adrg/xdg"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 )
@@ -154,18 +157,76 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		args = append(args, "-e", e)
 	}
 
-	// Mounts
+	// Mounts — Apple's container CLI only supports directories, so file
+	// mounts are staged into a directory and symlinked inside the container.
+	var symlinkCmds []string
 	for _, m := range opts.MountsRO {
-		if _, err := os.Stat(m); err != nil {
+		info, err := os.Stat(m)
+		if err != nil {
 			continue
 		}
-		args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", m, m))
+		if info.IsDir() {
+			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", m, m))
+		} else {
+			stagingDir, containerDir, err := stageFileMount(m)
+			if err != nil {
+				return fmt.Errorf("staging file mount %s: %w", m, err)
+			}
+			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", stagingDir, containerDir))
+			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
+				shellquote.Join(filepath.Dir(m)),
+				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
+				shellquote.Join(m),
+			))
+		}
 	}
 	for _, m := range opts.MountsRW {
-		if _, err := os.Stat(m); err != nil {
+		info, err := os.Stat(m)
+		if err != nil {
 			continue
 		}
-		args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m, m))
+		if info.IsDir() {
+			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m, m))
+		} else {
+			stagingDir, containerDir, err := stageFileMount(m)
+			if err != nil {
+				return fmt.Errorf("staging file mount %s: %w", m, err)
+			}
+			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", stagingDir, containerDir))
+			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
+				shellquote.Join(filepath.Dir(m)),
+				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
+				shellquote.Join(m),
+			))
+		}
+	}
+
+	// Prepend symlink commands into prehooks so they run before the main command.
+	if len(symlinkCmds) > 0 {
+		allPrehooks := append(symlinkCmds, opts.Prehooks...)
+		// Rebuild entrypoint to include symlink setup.
+		if len(fullCmd) > 0 {
+			var script strings.Builder
+			for _, hook := range allPrehooks {
+				script.WriteString(hook)
+				script.WriteString(" && ")
+			}
+			script.WriteString("exec ")
+			script.WriteString(shellquote.Join(fullCmd...))
+			entrypoint = "/bin/bash"
+			runArgs = []string{"-c", script.String()}
+		} else {
+			// No command — just run the symlink setup.
+			var script strings.Builder
+			for i, hook := range symlinkCmds {
+				if i > 0 {
+					script.WriteString(" && ")
+				}
+				script.WriteString(hook)
+			}
+			entrypoint = "/bin/bash"
+			runArgs = []string{"-c", script.String()}
+		}
 	}
 
 	if entrypoint != "" {
@@ -208,4 +269,24 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	return nil
+}
+
+// stageFileMount creates a staging directory containing a hard link to the
+// given file. It returns the host staging directory path and the corresponding
+// container-side mount target path.
+func stageFileMount(filePath string) (hostDir, containerDir string, err error) {
+	h := sha256.Sum256([]byte(filePath))
+	hash := hex.EncodeToString(h[:])
+	hostDir = filepath.Join(xdg.StateHome, "silo", "mounts", hash)
+	containerDir = filepath.Join("/silo/mounts", hash)
+	if err := os.MkdirAll(hostDir, 0755); err != nil {
+		return "", "", err
+	}
+	linkPath := filepath.Join(hostDir, filepath.Base(filePath))
+	// Remove any existing link before creating a new one.
+	os.Remove(linkPath)
+	if err := os.Link(filePath, linkPath); err != nil {
+		return "", "", err
+	}
+	return hostDir, containerDir, nil
 }

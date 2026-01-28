@@ -120,6 +120,8 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
+	rootCmd.Flags().String("backend", "", "Backend to use: docker, container")
+
 	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Configuration management commands",
@@ -233,6 +235,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	var toolArgs []string
 	if cmd.ArgsLenAtDash() > -1 {
 		toolArgs = args[cmd.ArgsLenAtDash():]
+	}
+
+	// Override backend from flag
+	if b, _ := cmd.Flags().GetString("backend"); b != "" {
+		cfg.Backend = b
 	}
 
 	// Run the tool
