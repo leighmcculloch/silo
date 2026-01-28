@@ -99,6 +99,18 @@ silo --backend container claude
 
 You can also set the backend in your configuration file.
 
+#### Backend Comparison
+
+| Feature | Docker | Apple Container |
+|---------|--------|-----------------|
+| Platform | Any | macOS only |
+| Isolation | Shared Linux VM | Per-container VM |
+| File mounts | Direct | Staged + symlinks |
+| Security | Dropped caps, no-new-privileges | VM isolation |
+| Resource control | Docker defaults | Explicit CPU/memory |
+| API | Docker SDK | CLI subprocess |
+
+
 #### Why Apple Containers on macOS?
 
 Docker on macOS runs all containers inside a single shared Linux VM that typically has broad access to the host filesystem (e.g., your entire home directory). The containers inside that VM share this access.
