@@ -400,12 +400,23 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		)
 	}
 
+	// Track env vars by category for logging
+	var envExplicitGlobal []string // explicit from cfg.Env (KEY=VALUE)
+	var envExplicitTool []string   // explicit from toolCfg.Env (KEY=VALUE)
+	var envFromHost []string       // lifted from host env
+	var envNotFound []string       // configured but not in host env
+
 	// Process env vars (passthrough if no '=', explicit if has '=')
 	for _, e := range cfg.Env {
 		if strings.Contains(e, "=") {
 			envVars = append(envVars, e)
+			// Extract key name for logging
+			envExplicitGlobal = append(envExplicitGlobal, strings.SplitN(e, "=", 2)[0])
 		} else if val := os.Getenv(e); val != "" {
 			envVars = append(envVars, e+"="+val)
+			envFromHost = append(envFromHost, e)
+		} else {
+			envNotFound = append(envNotFound, e)
 		}
 	}
 
@@ -414,8 +425,12 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		for _, e := range toolCfg.Env {
 			if strings.Contains(e, "=") {
 				envVars = append(envVars, e)
+				envExplicitTool = append(envExplicitTool, strings.SplitN(e, "=", 2)[0])
 			} else if val := os.Getenv(e); val != "" {
 				envVars = append(envVars, e+"="+val)
+				envFromHost = append(envFromHost, e)
+			} else {
+				envNotFound = append(envNotFound, e)
 			}
 		}
 	}
@@ -450,6 +465,29 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 		seen[m] = true
 		cli.LogBulletTo(stderr, "%s", m)
+	}
+
+	// Log environment variables
+	if len(envExplicitGlobal) > 0 {
+		cli.LogTo(stderr, "Environment (config):")
+		for _, name := range envExplicitGlobal {
+			cli.LogBulletTo(stderr, "%s", name)
+		}
+	}
+	if len(envExplicitTool) > 0 {
+		cli.LogTo(stderr, "Environment (config, %s):", tool)
+		for _, name := range envExplicitTool {
+			cli.LogBulletTo(stderr, "%s", name)
+		}
+	}
+	if len(envFromHost) > 0 || len(envNotFound) > 0 {
+		cli.LogTo(stderr, "Environment (host):")
+		for _, name := range envFromHost {
+			cli.LogBulletTo(stderr, "%s", name)
+		}
+		for _, name := range envNotFound {
+			cli.LogBulletTo(stderr, "%s (not set)", name)
+		}
 	}
 
 	cli.LogTo(stderr, "Container name: %s", containerName)
