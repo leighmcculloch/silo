@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -311,17 +312,25 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 // baseName-N where N is one more than the highest existing suffix.
 func (c *Client) NextContainerName(ctx context.Context, baseName string) string {
 	// List all containers (running and stopped)
-	cmd := exec.CommandContext(ctx, "container", "ps", "-a", "--format", "{{.Names}}")
+	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Sprintf("%s-1", baseName)
 	}
 
+	var containers []struct {
+		Configuration struct {
+			ID string `json:"id"`
+		} `json:"configuration"`
+	}
+	if err := json.Unmarshal(output, &containers); err != nil {
+		return fmt.Sprintf("%s-1", baseName)
+	}
+
 	maxNum := 0
 	prefix := baseName + "-"
-	for _, line := range strings.Split(string(output), "\n") {
-		name := strings.TrimSpace(line)
-		if suffix, ok := strings.CutPrefix(name, prefix); ok {
+	for _, ctr := range containers {
+		if suffix, ok := strings.CutPrefix(ctr.Configuration.ID, prefix); ok {
 			var num int
 			if _, err := fmt.Sscanf(suffix, "%d", &num); err == nil {
 				if num > maxNum {
