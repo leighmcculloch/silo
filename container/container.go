@@ -276,6 +276,24 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	cmd := exec.Command("container", args...)
 
+	// Save terminal state and ensure it's restored on exit
+	fd := int(os.Stdin.Fd())
+	oldState, _ := unix.IoctlGetTermios(fd, unix.TIOCGETA)
+	defer func() {
+		// Restore termios state
+		if oldState != nil {
+			unix.IoctlSetTermios(fd, unix.TIOCSETA, oldState)
+		}
+		// Reset terminal modes (mouse tracking, alternate screen, etc.)
+		// These are escape sequences not covered by termios
+		os.Stdout.WriteString("\x1b[?1000l") // Disable mouse click tracking
+		os.Stdout.WriteString("\x1b[?1002l") // Disable mouse button tracking
+		os.Stdout.WriteString("\x1b[?1003l") // Disable all mouse tracking
+		os.Stdout.WriteString("\x1b[?1006l") // Disable SGR mouse mode
+		os.Stdout.WriteString("\x1b[?25h")   // Show cursor
+		os.Stdout.WriteString("\x1b[?1049l") // Exit alternate screen buffer
+	}()
+
 	// Start command with PTY so container gets a real terminal
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -295,14 +313,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	defer signal.Stop(ch)
 
 	// Put our terminal in raw mode
-	fd := int(os.Stdin.Fd())
-	oldState, err := unix.IoctlGetTermios(fd, unix.TIOCGETA)
-	if err == nil {
+	if oldState != nil {
 		newState := *oldState
 		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG
 		newState.Iflag &^= unix.IXON | unix.ICRNL
 		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
-		defer unix.IoctlSetTermios(fd, unix.TIOCSETA, oldState)
 	}
 
 	// On signal or context cancellation, force-remove the container
