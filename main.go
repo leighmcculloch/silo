@@ -21,6 +21,7 @@ import (
 	"github.com/leighmcculloch/silo/config"
 	applecontainer "github.com/leighmcculloch/silo/container"
 	"github.com/leighmcculloch/silo/docker"
+	"github.com/leighmcculloch/silo/tilde"
 	"github.com/spf13/cobra"
 )
 
@@ -306,13 +307,13 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	switch backendType {
 	case "docker":
-		cli.LogTo(stderr, "Connecting to Docker...")
+		cli.LogTo(stderr, "Using docker backend...")
 		backendClient, err = docker.NewClient()
 		if err != nil {
 			return fmt.Errorf("failed to connect to Docker: %w", err)
 		}
 	case "container":
-		cli.LogTo(stderr, "Using container backend...")
+		cli.LogTo(stderr, "Using apple container (lightweight vms) backend...")
 		backendClient, err = applecontainer.NewClient()
 		if err != nil {
 			return fmt.Errorf("failed to initialize container backend: %w", err)
@@ -461,7 +462,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 				continue
 			}
 			seen[m] = true
-			cli.LogBulletTo(stderr, "%s", m)
+			cli.LogBulletTo(stderr, "%s", tilde.Path(m))
 		}
 	}
 	cli.LogTo(stderr, "Mounts (read-write):")
@@ -473,7 +474,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 			continue
 		}
 		seen[m] = true
-		cli.LogBulletTo(stderr, "%s", m)
+		cli.LogBulletTo(stderr, "%s", tilde.Path(m))
 	}
 
 	// Log environment variables
@@ -557,15 +558,6 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		commentStyle = commentStyle.Foreground(lipgloss.Color("8")) // Gray
 	}
 
-	// Helper to replace home dir with ~ in paths
-	home := os.Getenv("HOME")
-	tildePath := func(path string) string {
-		if home != "" && strings.HasPrefix(path, home) {
-			return "~" + strings.TrimPrefix(path, home)
-		}
-		return path
-	}
-
 	// Helper functions for colored output
 	key := func(k string) string {
 		return keyStyle.Render(fmt.Sprintf("%q", k))
@@ -574,7 +566,7 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		return stringStyle.Render(fmt.Sprintf("%q", s))
 	}
 	comment := func(c string) string {
-		return commentStyle.Render("// " + tildePath(c))
+		return commentStyle.Render("// " + tilde.Path(c))
 	}
 
 	// Output JSONC with source comments

@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/adrg/xdg"
+	"github.com/leighmcculloch/silo/tilde"
 	"github.com/tidwall/jsonc"
 )
 
@@ -70,14 +70,6 @@ func xdgStateHome() string {
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
-	// Helper to replace home dir with ~
-	tildePath := func(path string) string {
-		if rest, ok := strings.CutPrefix(path, xdg.Home); ok {
-			return "~" + rest
-		}
-		return path
-	}
-
 	return Config{
 		MountsRO: []string{},
 		MountsRW: []string{},
@@ -92,14 +84,14 @@ func DefaultConfig() Config {
 			},
 			"opencode": {
 				MountsRW: []string{
-					tildePath(filepath.Join(xdgConfigHome(), "opencode")),
-					tildePath(filepath.Join(xdgDataHome(), "opencode")),
-					tildePath(filepath.Join(xdgStateHome(), "opencode")),
+					tilde.Path(filepath.Join(xdgConfigHome(), "opencode")),
+					tilde.Path(filepath.Join(xdgDataHome(), "opencode")),
+					tilde.Path(filepath.Join(xdgStateHome(), "opencode")),
 				},
 			},
 			"copilot": {
 				MountsRW: []string{
-					tildePath(filepath.Join(xdgConfigHome(), ".copilot")),
+					tilde.Path(filepath.Join(xdgConfigHome(), ".copilot")),
 				},
 				Env: []string{
 					"COPILOT_GITHUB_TOKEN",
