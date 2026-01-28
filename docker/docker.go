@@ -374,6 +374,44 @@ func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 	return result, nil
 }
 
+// Remove removes specific containers by name
+func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	// Build a set of names to remove
+	toRemove := make(map[string]bool)
+	for _, name := range names {
+		toRemove[name] = true
+	}
+
+	var removed []string
+	for _, ctr := range containers {
+		// Check if it's a silo container by image name prefix
+		if !strings.HasPrefix(ctr.Image, "silo-") {
+			continue
+		}
+
+		name := ctr.ID[:12]
+		if len(ctr.Names) > 0 {
+			name = strings.TrimPrefix(ctr.Names[0], "/")
+		}
+
+		if !toRemove[name] {
+			continue
+		}
+
+		if err := c.cli.ContainerRemove(ctx, ctr.ID, container.RemoveOptions{Force: true}); err != nil {
+			return removed, fmt.Errorf("failed to remove container %s: %w", name, err)
+		}
+		removed = append(removed, name)
+	}
+
+	return removed, nil
+}
+
 // Destroy removes all silo-created containers (those with silo- image prefix)
 func (c *Client) Destroy(ctx context.Context) ([]string, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})

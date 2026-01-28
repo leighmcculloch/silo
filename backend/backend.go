@@ -23,6 +23,9 @@ type Backend interface {
 	// List returns all silo-created containers
 	List(ctx context.Context) ([]ContainerInfo, error)
 
+	// Remove removes specific containers by name
+	Remove(ctx context.Context, names []string) ([]string, error)
+
 	// Destroy removes all silo-created containers
 	Destroy(ctx context.Context) ([]string, error)
 

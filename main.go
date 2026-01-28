@@ -186,26 +186,27 @@ Use --local or --global to skip the prompt.`,
 
 	rootCmd.AddCommand(configCmd)
 
-	destroyCmd := &cobra.Command{
-		Use:   "destroy",
-		Short: "Remove all silo-created containers",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDestroy(cmd, args, stderr)
-		},
-	}
-	destroyCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
-	rootCmd.AddCommand(destroyCmd)
-
-	listCmd := &cobra.Command{
-		Use:   "list",
+	lsCmd := &cobra.Command{
+		Use:   "ls",
 		Short: "List all silo-created containers",
-		Aliases: []string{"ls"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(cmd, args, stdout, stderr)
 		},
 	}
-	listCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
-	rootCmd.AddCommand(listCmd)
+	lsCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	lsCmd.Flags().BoolP("quiet", "q", false, "Only display container names")
+	rootCmd.AddCommand(lsCmd)
+
+	rmCmd := &cobra.Command{
+		Use:   "rm [container...]",
+		Short: "Remove silo containers",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runRemove(cmd, args, stderr)
+		},
+	}
+	rmCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rootCmd.AddCommand(rmCmd)
 
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
@@ -958,7 +959,7 @@ func buildImageTag(target, dockerfile string, buildArgs map[string]string) strin
 	return fmt.Sprintf("silo-%s-%s", target, sum[:16])
 }
 
-func runDestroy(cmd *cobra.Command, _ []string, stderr io.Writer) error {
+func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	ctx := context.Background()
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
@@ -991,10 +992,10 @@ func runDestroy(cmd *cobra.Command, _ []string, stderr io.Writer) error {
 			return fmt.Errorf("unknown backend: %s", backendType)
 		}
 
-		removed, err := backendClient.Destroy(ctx)
+		removed, err := backendClient.Remove(ctx, args)
 		backendClient.Close()
 		if err != nil {
-			return fmt.Errorf("failed to destroy containers (%s): %w", backendType, err)
+			return fmt.Errorf("failed to remove containers (%s): %w", backendType, err)
 		}
 
 		for _, name := range removed {
@@ -1002,7 +1003,6 @@ func runDestroy(cmd *cobra.Command, _ []string, stderr io.Writer) error {
 		}
 	}
 
-	cli.LogSuccessTo(stderr, "Done")
 	return nil
 }
 
@@ -1010,6 +1010,7 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	ctx := context.Background()
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
+	quietFlag, _ := cmd.Flags().GetBool("quiet")
 
 	var backends []string
 	if backendFlag != "" {
@@ -1027,13 +1028,17 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 		case "docker":
 			backendClient, err = docker.NewClient()
 			if err != nil {
-				cli.LogWarningTo(stderr, "Docker not available: %v", err)
+				if !quietFlag {
+					cli.LogWarningTo(stderr, "Docker not available: %v", err)
+				}
 				continue
 			}
 		case "container":
 			backendClient, err = applecontainer.NewClient()
 			if err != nil {
-				cli.LogWarningTo(stderr, "Container backend not available: %v", err)
+				if !quietFlag {
+					cli.LogWarningTo(stderr, "Container backend not available: %v", err)
+				}
 				continue
 			}
 		default:
@@ -1048,11 +1053,15 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 
 		for _, ctr := range containers {
 			hasContainers = true
-			fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %s\n", ctr.Name, ctr.Image, backendType, ctr.Status)
+			if quietFlag {
+				fmt.Fprintln(stdout, ctr.Name)
+			} else {
+				fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %s\n", ctr.Name, ctr.Image, backendType, ctr.Status)
+			}
 		}
 	}
 
-	if !hasContainers {
+	if !hasContainers && !quietFlag {
 		cli.LogTo(stderr, "No silo containers found")
 	}
 
