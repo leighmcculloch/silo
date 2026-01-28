@@ -199,6 +199,8 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		Privileged:  false,
 		SecurityOpt: []string{"no-new-privileges:true"},
 		CapDrop:     []string{"ALL"},
+		PidMode:     "private",
+		IpcMode:     "private",
 	}
 
 	// Create the container
