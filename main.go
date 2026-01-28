@@ -18,6 +18,7 @@ import (
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
+	applecontainer "github.com/leighmcculloch/silo/container"
 	"github.com/leighmcculloch/silo/docker"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +28,7 @@ var (
 )
 
 const sampleConfig = `{
-  // Backend to use: "docker" (default)
+  // Backend to use: "docker" or "container" (default: "docker")
   "backend": "docker",
   // Read-only directories or files to mount into the container
   "mounts_ro": [],
@@ -292,8 +293,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		if err != nil {
 			return fmt.Errorf("failed to connect to Docker: %w", err)
 		}
+	case "container":
+		cli.LogTo(stderr, "Using container backend...")
+		backendClient, err = applecontainer.NewClient()
+		if err != nil {
+			return fmt.Errorf("failed to initialize container backend: %w", err)
+		}
 	default:
-		return fmt.Errorf("unknown backend: %s (valid: docker)", backendType)
+		return fmt.Errorf("unknown backend: %s (valid: docker, container)", backendType)
 	}
 	defer backendClient.Close()
 
