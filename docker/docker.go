@@ -195,11 +195,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	hostConfig := &container.HostConfig{
 		Mounts:      mounts,
+		Init:        boolPtr(true),
 		AutoRemove:  true,
 		Privileged:  false,
 		SecurityOpt: []string{"no-new-privileges:true"},
 		CapDrop:     []string{"ALL"},
-		PidMode:     "private",
 		IpcMode:     "private",
 	}
 
@@ -242,6 +242,18 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		go c.monitorTTYSize(ctx, resp.ID, fd)
 	}
 
+	// Forward SIGINT/SIGTERM to stop the container
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case <-sigCh:
+			c.cli.ContainerKill(ctx, resp.ID, "SIGTERM")
+		case <-ctx.Done():
+		}
+	}()
+
 	// Copy stdin to container
 	go func() {
 		io.Copy(attachResp.Conn, os.Stdin)
@@ -249,7 +261,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}()
 
 	// Copy container output to stdout
-	_, err = io.Copy(os.Stdout, attachResp.Reader)
+	io.Copy(os.Stdout, attachResp.Reader)
 
 	// Wait for the container to finish
 	statusCh, errCh := c.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
@@ -295,3 +307,5 @@ func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uint
 		}
 	}
 }
+
+func boolPtr(b bool) *bool { return &b }
