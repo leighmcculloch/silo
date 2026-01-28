@@ -257,7 +257,7 @@ configurable today, other than through the hooks.
 | Category | Included |
 |----------|----------|
 | **Base** | Ubuntu 24.04, build-essential, pkg-config, libssl-dev |
-| **Languages** | Go (latest), Rust (stable + nightly), Deno |
+| **Languages** | NodeJS (latest), Go (latest), Rust (stable) |
 | **Tools** | git, curl, jq, zstd, unzip, GitHub CLI |
 | **Go** | gopls (LSP server) |
 | **Rust** | rust-analyzer, wasm32v1-none target |
