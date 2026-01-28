@@ -29,19 +29,19 @@ var (
 
 const sampleConfig = `{
   // Backend to use: "docker" or "container" (default: "docker")
-  "backend": "docker",
+  // "backend": "docker",
   // Read-only directories or files to mount into the container
-  "mounts_ro": [],
+  // "mounts_ro": [],
   // Read-write directories or files to mount into the container
-  "mounts_rw": [],
+  // "mounts_rw": [],
   // Environment variables: names without '=' pass through from host,
   // names with '=' set explicitly (e.g., "FOO=bar")
-  "env": [],
+  // "env": [],
   // Shell commands to run inside the container before the tool
-  "prehooks": [],
+  // "prehooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  "tools": {}
+  // "tools": {}
 }
 `
 
