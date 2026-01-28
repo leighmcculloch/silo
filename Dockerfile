@@ -46,14 +46,6 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
     && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${ARCH} ${HOME}/.local/node
 
-# Install Deno
-ENV PATH="${HOME}/.deno/bin:${PATH}"
-RUN ARCH=$(uname -m) \
-    && DENO_VERSION=$(curl -fsSL https://api.github.com/repos/denoland/deno/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-${ARCH}-unknown-linux-gnu.zip" -o /tmp/deno.zip \
-    && unzip -o /tmp/deno.zip -d ${HOME}/.local/bin \
-    && rm /tmp/deno.zip
-
 # Install Rust (stable + nightly) with wasm32v1-none target and rust-analyzer
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
