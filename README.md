@@ -77,19 +77,23 @@ silo copilot
 
 ### Choosing a Backend
 
-Silo supports two backends:
+Silo supports two backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
-| Docker | `--backend docker` | Default. Uses Docker containers |
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
+| Docker | `--backend docker` | Uses Docker containers |
 
+**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker.
 
 ```bash
-# Use Docker (default)
+# Use auto-detected backend (container if available, else docker)
 silo claude
 
-# Use Apple container backend
+# Explicitly use Docker
+silo --backend docker claude
+
+# Explicitly use Apple container backend
 silo --backend container claude
 ```
 
@@ -132,8 +136,8 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker" (default) or "container" (Apple VMs)
-  "backend": "docker",
+  // Backend: "docker" or "container" (default: container if installed, else docker)
+  "backend": "container",
 
   // Read-only mounts (paths visible to the AI but not writable)
   "mounts_ro": [
@@ -257,7 +261,7 @@ configurable today, other than through the hooks.
 | Category | Included |
 |----------|----------|
 | **Base** | Ubuntu 24.04, build-essential, pkg-config, libssl-dev |
-| **Languages** | NodeJS (latest), Go (latest), Rust (stable) |
+| **Languages** | Node.js (latest), Go (latest), Rust (stable) |
 | **Tools** | git, curl, jq, zstd, unzip, GitHub CLI |
 | **Go** | gopls (LSP server) |
 | **Rust** | rust-analyzer, wasm32v1-none target |

@@ -30,7 +30,7 @@ var (
 )
 
 const sampleConfig = `{
-  // Backend to use: "docker" or "container" (default: "docker")
+  // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
   // "backend": "docker",
   // Read-only directories or files to mount into the container
   // "mounts_ro": [],
@@ -316,7 +316,12 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	backendType := cfg.Backend
 	if backendType == "" {
-		backendType = "docker" // default
+		// Default to container if available, otherwise docker
+		if _, err := exec.LookPath("container"); err == nil {
+			backendType = "container"
+		} else {
+			backendType = "docker"
+		}
 	}
 
 	switch backendType {
