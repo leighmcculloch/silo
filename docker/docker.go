@@ -138,8 +138,8 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Convert mounts
 	var mounts []mount.Mount
 	for _, m := range opts.MountsRO {
-		// Check if path exists before mounting
-		if _, err := os.Stat(m); err != nil {
+		// Check if path exists before mounting (use Lstat to not follow symlinks)
+		if _, err := os.Lstat(m); err != nil {
 			continue // Skip non-existent paths
 		}
 		mounts = append(mounts, mount.Mount{
@@ -150,8 +150,8 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		})
 	}
 	for _, m := range opts.MountsRW {
-		// Check if path exists before mounting
-		if _, err := os.Stat(m); err != nil {
+		// Check if path exists before mounting (use Lstat to not follow symlinks)
+		if _, err := os.Lstat(m); err != nil {
 			continue // Skip non-existent paths
 		}
 		mounts = append(mounts, mount.Mount{

@@ -445,7 +445,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	if len(mountsRO) > 0 {
 		cli.LogTo(stderr, "Mounts (read-only):")
 		for _, m := range mountsRO {
-			if _, err := os.Stat(m); err != nil {
+			if _, err := os.Lstat(m); err != nil {
 				continue
 			}
 			if seen[m] {
@@ -457,7 +457,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	}
 	cli.LogTo(stderr, "Mounts (read-write):")
 	for _, m := range mountsRW {
-		if _, err := os.Stat(m); err != nil {
+		if _, err := os.Lstat(m); err != nil {
 			continue
 		}
 		if seen[m] {

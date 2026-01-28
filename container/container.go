@@ -182,6 +182,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// mounts are staged into a directory and symlinked inside the container.
 	var symlinkCmds []string
 	for _, m := range opts.MountsRO {
+		// Check if path exists (use Lstat to not follow symlinks for existence check)
+		if _, err := os.Lstat(m); err != nil {
+			continue
+		}
+		// Get info following symlinks to check if target is a directory
 		info, err := os.Stat(m)
 		if err != nil {
 			continue
@@ -202,6 +207,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 	for _, m := range opts.MountsRW {
+		// Check if path exists (use Lstat to not follow symlinks for existence check)
+		if _, err := os.Lstat(m); err != nil {
+			continue
+		}
+		// Get info following symlinks to check if target is a directory
 		info, err := os.Stat(m)
 		if err != nil {
 			continue
