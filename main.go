@@ -30,6 +30,7 @@ var (
 )
 
 const sampleConfig = `{
+  "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
   // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
   // "backend": "docker",
   // Read-only directories or files to mount into the container
@@ -559,14 +560,14 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 
 	// Run the container/VM
 	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:    imageTag,
-		Name:     containerName,
-		WorkDir:  cwd,
-		MountsRO: mountsRO,
-		MountsRW: mountsRW,
-		Env:      envVars,
-		Command:  toolCommands[tool],
-		Args:     toolArgs,
+		Image:       imageTag,
+		Name:        containerName,
+		WorkDir:     cwd,
+		MountsRO:    mountsRO,
+		MountsRW:    mountsRW,
+		Env:         envVars,
+		Command:     toolCommands[tool],
+		Args:        toolArgs,
 		PreRunHooks: cfg.PreRunHooks,
 	})
 

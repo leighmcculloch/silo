@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
+  "title": "Silo Configuration",
+  "description": "Configuration file for silo - run AI coding tools in isolated containers",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for editor autocompletion and validation"
+    },
+    "backend": {
+      "type": "string",
+      "enum": ["docker", "container"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs. Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container"]
+    },
+    "mounts_ro": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Read-only directories or files to mount into the container. Paths starting with ~ are expanded to home directory.",
+      "examples": [["~/.gitconfig", "~/.ssh/known_hosts"]]
+    },
+    "mounts_rw": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Read-write directories or files to mount into the container. Paths starting with ~ are expanded to home directory.",
+      "examples": [["~/.cache/myapp"]]
+    },
+    "env": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Environment variables. Names without '=' pass through from host, names with '=' set explicitly (e.g., 'FOO=bar').",
+      "examples": [["MY_API_KEY", "DEBUG=1"]]
+    },
+    "pre_run_hooks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Shell commands to run inside the container before the tool starts. Useful for dynamic setup that depends on the mounted working directory.",
+      "examples": [["cd /workspace && npm install"]]
+    },
+    "post_build_hooks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Shell commands to run inside the container after building the image. These are baked into the image and cached.",
+      "examples": [["apt-get update && apt-get install -y ripgrep", "npm install -g typescript"]]
+    },
+    "tools": {
+      "type": "object",
+      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'opencode', 'copilot').",
+      "additionalProperties": {
+        "$ref": "#/$defs/toolConfig"
+      },
+      "examples": [{
+        "claude": {
+          "env": ["CLAUDE_SPECIFIC_VAR"]
+        }
+      }]
+    }
+  },
+  "$defs": {
+    "toolConfig": {
+      "type": "object",
+      "description": "Configuration specific to a single tool. These settings are merged with global config when running that tool.",
+      "properties": {
+        "mounts_ro": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Read-only directories or files to mount for this tool only."
+        },
+        "mounts_rw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Read-write directories or files to mount for this tool only."
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Environment variables for this tool only. Same format as global env."
+        },
+        "post_build_hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shell commands to run in the Dockerfile for this tool's build stage."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
