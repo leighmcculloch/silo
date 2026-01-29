@@ -94,6 +94,13 @@
           },
           "description": "Environment variables for this tool only. Same format as global env."
         },
+        "pre_run_hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shell commands to run inside the container before this tool starts."
+        },
         "post_build_hooks": {
           "type": "array",
           "items": {

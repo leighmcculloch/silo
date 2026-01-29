@@ -375,9 +375,11 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
-	// Get tool-specific post-build hooks
+	// Get tool-specific hooks
+	var toolPreRunHooks []string
 	var toolPostBuildHooks []string
 	if toolCfg, ok := cfg.Tools[tool]; ok {
+		toolPreRunHooks = toolCfg.PreRunHooks
 		toolPostBuildHooks = toolCfg.PostBuildHooks
 	}
 
@@ -540,10 +542,19 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
+	// Combine global and tool-specific pre-run hooks
+	preRunHooks := append(cfg.PreRunHooks, toolPreRunHooks...)
+
 	// Log pre-run hooks
 	if len(cfg.PreRunHooks) > 0 {
 		cli.LogTo(stderr, "Pre-run hooks:")
 		for _, hook := range cfg.PreRunHooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+	if len(toolPreRunHooks) > 0 {
+		cli.LogTo(stderr, "Pre-run hooks (%s):", tool)
+		for _, hook := range toolPreRunHooks {
 			cli.LogBulletTo(stderr, "%s", hook)
 		}
 	}
@@ -568,7 +579,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		Env:         envVars,
 		Command:     toolCommands[tool],
 		Args:        toolArgs,
-		PreRunHooks: cfg.PreRunHooks,
+		PreRunHooks: preRunHooks,
 	})
 
 	if err != nil {
@@ -724,6 +735,30 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 			source := sources.ToolEnv[toolName][v]
 			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
 		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Tool pre_run_hooks
+		fmt.Fprintf(stdout, "      %s: [\n", key("pre_run_hooks"))
+		for i, v := range toolCfg.PreRunHooks {
+			comma := ","
+			if i == len(toolCfg.PreRunHooks)-1 {
+				comma = ""
+			}
+			source := sources.ToolPreRunHooks[toolName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Tool post_build_hooks
+		fmt.Fprintf(stdout, "      %s: [\n", key("post_build_hooks"))
+		for i, v := range toolCfg.PostBuildHooks {
+			comma := ","
+			if i == len(toolCfg.PostBuildHooks)-1 {
+				comma = ""
+			}
+			source := sources.ToolPostBuildHooks[toolName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
 		fmt.Fprintln(stdout, "      ]")
 
 		toolComma := ","
@@ -847,6 +882,26 @@ func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		for i, v := range toolCfg.Env {
 			comma := ","
 			if i == len(toolCfg.Env)-1 {
+				comma = ""
+			}
+			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		fmt.Fprintln(stdout, "      \"pre_run_hooks\": [")
+		for i, v := range toolCfg.PreRunHooks {
+			comma := ","
+			if i == len(toolCfg.PreRunHooks)-1 {
+				comma = ""
+			}
+			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		fmt.Fprintln(stdout, "      \"post_build_hooks\": [")
+		for i, v := range toolCfg.PostBuildHooks {
+			comma := ","
+			if i == len(toolCfg.PostBuildHooks)-1 {
 				comma = ""
 			}
 			fmt.Fprintf(stdout, "        %q%s\n", v, comma)

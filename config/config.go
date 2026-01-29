@@ -46,6 +46,9 @@ type ToolConfig struct {
 	// Env specific to this tool (same format as Config.Env)
 	Env []string `json:"env,omitempty"`
 
+	// PreRunHooks are shell commands to run inside the container before this tool
+	PreRunHooks []string `json:"pre_run_hooks,omitempty"`
+
 	// PostBuildHooks are shell commands to run in the Dockerfile for this tool's stage
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
 }
@@ -77,9 +80,9 @@ func xdgStateHome() string {
 // DefaultConfig returns the default configuration
 func DefaultConfig() Config {
 	return Config{
-		MountsRO: []string{},
-		MountsRW: []string{},
-		Env:      []string{},
+		MountsRO:       []string{},
+		MountsRW:       []string{},
+		Env:            []string{},
 		PreRunHooks:    []string{},
 		PostBuildHooks: []string{},
 		Tools: map[string]ToolConfig{
@@ -156,6 +159,7 @@ func Merge(base, overlay Config) Config {
 			existing.MountsRO = append(existing.MountsRO, tool.MountsRO...)
 			existing.MountsRW = append(existing.MountsRW, tool.MountsRW...)
 			existing.Env = append(existing.Env, tool.Env...)
+			existing.PreRunHooks = append(existing.PreRunHooks, tool.PreRunHooks...)
 			existing.PostBuildHooks = append(existing.PostBuildHooks, tool.PostBuildHooks...)
 			result.Tools[name] = existing
 		} else {
@@ -168,29 +172,31 @@ func Merge(base, overlay Config) Config {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
-	Backend      string                       // source path for backend setting
-	MountsRO     map[string]string            // value -> source path
-	MountsRW     map[string]string            // value -> source path
-	Env          map[string]string            // value -> source path
-	PreRunHooks    map[string]string            // value -> source path
-	PostBuildHooks map[string]string            // value -> source path
+	Backend            string                       // source path for backend setting
+	MountsRO           map[string]string            // value -> source path
+	MountsRW           map[string]string            // value -> source path
+	Env                map[string]string            // value -> source path
+	PreRunHooks        map[string]string            // value -> source path
+	PostBuildHooks     map[string]string            // value -> source path
 	ToolMountsRO       map[string]map[string]string // tool -> value -> source
 	ToolMountsRW       map[string]map[string]string // tool -> value -> source
 	ToolEnv            map[string]map[string]string // tool -> value -> source
+	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
 	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
 }
 
 // NewSourceInfo creates a new empty SourceInfo
 func NewSourceInfo() *SourceInfo {
 	return &SourceInfo{
-		MountsRO:     make(map[string]string),
-		MountsRW:     make(map[string]string),
-		Env:          make(map[string]string),
-		PreRunHooks:    make(map[string]string),
-		PostBuildHooks: make(map[string]string),
+		MountsRO:           make(map[string]string),
+		MountsRW:           make(map[string]string),
+		Env:                make(map[string]string),
+		PreRunHooks:        make(map[string]string),
+		PostBuildHooks:     make(map[string]string),
 		ToolMountsRO:       make(map[string]map[string]string),
 		ToolMountsRW:       make(map[string]map[string]string),
 		ToolEnv:            make(map[string]map[string]string),
+		ToolPreRunHooks:    make(map[string]map[string]string),
 		ToolPostBuildHooks: make(map[string]map[string]string),
 	}
 }
@@ -317,6 +323,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		if info.ToolEnv[toolName] == nil {
 			info.ToolEnv[toolName] = make(map[string]string)
 		}
+		if info.ToolPreRunHooks[toolName] == nil {
+			info.ToolPreRunHooks[toolName] = make(map[string]string)
+		}
 		if info.ToolPostBuildHooks[toolName] == nil {
 			info.ToolPostBuildHooks[toolName] = make(map[string]string)
 		}
@@ -328,6 +337,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 		for _, v := range toolCfg.Env {
 			info.ToolEnv[toolName][v] = source
+		}
+		for _, v := range toolCfg.PreRunHooks {
+			info.ToolPreRunHooks[toolName][v] = source
 		}
 		for _, v := range toolCfg.PostBuildHooks {
 			info.ToolPostBuildHooks[toolName][v] = source
