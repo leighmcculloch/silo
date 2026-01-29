@@ -315,7 +315,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Put our terminal in raw mode
 	if oldState != nil {
 		newState := *oldState
-		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG
+		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG | unix.IEXTEN
 		newState.Iflag &^= unix.IXON | unix.ICRNL
 		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
 	}
