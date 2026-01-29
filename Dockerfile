@@ -76,12 +76,10 @@ ARG HOME
 RUN curl -fsSL https://opencode.ai/install | bash
 
 ENV PATH="${HOME}/.opencode/bin:${PATH}"
-ENV OPENCODE_PERMISSION='{"edit":"allow","bash":"allow","webfetch":"allow", "websearch":"allow","external_directory":"allow"}'
+ENV OPENCODE_PERMISSION='{"edit":"allow","bash":"allow","webfetch":"allow","websearch":"allow","external_directory":"allow"}'
 ENV OPENCODE_EXPERIMENTAL=true
 
 # SILO_POST_BUILD_HOOKS_OPENCODE
-
-ENTRYPOINT ["opencode"]
  
 # ============================================
 # Claude Code stage
@@ -96,8 +94,6 @@ ENV PATH="${HOME}/.claude/bin:${PATH}"
 
 # SILO_POST_BUILD_HOOKS_CLAUDE
 
-ENTRYPOINT ["/bin/sh", "-c", "exec claude --mcp-config=$HOME/.claude/mcp.json --dangerously-skip-permissions"]
-
 # ============================================
 # Copilot CLI stage
 # ============================================
@@ -110,5 +106,3 @@ RUN curl -fsSL https://gh.io/copilot-install | bash
 ENV PATH="${HOME}/.local/bin:${PATH}"
 
 # SILO_POST_BUILD_HOOKS_COPILOT
-
-ENTRYPOINT ["/bin/sh", "-c", "exec copilot --allow-all"]

@@ -562,11 +562,11 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	cli.LogTo(stderr, "Container name: %s", containerName)
 	cli.LogTo(stderr, "Running %s...", tool)
 
-	// Define tool-specific commands (these match the Dockerfile entrypoints)
+	// Define tool-specific commands
 	toolCommands := map[string][]string{
 		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
 		"opencode": {"opencode"},
-		"copilot":  {"copilot", "--allow-all"},
+		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
 	}
 
 	// Run the container/VM
