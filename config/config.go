@@ -98,10 +98,16 @@ func DefaultConfig() Config {
 					tilde.Path(filepath.Join(xdgDataHome(), "opencode")),
 					tilde.Path(filepath.Join(xdgStateHome(), "opencode")),
 				},
+				MountsRO: []string{
+					"~/.claude",
+				},
 			},
 			"copilot": {
 				MountsRW: []string{
 					tilde.Path(filepath.Join(xdgConfigHome(), ".copilot")),
+				},
+				MountsRO: []string{
+					"~/.claude",
 				},
 				Env: []string{
 					"COPILOT_GITHUB_TOKEN",
