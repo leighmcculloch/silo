@@ -21,8 +21,23 @@ RUN apt-get update && apt-get install -y \
     ncurses-base \
     && rm -rf /var/lib/apt/lists/*
 
-# Create user with matching UID and macOS-style home path
-RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash ${USER}
+# Install Docker CE (for container backend which runs in a VM)
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+    && chmod a+r /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update \
+    && apt-get install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create user with matching UID and macOS-style home path, add to docker group
+RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash -G docker ${USER}
+
+# Allow user to start Docker daemon without password (for container backend VM)
+RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
+    && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/docker \
+    && chmod 0440 /etc/sudoers.d/docker
 
 # Set up environment
 ENV PATH="${HOME}/.local/bin:${PATH}"

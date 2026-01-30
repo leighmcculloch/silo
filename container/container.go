@@ -1,3 +1,5 @@
+//go:build darwin
+
 package container
 
 import (
@@ -134,8 +136,15 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	return tag, nil
 }
 
+// dockerStartHook is a pre-run hook that starts the Docker daemon in the VM.
+// It checks if Docker is already running and starts it if not.
+const dockerStartHook = `if [ ! -S /var/run/docker.sock ]; then sudo dockerd --iptables=false > /tmp/dockerd.log 2>&1 & fi`
+
 // Run runs a container using the container CLI.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
+	// Prepend Docker daemon startup hook for VM environments
+	opts.PreRunHooks = append([]string{dockerStartHook}, opts.PreRunHooks...)
+
 	// Build full command: Command + Args
 	fullCmd := append(opts.Command, opts.Args...)
 
