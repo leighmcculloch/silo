@@ -26,9 +26,6 @@ type Backend interface {
 	// Remove removes specific containers by name
 	Remove(ctx context.Context, names []string) ([]string, error)
 
-	// Destroy removes all silo-created containers
-	Destroy(ctx context.Context) ([]string, error)
-
 	// Close releases any resources held by the backend
 	Close() error
 }

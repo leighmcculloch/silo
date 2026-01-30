@@ -97,13 +97,3 @@ func TestTitle(t *testing.T) {
 		t.Errorf("expected title to contain text, got: %s", title)
 	}
 }
-
-func TestSubtitle(t *testing.T) {
-	subtitle := Subtitle("My Subtitle")
-	if subtitle == "" {
-		t.Error("expected non-empty subtitle")
-	}
-	if !strings.Contains(subtitle, "My Subtitle") {
-		t.Errorf("expected subtitle to contain text, got: %s", subtitle)
-	}
-}

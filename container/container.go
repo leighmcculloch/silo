@@ -568,41 +568,6 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	return removed, nil
 }
 
-// Destroy removes all silo-created containers (those with silo- image prefix)
-func (c *Client) Destroy(ctx context.Context) ([]string, error) {
-	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
-	}
-
-	var containers []struct {
-		Configuration struct {
-			ID    string `json:"id"`
-			Image struct {
-				Reference string `json:"reference"`
-			} `json:"image"`
-		} `json:"configuration"`
-	}
-	if err := json.Unmarshal(output, &containers); err != nil {
-		return nil, fmt.Errorf("failed to parse container list: %w", err)
-	}
-
-	var removed []string
-	for _, ctr := range containers {
-		// Check if it's a silo container by image name prefix
-		if strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
-			rmCmd := exec.CommandContext(ctx, "container", "rm", "-f", ctr.Configuration.ID)
-			if err := rmCmd.Run(); err != nil {
-				return removed, fmt.Errorf("failed to remove container %s: %w", ctr.Configuration.ID, err)
-			}
-			removed = append(removed, ctr.Configuration.ID)
-		}
-	}
-
-	return removed, nil
-}
-
 // stageFileMount creates a staging directory containing a hard link to the
 // given file. It returns the host staging directory path and the corresponding
 // container-side mount target path.

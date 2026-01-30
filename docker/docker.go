@@ -412,31 +412,6 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	return removed, nil
 }
 
-// Destroy removes all silo-created containers (those with silo- image prefix)
-func (c *Client) Destroy(ctx context.Context) ([]string, error) {
-	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
-	}
-
-	var removed []string
-	for _, ctr := range containers {
-		// Check if it's a silo container by image name prefix
-		if strings.HasPrefix(ctr.Image, "silo-") {
-			if err := c.cli.ContainerRemove(ctx, ctr.ID, container.RemoveOptions{Force: true}); err != nil {
-				return removed, fmt.Errorf("failed to remove container %s: %w", ctr.ID[:12], err)
-			}
-			name := ctr.ID[:12]
-			if len(ctr.Names) > 0 {
-				name = strings.TrimPrefix(ctr.Names[0], "/")
-			}
-			removed = append(removed, name)
-		}
-	}
-
-	return removed, nil
-}
-
 // NextContainerName returns the next sequential container name for the given
 // base name. It lists existing containers with the same prefix and returns
 // baseName-N where N is one more than the highest existing suffix.
