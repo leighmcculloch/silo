@@ -101,6 +101,9 @@ func DefaultConfig() Config {
 				MountsRO: []string{
 					"~/.claude",
 				},
+				Env: []string{
+					"OPENCODE_DISABLE_DEFAULT_PLUGINS=1",
+				},
 			},
 			"copilot": {
 				MountsRW: []string{
