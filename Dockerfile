@@ -88,7 +88,7 @@ FROM base AS opencode
 
 ARG HOME
 
-RUN curl -fsSL https://opencode.ai/install | bash
+RUN curl -fsSL https://raw.githubusercontent.com/anomalyco/opencode/refs/heads/dev/install | bash
 
 ENV PATH="${HOME}/.opencode/bin:${PATH}"
 ENV OPENCODE_PERMISSION='{"edit":"allow","bash":"allow","webfetch":"allow","websearch":"allow","external_directory":"allow"}'
