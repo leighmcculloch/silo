@@ -405,10 +405,10 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		exists = false
 	}
 
+	cli.LogTo(stderr, "Building environment for %s...", tool)
 	if exists {
-		cli.LogSuccessTo(stderr, "Environment cached")
+		cli.LogSuccessBulletTo(stderr, "Environment cached")
 	} else {
-		cli.LogTo(stderr, "Building environment for %s...", tool)
 		_, err = backendClient.Build(ctx, backend.BuildOptions{
 			Dockerfile: dockerfile,
 			Target:     tool,
@@ -423,7 +423,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		if err != nil {
 			return fmt.Errorf("failed to build environment: %w", err)
 		}
-		cli.LogSuccessTo(stderr, "Environment ready")
+		cli.LogSuccessBulletTo(stderr, "Environment ready")
 	}
 
 	// Collect environment variables

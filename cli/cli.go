@@ -46,6 +46,12 @@ func LogSuccessTo(w io.Writer, format string, args ...any) {
 	fmt.Fprintln(w, successStyle.Render("✓ "+msg))
 }
 
+// LogSuccessBulletTo prints an indented success message to the given writer
+func LogSuccessBulletTo(w io.Writer, format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	fmt.Fprintln(w, "  "+successStyle.Render("✓ "+msg))
+}
+
 // LogWarningTo prints a warning message to the given writer
 func LogWarningTo(w io.Writer, format string, args ...any) {
 	msg := fmt.Sprintf(format, args...)
