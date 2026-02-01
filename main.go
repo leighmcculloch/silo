@@ -21,6 +21,7 @@ import (
 	"github.com/leighmcculloch/silo/config"
 	applecontainer "github.com/leighmcculloch/silo/container"
 	"github.com/leighmcculloch/silo/docker"
+	"github.com/leighmcculloch/silo/mountwait"
 	"github.com/leighmcculloch/silo/tilde"
 	"github.com/spf13/cobra"
 )
@@ -552,7 +553,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	sort.Strings(allMountPaths)
 
 	// Prepend mount wait hook to ensure mounts are ready before other hooks run
-	if mountWaitHook := backend.GenerateMountWaitScript(allMountPaths); mountWaitHook != "" {
+	if mountWaitHook := mountwait.GenerateScript(allMountPaths); mountWaitHook != "" {
 		preRunHooks = append([]string{mountWaitHook}, preRunHooks...)
 	}
 
