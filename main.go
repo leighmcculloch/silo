@@ -384,6 +384,20 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	}
 	imageTag := buildImageTag(tool, dockerfile, buildArgs)
 
+	// Log post-build hooks (before building so user knows what will be run)
+	if len(cfg.PostBuildHooks) > 0 {
+		cli.LogTo(stderr, "Post-build hooks:")
+		for _, hook := range cfg.PostBuildHooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+	if len(toolPostBuildHooks) > 0 {
+		cli.LogTo(stderr, "Post-build hooks (%s):", tool)
+		for _, hook := range toolPostBuildHooks {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+
 	// Check if image already exists
 	exists, err := backendClient.ImageExists(ctx, imageTag)
 	if err != nil {
@@ -517,20 +531,6 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 		for _, name := range envNotFound {
 			cli.LogBulletTo(stderr, "%s (not set)", name)
-		}
-	}
-
-	// Log post-build hooks
-	if len(cfg.PostBuildHooks) > 0 {
-		cli.LogTo(stderr, "Post-build hooks:")
-		for _, hook := range cfg.PostBuildHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
-		}
-	}
-	if len(toolPostBuildHooks) > 0 {
-		cli.LogTo(stderr, "Post-build hooks (%s):", tool)
-		for _, hook := range toolPostBuildHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
 		}
 	}
 
