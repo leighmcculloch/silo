@@ -33,6 +33,8 @@ const sampleConfig = `{
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
   // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
   // "backend": "docker",
+  // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)
+  // "tool": "claude",
   // Read-only directories or files to mount into the container
   // "mounts_ro": [],
   // Read-write directories or files to mount into the container
@@ -232,6 +234,8 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	var tool string
 	if len(args) > 0 {
 		tool = args[0]
+	} else if cfg.Tool != "" {
+		tool = cfg.Tool
 	} else {
 		// Interactive selection
 		tool, err = selectTool()
@@ -645,6 +649,21 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		backendSource = "default"
 	}
 	fmt.Fprintf(stdout, "  %s: %s, %s\n", key("backend"), str(backendValue), comment(backendSource))
+
+	// Tool
+	toolValue := cfg.Tool
+	if toolValue == "" {
+		toolValue = ""
+	}
+	toolSource := sources.Tool
+	if toolSource == "" {
+		toolSource = "default"
+	}
+	if toolValue != "" {
+		fmt.Fprintf(stdout, "  %s: %s, %s\n", key("tool"), str(toolValue), comment(toolSource))
+	} else {
+		fmt.Fprintf(stdout, "  %s: null, %s\n", key("tool"), comment(toolSource))
+	}
 
 	// MountsRO
 	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_ro"))

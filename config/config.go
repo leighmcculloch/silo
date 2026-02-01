@@ -15,6 +15,10 @@ type Config struct {
 	// Backend specifies which backend to use: "docker" (default)
 	Backend string `json:"backend,omitempty"`
 
+	// Tool specifies the default tool to run: "claude", "opencode", or "copilot"
+	// If not set, an interactive prompt is shown
+	Tool string `json:"tool,omitempty"`
+
 	// MountsRO are read-only directories or files to mount into the container
 	MountsRO []string `json:"mounts_ro,omitempty"`
 
@@ -56,6 +60,7 @@ type ToolConfig struct {
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
 	Backend            string                       // source path for backend setting
+	Tool               string                       // source path for tool setting
 	MountsRO           map[string]string            // value -> source path
 	MountsRW           map[string]string            // value -> source path
 	Env                map[string]string            // value -> source path
@@ -147,6 +152,11 @@ func Merge(base, overlay Config) Config {
 	// Backend: overlay takes precedence if set
 	if overlay.Backend != "" {
 		result.Backend = overlay.Backend
+	}
+
+	// Tool: overlay takes precedence if set
+	if overlay.Tool != "" {
+		result.Tool = overlay.Tool
 	}
 
 	// Append arrays
@@ -282,6 +292,9 @@ func LoadAllWithSources() (Config, *SourceInfo) {
 func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	if cfg.Backend != "" {
 		info.Backend = source
+	}
+	if cfg.Tool != "" {
+		info.Tool = source
 	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source
