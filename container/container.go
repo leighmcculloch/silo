@@ -180,7 +180,6 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Mounts — Apple's container CLI only supports directories, so file
 	// mounts are staged into a directory and symlinked inside the container.
 	var symlinkCmds []string
-	var mountPaths []string // Paths to wait for before running hooks
 	for _, m := range opts.MountsRO {
 		// Check if path exists (use Lstat to not follow symlinks for existence check)
 		if _, err := os.Lstat(m); err != nil {
@@ -193,14 +192,12 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 		if info.IsDir() {
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", m, m))
-			mountPaths = append(mountPaths, m)
 		} else {
 			stagingDir, containerDir, err := stageFileMount(m)
 			if err != nil {
 				return fmt.Errorf("staging file mount %s: %w", m, err)
 			}
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", stagingDir, containerDir))
-			mountPaths = append(mountPaths, containerDir)
 			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
 				shellquote.Join(filepath.Dir(m)),
 				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
@@ -220,14 +217,12 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 		if info.IsDir() {
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m, m))
-			mountPaths = append(mountPaths, m)
 		} else {
 			stagingDir, containerDir, err := stageFileMount(m)
 			if err != nil {
 				return fmt.Errorf("staging file mount %s: %w", m, err)
 			}
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", stagingDir, containerDir))
-			mountPaths = append(mountPaths, containerDir)
 			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
 				shellquote.Join(filepath.Dir(m)),
 				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
@@ -236,17 +231,10 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 
-	// Generate mount wait hook if we have any mounts
-	mountWaitHook := generateMountWaitScript(mountPaths)
-
 	// Build the complete list of pre-run hooks in order:
-	// 1. Mount wait hook (waits for mounts to be ready)
-	// 2. Symlink commands (creates symlinks for file mounts)
-	// 3. Docker daemon hook and user pre-run hooks (already in opts.PreRunHooks)
+	// 1. Symlink commands (creates symlinks for file mounts - may be dangling initially)
+	// 2. Pre-run hooks from opts (includes mount wait hook, docker daemon hook, user hooks)
 	var allPreRunHooks []string
-	if mountWaitHook != "" {
-		allPreRunHooks = append(allPreRunHooks, mountWaitHook)
-	}
 	allPreRunHooks = append(allPreRunHooks, symlinkCmds...)
 	allPreRunHooks = append(allPreRunHooks, opts.PreRunHooks...)
 
@@ -519,53 +507,6 @@ func resourceArgs() []string {
 		args = append(args, "-m", fmt.Sprintf("%dM", memMB))
 	}
 	return args
-}
-
-// generateMountWaitScript generates a bash script that waits for all mount paths to exist.
-// It polls each path at 0.01s intervals for up to 10s total timeout, with logging.
-func generateMountWaitScript(paths []string) string {
-	if len(paths) == 0 {
-		return ""
-	}
-	var quotedPaths []string
-	for _, p := range paths {
-		quotedPaths = append(quotedPaths, shellquote.Join(p))
-	}
-	return fmt.Sprintf(`__silo_wait_for_mount() {
-  local p=$1 timeout=10000 i=0
-  if [ -e "$p" ]; then
-    echo "silo: mount ready: $p" >&2
-    return 0
-  fi
-  echo "silo: mount not yet ready, waiting: $p" >&2
-  while [ ! -e "$p" ] && [ $i -lt $timeout ]; do
-    sleep 0.001
-    i=$((i+1))
-  done
-  if [ -e "$p" ]; then
-    echo "silo: mount ready after ${i}ms: $p" >&2
-    return 0
-  fi
-  echo "silo: mount not ready after 10s: $p" >&2
-  return 1
-}
-__silo_wait_for_mounts() {
-  local paths=(%s)
-  local pids=() p
-  echo "silo: waiting for ${#paths[@]} mount(s) in parallel..." >&2
-  for p in "${paths[@]}"; do
-    __silo_wait_for_mount "$p" &
-    pids+=($!)
-  done
-  local failed=0
-  for pid in "${pids[@]}"; do
-    wait $pid || failed=1
-  done
-  if [ $failed -eq 1 ]; then
-    exit 1
-  fi
-  echo "silo: all mounts ready" >&2
-}; __silo_wait_for_mounts`, strings.Join(quotedPaths, " "))
 }
 
 // stageFileMount creates a staging directory containing a hard link to the

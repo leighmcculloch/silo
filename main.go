@@ -537,6 +537,25 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	// Combine global and tool-specific pre-run hooks
 	preRunHooks := append(cfg.PreRunHooks, toolPreRunHooks...)
 
+	// Collect all mount paths that exist for the mount wait script
+	var allMountPaths []string
+	for _, m := range mountsRO {
+		if _, err := os.Lstat(m); err == nil {
+			allMountPaths = append(allMountPaths, m)
+		}
+	}
+	for _, m := range mountsRW {
+		if _, err := os.Lstat(m); err == nil {
+			allMountPaths = append(allMountPaths, m)
+		}
+	}
+	sort.Strings(allMountPaths)
+
+	// Prepend mount wait hook to ensure mounts are ready before other hooks run
+	if mountWaitHook := backend.GenerateMountWaitScript(allMountPaths); mountWaitHook != "" {
+		preRunHooks = append([]string{mountWaitHook}, preRunHooks...)
+	}
+
 	// Log pre-run hooks
 	if len(cfg.PreRunHooks) > 0 {
 		cli.LogTo(stderr, "Pre-run hooks:")
