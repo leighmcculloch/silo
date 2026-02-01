@@ -151,6 +151,9 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Backend: "docker" or "container" (default: container if installed, else docker)
   "backend": "container",
 
+  // Default tool: "claude", "opencode", or "copilot" (if not set, interactive prompt is shown)
+  "tool": "claude",
+
   // Read-only mounts (paths visible to the AI but not writable)
   "mounts_ro": [
     "/path/to/reference/docs"
@@ -204,7 +207,7 @@ Arrays are **appended** (not replaced) when configs are merged:
 // Result: env = ["GITHUB_TOKEN", "PROJECT_TOKEN"]
 ```
 
-The `backend` setting is replaced (later config wins).
+The `backend` and `tool` settings are replaced (later config wins).
 
 ### Managing Configuration
 

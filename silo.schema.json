@@ -15,6 +15,12 @@
       "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs. Default: 'container' if installed, else 'docker'",
       "examples": ["docker", "container"]
     },
+    "tool": {
+      "type": "string",
+      "enum": ["claude", "opencode", "copilot"],
+      "description": "Default tool to run. If not set, an interactive prompt is shown.",
+      "examples": ["claude", "opencode", "copilot"]
+    },
     "mounts_ro": {
       "type": "array",
       "items": {
