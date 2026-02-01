@@ -317,37 +317,6 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	return nil
 }
 
-// resizeContainerTTY resizes the container's TTY to match the terminal size
-func (c *Client) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
-	winsize, err := term.GetWinsize(fd)
-	if err != nil {
-		return
-	}
-
-	c.cli.ContainerResize(ctx, containerID, container.ResizeOptions{
-		Height: uint(winsize.Height),
-		Width:  uint(winsize.Width),
-	})
-}
-
-// monitorTTYSize monitors for terminal resize signals and updates the container
-func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uintptr) {
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGWINCH)
-	defer signal.Stop(sigchan)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-sigchan:
-			c.resizeContainerTTY(ctx, containerID, fd)
-		}
-	}
-}
-
-func boolPtr(b bool) *bool { return &b }
-
 // List returns all silo-created containers (those with silo- image prefix)
 func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
@@ -438,3 +407,34 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 
 	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
 }
+
+// resizeContainerTTY resizes the container's TTY to match the terminal size
+func (c *Client) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
+	winsize, err := term.GetWinsize(fd)
+	if err != nil {
+		return
+	}
+
+	c.cli.ContainerResize(ctx, containerID, container.ResizeOptions{
+		Height: uint(winsize.Height),
+		Width:  uint(winsize.Width),
+	})
+}
+
+// monitorTTYSize monitors for terminal resize signals and updates the container
+func (c *Client) monitorTTYSize(ctx context.Context, containerID string, fd uintptr) {
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGWINCH)
+	defer signal.Stop(sigchan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigchan:
+			c.resizeContainerTTY(ctx, containerID, fd)
+		}
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }

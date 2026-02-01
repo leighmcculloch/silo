@@ -27,19 +27,9 @@ import (
 	"github.com/leighmcculloch/silo/backend"
 )
 
-// resourceArgs returns CLI flags for --cpus (all CPUs) and --memory (half system RAM).
-func resourceArgs() []string {
-	cpus := runtime.NumCPU()
-	var memMB uint64
-	if memBytes, err := unix.SysctlUint64("hw.memsize"); err == nil {
-		memMB = memBytes / 2 / (1024 * 1024) // half, in MiB
-	}
-	args := []string{"-c", fmt.Sprintf("%d", cpus)}
-	if memMB > 0 {
-		args = append(args, "-m", fmt.Sprintf("%dM", memMB))
-	}
-	return args
-}
+// dockerStartHook is a pre-run hook that starts the Docker daemon in the VM.
+// It checks if Docker is already running and starts it if not.
+const dockerStartHook = `if [ ! -S /var/run/docker.sock ]; then sudo dockerd --iptables=false > /tmp/dockerd.log 2>&1 & fi`
 
 // Client implements backend.Backend using the Apple container CLI.
 type Client struct{}
@@ -134,57 +124,6 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	}
 
 	return tag, nil
-}
-
-// dockerStartHook is a pre-run hook that starts the Docker daemon in the VM.
-// It checks if Docker is already running and starts it if not.
-const dockerStartHook = `if [ ! -S /var/run/docker.sock ]; then sudo dockerd --iptables=false > /tmp/dockerd.log 2>&1 & fi`
-
-// generateMountWaitScript generates a bash script that waits for all mount paths to exist.
-// It polls each path at 0.01s intervals for up to 10s total timeout, with logging.
-func generateMountWaitScript(paths []string) string {
-	if len(paths) == 0 {
-		return ""
-	}
-	var quotedPaths []string
-	for _, p := range paths {
-		quotedPaths = append(quotedPaths, shellquote.Join(p))
-	}
-	return fmt.Sprintf(`__silo_wait_for_mount() {
-  local p=$1 timeout=10000 i=0
-  if [ -e "$p" ]; then
-    echo "silo: mount ready: $p" >&2
-    return 0
-  fi
-  echo "silo: mount not yet ready, waiting: $p" >&2
-  while [ ! -e "$p" ] && [ $i -lt $timeout ]; do
-    sleep 0.001
-    i=$((i+1))
-  done
-  if [ -e "$p" ]; then
-    echo "silo: mount ready after ${i}ms: $p" >&2
-    return 0
-  fi
-  echo "silo: mount not ready after 10s: $p" >&2
-  return 1
-}
-__silo_wait_for_mounts() {
-  local paths=(%s)
-  local pids=() p
-  echo "silo: waiting for ${#paths[@]} mount(s) in parallel..." >&2
-  for p in "${paths[@]}"; do
-    __silo_wait_for_mount "$p" &
-    pids+=($!)
-  done
-  local failed=0
-  for pid in "${pids[@]}"; do
-    wait $pid || failed=1
-  done
-  if [ $failed -eq 1 ]; then
-    exit 1
-  fi
-  echo "silo: all mounts ready" >&2
-}; __silo_wait_for_mounts`, strings.Join(quotedPaths, " "))
 }
 
 // Run runs a container using the container CLI.
@@ -566,6 +505,67 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	}
 
 	return removed, nil
+}
+
+// resourceArgs returns CLI flags for --cpus (all CPUs) and --memory (half system RAM).
+func resourceArgs() []string {
+	cpus := runtime.NumCPU()
+	var memMB uint64
+	if memBytes, err := unix.SysctlUint64("hw.memsize"); err == nil {
+		memMB = memBytes / 2 / (1024 * 1024) // half, in MiB
+	}
+	args := []string{"-c", fmt.Sprintf("%d", cpus)}
+	if memMB > 0 {
+		args = append(args, "-m", fmt.Sprintf("%dM", memMB))
+	}
+	return args
+}
+
+// generateMountWaitScript generates a bash script that waits for all mount paths to exist.
+// It polls each path at 0.01s intervals for up to 10s total timeout, with logging.
+func generateMountWaitScript(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	var quotedPaths []string
+	for _, p := range paths {
+		quotedPaths = append(quotedPaths, shellquote.Join(p))
+	}
+	return fmt.Sprintf(`__silo_wait_for_mount() {
+  local p=$1 timeout=10000 i=0
+  if [ -e "$p" ]; then
+    echo "silo: mount ready: $p" >&2
+    return 0
+  fi
+  echo "silo: mount not yet ready, waiting: $p" >&2
+  while [ ! -e "$p" ] && [ $i -lt $timeout ]; do
+    sleep 0.001
+    i=$((i+1))
+  done
+  if [ -e "$p" ]; then
+    echo "silo: mount ready after ${i}ms: $p" >&2
+    return 0
+  fi
+  echo "silo: mount not ready after 10s: $p" >&2
+  return 1
+}
+__silo_wait_for_mounts() {
+  local paths=(%s)
+  local pids=() p
+  echo "silo: waiting for ${#paths[@]} mount(s) in parallel..." >&2
+  for p in "${paths[@]}"; do
+    __silo_wait_for_mount "$p" &
+    pids+=($!)
+  done
+  local failed=0
+  for pid in "${pids[@]}"; do
+    wait $pid || failed=1
+  done
+  if [ $failed -eq 1 ]; then
+    exit 1
+  fi
+  echo "silo: all mounts ready" >&2
+}; __silo_wait_for_mounts`, strings.Join(quotedPaths, " "))
 }
 
 // stageFileMount creates a staging directory containing a hard link to the

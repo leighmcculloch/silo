@@ -53,28 +53,25 @@ type ToolConfig struct {
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
 }
 
-// xdgConfigHome returns XDG_CONFIG_HOME or the default ~/.config
-func xdgConfigHome() string {
-	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
-		return v
-	}
-	return filepath.Join(xdg.Home, ".config")
+// SourceInfo tracks the source of configuration values
+type SourceInfo struct {
+	Backend            string                       // source path for backend setting
+	MountsRO           map[string]string            // value -> source path
+	MountsRW           map[string]string            // value -> source path
+	Env                map[string]string            // value -> source path
+	PreRunHooks        map[string]string            // value -> source path
+	PostBuildHooks     map[string]string            // value -> source path
+	ToolMountsRO       map[string]map[string]string // tool -> value -> source
+	ToolMountsRW       map[string]map[string]string // tool -> value -> source
+	ToolEnv            map[string]map[string]string // tool -> value -> source
+	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
+	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
 }
 
-// xdgDataHome returns XDG_DATA_HOME or the default ~/.local/share
-func xdgDataHome() string {
-	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
-		return v
-	}
-	return filepath.Join(xdg.Home, ".local", "share")
-}
-
-// xdgStateHome returns XDG_STATE_HOME or the default ~/.local/state
-func xdgStateHome() string {
-	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
-		return v
-	}
-	return filepath.Join(xdg.Home, ".local", "state")
+// ConfigPath represents a config file path with its status
+type ConfigPath struct {
+	Path   string
+	Exists bool
 }
 
 // DefaultConfig returns the default configuration
@@ -179,21 +176,6 @@ func Merge(base, overlay Config) Config {
 	return result
 }
 
-// SourceInfo tracks the source of configuration values
-type SourceInfo struct {
-	Backend            string                       // source path for backend setting
-	MountsRO           map[string]string            // value -> source path
-	MountsRW           map[string]string            // value -> source path
-	Env                map[string]string            // value -> source path
-	PreRunHooks        map[string]string            // value -> source path
-	PostBuildHooks     map[string]string            // value -> source path
-	ToolMountsRO       map[string]map[string]string // tool -> value -> source
-	ToolMountsRW       map[string]map[string]string // tool -> value -> source
-	ToolEnv            map[string]map[string]string // tool -> value -> source
-	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
-	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
-}
-
 // NewSourceInfo creates a new empty SourceInfo
 func NewSourceInfo() *SourceInfo {
 	return &SourceInfo{
@@ -208,12 +190,6 @@ func NewSourceInfo() *SourceInfo {
 		ToolPreRunHooks:    make(map[string]map[string]string),
 		ToolPostBuildHooks: make(map[string]map[string]string),
 	}
-}
-
-// ConfigPath represents a config file path with its status
-type ConfigPath struct {
-	Path   string
-	Exists bool
 }
 
 // GetConfigPaths returns all config paths that would be checked/loaded
@@ -354,4 +330,28 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 			info.ToolPostBuildHooks[toolName][v] = source
 		}
 	}
+}
+
+// xdgConfigHome returns XDG_CONFIG_HOME or the default ~/.config
+func xdgConfigHome() string {
+	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".config")
+}
+
+// xdgDataHome returns XDG_DATA_HOME or the default ~/.local/share
+func xdgDataHome() string {
+	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".local", "share")
+}
+
+// xdgStateHome returns XDG_STATE_HOME or the default ~/.local/state
+func xdgStateHome() string {
+	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
+		return v
+	}
+	return filepath.Join(xdg.Home, ".local", "state")
 }

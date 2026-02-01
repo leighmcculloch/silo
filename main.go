@@ -50,18 +50,6 @@ const sampleConfig = `{
 }
 `
 
-// expandPath expands ~ to the user's home directory
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home := os.Getenv("HOME")
-		return filepath.Join(home, path[2:])
-	}
-	if path == "~" {
-		return os.Getenv("HOME")
-	}
-	return path
-}
-
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
@@ -589,6 +577,30 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 	return nil
 }
 
+// buildImageTag returns a content-addressed image tag encoding the build inputs.
+func buildImageTag(target, dockerfile string, buildArgs map[string]string) string {
+	h := sha256.New()
+	h.Write([]byte(dockerfile))
+	h.Write([]byte{0})
+	h.Write([]byte(target))
+	h.Write([]byte{0})
+
+	keys := make([]string, 0, len(buildArgs))
+	for k := range buildArgs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		h.Write([]byte(k))
+		h.Write([]byte("="))
+		h.Write([]byte(buildArgs[k]))
+		h.Write([]byte{0})
+	}
+
+	sum := fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("silo-%s-%s", target, sum[:16])
+}
+
 func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	cfg, sources := config.LoadAllWithSources()
 
@@ -1040,30 +1052,6 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 	return nil
 }
 
-// buildImageTag returns a content-addressed image tag encoding the build inputs.
-func buildImageTag(target, dockerfile string, buildArgs map[string]string) string {
-	h := sha256.New()
-	h.Write([]byte(dockerfile))
-	h.Write([]byte{0})
-	h.Write([]byte(target))
-	h.Write([]byte{0})
-
-	keys := make([]string, 0, len(buildArgs))
-	for k := range buildArgs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		h.Write([]byte(k))
-		h.Write([]byte("="))
-		h.Write([]byte(buildArgs[k]))
-		h.Write([]byte{0})
-	}
-
-	sum := fmt.Sprintf("%x", h.Sum(nil))
-	return fmt.Sprintf("silo-%s-%s", target, sum[:16])
-}
-
 func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	ctx := context.Background()
 
@@ -1171,4 +1159,16 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	}
 
 	return nil
+}
+
+// expandPath expands ~ to the user's home directory
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		home := os.Getenv("HOME")
+		return filepath.Join(home, path[2:])
+	}
+	if path == "~" {
+		return os.Getenv("HOME")
+	}
+	return path
 }
