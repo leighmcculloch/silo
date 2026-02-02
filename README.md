@@ -57,9 +57,9 @@ go install github.com/leighmcculloch/silo@latest
 
 ### Prerequisites
 
-- **Go 1.25+**: To install
+- **Go 1.25+**: To install silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
-- **Apple Container**: Required for the `container` backend (`brew install container`)
+- **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
 
 ## Usage
 
@@ -95,6 +95,9 @@ silo --backend docker claude
 
 # Explicitly use Apple container backend
 silo --backend container claude
+
+# Force rebuild of the container image (ignore cache)
+silo --force-build claude
 ```
 
 You can also set the backend in your configuration file.
@@ -246,7 +249,7 @@ Example output from `silo config show`:
 
 Silo automatically mounts these paths (read-write):
 
-| Tool | Auto-mounted Paths |
+| Tool | Auto-mounted Paths (read-write) |
 |------|-------------------|
 | All | Current working directory |
 | All | Git worktree common directories (detected automatically) |
@@ -254,13 +257,21 @@ Silo automatically mounts these paths (read-write):
 | OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/` (respecting XDG env vars) |
 | Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
 
+Additionally, some tools mount paths read-only to share configuration:
+
+| Tool | Auto-mounted Paths (read-only) |
+|------|-------------------|
+| OpenCode | `~/.claude/` (for sharing CLAUDE.md files) |
+| Copilot | `~/.claude/` (for sharing CLAUDE.md files) |
+
 ### Environment Variables
 
-Some environment variables are automatically passed through:
+Some environment variables are automatically set or passed through:
 
-| Tool | Auto-passed Variables |
+| Tool | Auto-set Variables |
 |------|----------------------|
-| Copilot | `COPILOT_GITHUB_TOKEN` |
+| OpenCode | `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` |
+| Copilot | `COPILOT_GITHUB_TOKEN` (passed through from host) |
 
 Git identity is configured automatically from your host:
 - `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`
@@ -277,7 +288,7 @@ configurable today, other than through the hooks.
 |----------|----------|
 | **Base** | Ubuntu 24.04, build-essential, pkg-config, libssl-dev |
 | **Languages** | Node.js (latest), Go (latest), Rust (stable) |
-| **Tools** | git, curl, jq, zstd, unzip, GitHub CLI |
+| **Tools** | git, curl, jq, zstd, unzip, zsh, GitHub CLI, Docker CE |
 | **Go** | gopls (LSP server) |
 | **Rust** | rust-analyzer, wasm32v1-none target |
 
@@ -357,26 +368,32 @@ See all silo-created containers:
 
 ```bash
 # List from all backends
-silo list
+silo ls
 
 # List from specific backend only
-silo list --backend docker
-silo list --backend container
+silo ls --backend docker
+silo ls --backend container
+
+# Quiet mode (just container names)
+silo ls -q
 ```
 
 Output shows container name, image, backend, and status.
 
-### Cleanup
+### Removing Containers
 
-Remove all silo-created containers:
+Remove specific silo containers by name:
 
 ```bash
-# Remove from all backends
-silo destroy
+# Remove specific containers
+silo rm myproject-1 myproject-2
+
+# Remove all silo containers
+silo rm $(silo ls -q)
 
 # Remove from specific backend only
-silo destroy --backend docker
-silo destroy --backend container
+silo rm --backend docker myproject-1
+silo rm --backend container myproject-2
 ```
 
 ## Examples
