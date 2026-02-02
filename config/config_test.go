@@ -309,10 +309,7 @@ func TestLoadAll(t *testing.T) {
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	xdg.Reload()
 
-	cfg, err := LoadAll()
-	if err != nil {
-		t.Fatalf("failed to load all configs: %v", err)
-	}
+	cfg := LoadAll()
 
 	// Check that both global and local mounts are present
 	hasGlobal := false

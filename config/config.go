@@ -235,10 +235,11 @@ func GetConfigPaths() []ConfigPath {
 	return paths
 }
 
-// LoadAll loads and merges all configuration files from XDG config home and current/parent directories
-func LoadAll() (Config, error) {
+// LoadAll loads and merges all configuration files from XDG config home and current/parent directories.
+// Missing or invalid config files are silently ignored - only defaults and valid configs are merged.
+func LoadAll() Config {
 	cfg, _ := LoadAllWithSources()
-	return cfg, nil
+	return cfg
 }
 
 // LoadAllWithSources loads and merges all configs, tracking the source of each value

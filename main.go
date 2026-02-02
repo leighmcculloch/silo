@@ -226,14 +226,11 @@ func completeTools(cmd *cobra.Command, args []string, toComplete string) ([]stri
 
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
 	// Load configuration
-	cfg, err := config.LoadAll()
-	if err != nil {
-		cli.LogWarningTo(stderr, "Failed to load config: %v", err)
-		cfg = config.DefaultConfig()
-	}
+	cfg := config.LoadAll()
 
 	// Determine tool
 	var tool string
+	var err error
 	if len(args) > 0 {
 		tool = args[0]
 	} else if cfg.Tool != "" {
