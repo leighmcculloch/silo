@@ -306,10 +306,98 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	}()
 
 	// Select and create backend
-	var backendClient backend.Backend
-	var err error
+	backendClient, err := createBackend(cfg.Backend, stderr)
+	if err != nil {
+		return err
+	}
+	defer backendClient.Close()
 
-	backendType := cfg.Backend
+	// Get current user info
+	home := os.Getenv("HOME")
+	user := os.Getenv("USER")
+	uid := os.Getuid()
+	cwd, _ := os.Getwd()
+
+	// Collect mounts from config
+	mountsRO, mountsRW := collectMounts(tool, cfg, cwd)
+
+	// Get tool-specific hooks
+	var toolPreRunHooks, toolPostBuildHooks []string
+	if toolCfg, ok := cfg.Tools[tool]; ok {
+		toolPreRunHooks = toolCfg.PreRunHooks
+		toolPostBuildHooks = toolCfg.PostBuildHooks
+	}
+
+	// Prepare build configuration
+	dockerfile := DockerfileWithHooks(cfg.PostBuildHooks, tool, toolPostBuildHooks)
+	buildArgs := map[string]string{
+		"HOME": home,
+		"USER": user,
+		"UID":  fmt.Sprintf("%d", uid),
+	}
+	imageTag := buildImageTag(tool, dockerfile, buildArgs)
+
+	// Build or use cached image
+	if err := buildEnvironment(ctx, backendClient, buildEnvOptions{
+		tool:               tool,
+		dockerfile:         dockerfile,
+		imageTag:           imageTag,
+		buildArgs:          buildArgs,
+		mountsRO:           mountsRO,
+		mountsRW:           mountsRW,
+		forceBuild:         forceBuild,
+		globalPostBuild:    cfg.PostBuildHooks,
+		toolPostBuildHooks: toolPostBuildHooks,
+		stderr:             stderr,
+	}); err != nil {
+		return err
+	}
+
+	// Collect environment variables
+	envVars, envLog := collectEnvVars(tool, cfg)
+
+	// Generate container name
+	baseName := filepath.Base(cwd)
+	baseName = strings.ReplaceAll(baseName, ".", "")
+	containerName := backendClient.NextContainerName(ctx, baseName)
+
+	// Log configuration
+	logRunConfig(stderr, tool, mountsRO, mountsRW, envLog, cfg.PreRunHooks, toolPreRunHooks, containerName)
+
+	// Prepare pre-run hooks
+	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, mountsRO, mountsRW)
+
+	// Define tool-specific commands
+	toolCommands := map[string][]string{
+		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
+		"opencode": {"opencode"},
+		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
+	}
+
+	cli.LogTo(stderr, "Running %s...", tool)
+
+	// Run the container/VM
+	err = backendClient.Run(ctx, backend.RunOptions{
+		Image:       imageTag,
+		Name:        containerName,
+		WorkDir:     cwd,
+		MountsRO:    mountsRO,
+		MountsRW:    mountsRW,
+		Env:         envVars,
+		Command:     toolCommands[tool],
+		Args:        toolArgs,
+		PreRunHooks: preRunHooks,
+	})
+
+	if err != nil {
+		return fmt.Errorf("run error: %w", err)
+	}
+
+	return nil
+}
+
+// createBackend creates the appropriate backend based on configuration
+func createBackend(backendType string, stderr io.Writer) (backend.Backend, error) {
 	if backendType == "" {
 		// Default to container if available, otherwise docker
 		if _, err := exec.LookPath("container"); err == nil {
@@ -322,30 +410,26 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	switch backendType {
 	case "docker":
 		cli.LogTo(stderr, "Using docker backend...")
-		backendClient, err = docker.NewClient()
+		client, err := docker.NewClient()
 		if err != nil {
-			return fmt.Errorf("failed to connect to Docker: %w", err)
+			return nil, fmt.Errorf("failed to connect to Docker: %w", err)
 		}
+		return client, nil
 	case "container":
 		cli.LogTo(stderr, "Using apple container (lightweight vms) backend...")
-		backendClient, err = applecontainer.NewClient()
+		client, err := applecontainer.NewClient()
 		if err != nil {
-			return fmt.Errorf("failed to initialize container backend: %w", err)
+			return nil, fmt.Errorf("failed to initialize container backend: %w", err)
 		}
+		return client, nil
 	default:
-		return fmt.Errorf("unknown backend: %s (valid: docker, container)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container)", backendType)
 	}
-	defer backendClient.Close()
+}
 
-	// Get current user info
-	home := os.Getenv("HOME")
-	user := os.Getenv("USER")
-	uid := os.Getuid()
-
-	// Collect mounts (needed for Lima VM configuration at build time)
-	cwd, _ := os.Getwd()
-	mountsRW := []string{cwd}
-	var mountsRO []string
+// collectMounts gathers all mount paths from config for a specific tool
+func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mountsRW []string) {
+	mountsRW = []string{cwd}
 
 	// Add tool-specific mounts
 	if toolCfg, ok := cfg.Tools[tool]; ok {
@@ -369,74 +453,88 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
-	// Get tool-specific hooks
-	var toolPreRunHooks []string
-	var toolPostBuildHooks []string
-	if toolCfg, ok := cfg.Tools[tool]; ok {
-		toolPreRunHooks = toolCfg.PreRunHooks
-		toolPostBuildHooks = toolCfg.PostBuildHooks
-	}
+	return mountsRO, mountsRW
+}
 
-	// Compute content-addressed tag for caching
-	dockerfile := DockerfileWithHooks(cfg.PostBuildHooks, tool, toolPostBuildHooks)
-	buildArgs := map[string]string{
-		"HOME": home,
-		"USER": user,
-		"UID":  fmt.Sprintf("%d", uid),
-	}
-	imageTag := buildImageTag(tool, dockerfile, buildArgs)
+// buildEnvOptions contains options for building the container environment
+type buildEnvOptions struct {
+	tool               string
+	dockerfile         string
+	imageTag           string
+	buildArgs          map[string]string
+	mountsRO           []string
+	mountsRW           []string
+	forceBuild         bool
+	globalPostBuild    []string
+	toolPostBuildHooks []string
+	stderr             io.Writer
+}
 
+// buildEnvironment builds or uses cached container image
+func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts buildEnvOptions) error {
 	// Log post-build hooks (before building so user knows what will be run)
-	if len(cfg.PostBuildHooks) > 0 {
-		cli.LogTo(stderr, "Post-build hooks:")
-		for _, hook := range cfg.PostBuildHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
+	if len(opts.globalPostBuild) > 0 {
+		cli.LogTo(opts.stderr, "Post-build hooks:")
+		for _, hook := range opts.globalPostBuild {
+			cli.LogBulletTo(opts.stderr, "%s", hook)
 		}
 	}
-	if len(toolPostBuildHooks) > 0 {
-		cli.LogTo(stderr, "Post-build hooks (%s):", tool)
-		for _, hook := range toolPostBuildHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
+	if len(opts.toolPostBuildHooks) > 0 {
+		cli.LogTo(opts.stderr, "Post-build hooks (%s):", opts.tool)
+		for _, hook := range opts.toolPostBuildHooks {
+			cli.LogBulletTo(opts.stderr, "%s", hook)
 		}
 	}
 
 	// Check if image already exists (skip if force rebuild requested)
 	exists := false
-	if !forceBuild {
-		exists, err = backendClient.ImageExists(ctx, imageTag)
+	if !opts.forceBuild {
+		var err error
+		exists, err = backendClient.ImageExists(ctx, opts.imageTag)
 		if err != nil {
 			exists = false
 		}
 	}
 
-	cli.LogTo(stderr, "Building environment for %s...", tool)
-	if forceBuild {
-		cli.LogBulletTo(stderr, "Force rebuild requested, ignoring cache")
+	cli.LogTo(opts.stderr, "Building environment for %s...", opts.tool)
+	if opts.forceBuild {
+		cli.LogBulletTo(opts.stderr, "Force rebuild requested, ignoring cache")
 	}
+
 	if exists {
-		cli.LogSuccessBulletTo(stderr, "Environment cached")
-	} else {
-		_, err = backendClient.Build(ctx, backend.BuildOptions{
-			Dockerfile: dockerfile,
-			Target:     tool,
-			Tag:        imageTag,
-			BuildArgs:  buildArgs,
-			MountsRO:   mountsRO,
-			MountsRW:   mountsRW,
-			NoCache:    forceBuild,
-			OnProgress: func(msg string) {
-				fmt.Fprint(stderr, msg)
-			},
-		})
-		if err != nil {
-			return fmt.Errorf("failed to build environment: %w", err)
-		}
-		cli.LogSuccessBulletTo(stderr, "Environment ready")
+		cli.LogSuccessBulletTo(opts.stderr, "Environment cached")
+		return nil
 	}
 
-	// Collect environment variables
-	var envVars []string
+	_, err := backendClient.Build(ctx, backend.BuildOptions{
+		Dockerfile: opts.dockerfile,
+		Target:     opts.tool,
+		Tag:        opts.imageTag,
+		BuildArgs:  opts.buildArgs,
+		MountsRO:   opts.mountsRO,
+		MountsRW:   opts.mountsRW,
+		NoCache:    opts.forceBuild,
+		OnProgress: func(msg string) {
+			fmt.Fprint(opts.stderr, msg)
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build environment: %w", err)
+	}
+	cli.LogSuccessBulletTo(opts.stderr, "Environment ready")
+	return nil
+}
 
+// envLogInfo holds environment variable categorization for logging
+type envLogInfo struct {
+	explicitGlobal []string // explicit from cfg.Env (KEY=VALUE)
+	explicitTool   []string // explicit from toolCfg.Env (KEY=VALUE)
+	fromHost       []string // lifted from host env
+	notFound       []string // configured but not in host env
+}
+
+// collectEnvVars gathers environment variables from config and host
+func collectEnvVars(tool string, cfg config.Config) (envVars []string, log envLogInfo) {
 	// Get git identity
 	gitName, gitEmail := backend.GetGitIdentity()
 	if gitName != "" {
@@ -444,7 +542,6 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 			"GIT_AUTHOR_NAME="+gitName,
 			"GIT_COMMITTER_NAME="+gitName,
 		)
-		cli.LogTo(stderr, "Git identity: %s <%s>", gitName, gitEmail)
 	}
 	if gitEmail != "" {
 		envVars = append(envVars,
@@ -453,23 +550,16 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		)
 	}
 
-	// Track env vars by category for logging
-	var envExplicitGlobal []string // explicit from cfg.Env (KEY=VALUE)
-	var envExplicitTool []string   // explicit from toolCfg.Env (KEY=VALUE)
-	var envFromHost []string       // lifted from host env
-	var envNotFound []string       // configured but not in host env
-
-	// Process env vars (passthrough if no '=', explicit if has '=')
+	// Process global env vars (passthrough if no '=', explicit if has '=')
 	for _, e := range cfg.Env {
 		if strings.Contains(e, "=") {
 			envVars = append(envVars, e)
-			// Extract key name for logging
-			envExplicitGlobal = append(envExplicitGlobal, strings.SplitN(e, "=", 2)[0])
+			log.explicitGlobal = append(log.explicitGlobal, strings.SplitN(e, "=", 2)[0])
 		} else if val := os.Getenv(e); val != "" {
 			envVars = append(envVars, e+"="+val)
-			envFromHost = append(envFromHost, e)
+			log.fromHost = append(log.fromHost, e)
 		} else {
-			envNotFound = append(envNotFound, e)
+			log.notFound = append(log.notFound, e)
 		}
 	}
 
@@ -478,20 +568,26 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		for _, e := range toolCfg.Env {
 			if strings.Contains(e, "=") {
 				envVars = append(envVars, e)
-				envExplicitTool = append(envExplicitTool, strings.SplitN(e, "=", 2)[0])
+				log.explicitTool = append(log.explicitTool, strings.SplitN(e, "=", 2)[0])
 			} else if val := os.Getenv(e); val != "" {
 				envVars = append(envVars, e+"="+val)
-				envFromHost = append(envFromHost, e)
+				log.fromHost = append(log.fromHost, e)
 			} else {
-				envNotFound = append(envNotFound, e)
+				log.notFound = append(log.notFound, e)
 			}
 		}
 	}
 
-	// Generate container name
-	baseName := filepath.Base(cwd)
-	baseName = strings.ReplaceAll(baseName, ".", "")
-	containerName := backendClient.NextContainerName(ctx, baseName)
+	return envVars, log
+}
+
+// logRunConfig logs the run configuration to stderr
+func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, envLog envLogInfo, globalPreRun, toolPreRun []string, containerName string) {
+	// Get git identity for logging
+	gitName, gitEmail := backend.GetGitIdentity()
+	if gitName != "" {
+		cli.LogTo(stderr, "Git identity: %s <%s>", gitName, gitEmail)
+	}
 
 	// Log mounts
 	seen := make(map[string]bool)
@@ -521,30 +617,48 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	}
 
 	// Log environment variables
-	if len(envExplicitGlobal) > 0 {
+	if len(envLog.explicitGlobal) > 0 {
 		cli.LogTo(stderr, "Environment (config):")
-		for _, name := range envExplicitGlobal {
+		for _, name := range envLog.explicitGlobal {
 			cli.LogBulletTo(stderr, "%s", name)
 		}
 	}
-	if len(envExplicitTool) > 0 {
+	if len(envLog.explicitTool) > 0 {
 		cli.LogTo(stderr, "Environment (config, %s):", tool)
-		for _, name := range envExplicitTool {
+		for _, name := range envLog.explicitTool {
 			cli.LogBulletTo(stderr, "%s", name)
 		}
 	}
-	if len(envFromHost) > 0 || len(envNotFound) > 0 {
+	if len(envLog.fromHost) > 0 || len(envLog.notFound) > 0 {
 		cli.LogTo(stderr, "Environment (host):")
-		for _, name := range envFromHost {
+		for _, name := range envLog.fromHost {
 			cli.LogBulletTo(stderr, "%s", name)
 		}
-		for _, name := range envNotFound {
+		for _, name := range envLog.notFound {
 			cli.LogBulletTo(stderr, "%s (not set)", name)
 		}
 	}
 
-	// Combine global and tool-specific pre-run hooks
-	preRunHooks := append(cfg.PreRunHooks, toolPreRunHooks...)
+	// Log pre-run hooks
+	if len(globalPreRun) > 0 {
+		cli.LogTo(stderr, "Pre-run hooks:")
+		for _, hook := range globalPreRun {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+	if len(toolPreRun) > 0 {
+		cli.LogTo(stderr, "Pre-run hooks (%s):", tool)
+		for _, hook := range toolPreRun {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
+
+	cli.LogTo(stderr, "Container name: %s", containerName)
+}
+
+// preparePreRunHooks combines and prepares pre-run hooks including mount wait
+func preparePreRunHooks(globalHooks, toolHooks []string, mountsRO, mountsRW []string) []string {
+	preRunHooks := append(globalHooks, toolHooks...)
 
 	// Collect all mount paths that exist for the mount wait script
 	var allMountPaths []string
@@ -565,48 +679,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		preRunHooks = append([]string{mountWaitHook}, preRunHooks...)
 	}
 
-	// Log pre-run hooks
-	if len(cfg.PreRunHooks) > 0 {
-		cli.LogTo(stderr, "Pre-run hooks:")
-		for _, hook := range cfg.PreRunHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
-		}
-	}
-	if len(toolPreRunHooks) > 0 {
-		cli.LogTo(stderr, "Pre-run hooks (%s):", tool)
-		for _, hook := range toolPreRunHooks {
-			cli.LogBulletTo(stderr, "%s", hook)
-		}
-	}
-
-	cli.LogTo(stderr, "Container name: %s", containerName)
-	cli.LogTo(stderr, "Running %s...", tool)
-
-	// Define tool-specific commands
-	toolCommands := map[string][]string{
-		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
-		"opencode": {"opencode"},
-		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
-	}
-
-	// Run the container/VM
-	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:       imageTag,
-		Name:        containerName,
-		WorkDir:     cwd,
-		MountsRO:    mountsRO,
-		MountsRW:    mountsRW,
-		Env:         envVars,
-		Command:     toolCommands[tool],
-		Args:        toolArgs,
-		PreRunHooks: preRunHooks,
-	})
-
-	if err != nil {
-		return fmt.Errorf("run error: %w", err)
-	}
-
-	return nil
+	return preRunHooks
 }
 
 // buildImageTag returns a content-addressed image tag encoding the build inputs.
