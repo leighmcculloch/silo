@@ -466,8 +466,7 @@ silo --backend container claude
 
 ## License
 
-Copyright 2026 Stellar Development Foundation
-This is not an official project of the Stellar Development Foundation.
+Copyright 2026 Stellar Development Foundation (This is not an official project of the Stellar Development Foundation)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
