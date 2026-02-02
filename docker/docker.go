@@ -94,6 +94,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		BuildArgs:  buildArgs,
 		Tags:       []string{tag},
 		Remove:     true,
+		NoCache:    opts.NoCache,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to build image: %w", err)

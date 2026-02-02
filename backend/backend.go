@@ -59,6 +59,9 @@ type BuildOptions struct {
 
 	// OnProgress is called with build progress messages
 	OnProgress func(string)
+
+	// NoCache disables build layer caching, forcing a complete rebuild
+	NoCache bool
 }
 
 // RunOptions contains options for running a command

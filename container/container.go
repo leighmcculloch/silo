@@ -80,6 +80,9 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		"-t", tag,
 		"--progress", "plain",
 	}
+	if opts.NoCache {
+		args = append(args, "--no-cache")
+	}
 	args = append(args, resourceArgs()...)
 
 	if opts.Target != "" {

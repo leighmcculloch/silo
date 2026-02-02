@@ -117,6 +117,7 @@ Configuration is loaded from (in order, merged):
 	}
 
 	rootCmd.Flags().String("backend", "", "Backend to use: docker, container")
+	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
 
 	configCmd := &cobra.Command{
 		Use:   "config",
@@ -262,8 +263,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		cfg.Backend = b
 	}
 
+	// Get force-build flag
+	forceBuild, _ := cmd.Flags().GetBool("force-build")
+
 	// Run the tool
-	return runTool(tool, toolArgs, cfg, stdout, stderr)
+	return runTool(tool, toolArgs, cfg, forceBuild, stdout, stderr)
 }
 
 func selectTool() (string, error) {
@@ -292,7 +296,7 @@ func selectTool() (string, error) {
 	return selected, nil
 }
 
-func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Writer) error {
+func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool, _, stderr io.Writer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -399,13 +403,19 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 		}
 	}
 
-	// Check if image already exists
-	exists, err := backendClient.ImageExists(ctx, imageTag)
-	if err != nil {
-		exists = false
+	// Check if image already exists (skip if force rebuild requested)
+	exists := false
+	if !forceBuild {
+		exists, err = backendClient.ImageExists(ctx, imageTag)
+		if err != nil {
+			exists = false
+		}
 	}
 
 	cli.LogTo(stderr, "Building environment for %s...", tool)
+	if forceBuild {
+		cli.LogBulletTo(stderr, "Force rebuild requested, ignoring cache")
+	}
 	if exists {
 		cli.LogSuccessBulletTo(stderr, "Environment cached")
 	} else {
@@ -416,6 +426,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, _, stderr io.Wri
 			BuildArgs:  buildArgs,
 			MountsRO:   mountsRO,
 			MountsRW:   mountsRW,
+			NoCache:    forceBuild,
 			OnProgress: func(msg string) {
 				fmt.Fprint(stderr, msg)
 			},
