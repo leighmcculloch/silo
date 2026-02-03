@@ -348,15 +348,44 @@ func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 			if len(ctr.Names) > 0 {
 				name = strings.TrimPrefix(ctr.Names[0], "/")
 			}
+
+			isRunning := ctr.State == "running"
+			var memUsage uint64
+
+			// Only fetch memory stats for running containers
+			if isRunning {
+				memUsage = c.getContainerMemoryUsage(ctx, ctr.ID)
+			}
+
 			result = append(result, backend.ContainerInfo{
-				Name:   name,
-				Image:  ctr.Image,
-				Status: ctr.Status,
+				Name:        name,
+				Image:       ctr.Image,
+				Status:      ctr.Status,
+				MemoryUsage: memUsage,
+				IsRunning:   isRunning,
 			})
 		}
 	}
 
 	return result, nil
+}
+
+// getContainerMemoryUsage fetches the current memory usage for a container.
+// Returns 0 if stats cannot be retrieved (container stopped, error, etc.)
+func (c *Client) getContainerMemoryUsage(ctx context.Context, containerID string) uint64 {
+	// Use non-streaming mode (stream=false) to get a single stats snapshot
+	stats, err := c.cli.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		return 0
+	}
+	defer stats.Body.Close()
+
+	var statsResp container.StatsResponse
+	if err := json.NewDecoder(stats.Body).Decode(&statsResp); err != nil {
+		return 0
+	}
+
+	return statsResp.MemoryStats.Usage
 }
 
 // Remove removes specific containers by name

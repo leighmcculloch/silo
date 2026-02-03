@@ -442,15 +442,47 @@ func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 	for _, ctr := range containers {
 		// Check if it's a silo container by image name prefix
 		if strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
+			isRunning := strings.ToLower(ctr.Status) == "running"
+			var memUsage uint64
+
+			if isRunning {
+				memUsage = c.getContainerMemoryUsage(ctx, ctr.Configuration.ID)
+			}
+
 			result = append(result, backend.ContainerInfo{
-				Name:   ctr.Configuration.ID,
-				Image:  ctr.Configuration.Image.Reference,
-				Status: ctr.Status,
+				Name:        ctr.Configuration.ID,
+				Image:       ctr.Configuration.Image.Reference,
+				Status:      ctr.Status,
+				MemoryUsage: memUsage,
+				IsRunning:   isRunning,
 			})
 		}
 	}
 
 	return result, nil
+}
+
+// getContainerMemoryUsage fetches memory usage for an Apple container.
+// Returns 0 if stats cannot be retrieved.
+func (c *Client) getContainerMemoryUsage(ctx context.Context, containerID string) uint64 {
+	cmd := exec.CommandContext(ctx, "container", "stats", "--no-stream", "--format", "json", containerID)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+
+	// Parse the stats JSON output (returns an array)
+	var stats []struct {
+		MemoryUsageBytes uint64 `json:"memoryUsageBytes"`
+	}
+	if err := json.Unmarshal(output, &stats); err != nil {
+		return 0
+	}
+
+	if len(stats) > 0 {
+		return stats[0].MemoryUsageBytes
+	}
+	return 0
 }
 
 // Remove removes specific containers by name

@@ -32,9 +32,11 @@ type Backend interface {
 
 // ContainerInfo holds information about a container
 type ContainerInfo struct {
-	Name   string
-	Image  string
-	Status string
+	Name        string
+	Image       string
+	Status      string
+	MemoryUsage uint64 // Memory usage in bytes (0 if not running/unavailable)
+	IsRunning   bool   // Whether container is currently running
 }
 
 // BuildOptions contains options for building/preparing an environment

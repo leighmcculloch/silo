@@ -16,6 +16,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/dustin/go-humanize"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
@@ -1242,6 +1243,8 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	}
 
 	hasContainers := false
+	headerPrinted := false
+
 	for _, backendType := range backends {
 		var backendClient backend.Backend
 		var err error
@@ -1270,7 +1273,10 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 		containers, err := backendClient.List(ctx)
 		backendClient.Close()
 		if err != nil {
-			return fmt.Errorf("failed to list containers (%s): %w", backendType, err)
+			if !quietFlag {
+				cli.LogWarningTo(stderr, "Failed to list containers (%s): %v", backendType, err)
+			}
+			continue
 		}
 
 		for _, ctr := range containers {
@@ -1278,7 +1284,18 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 			if quietFlag {
 				fmt.Fprintln(stdout, ctr.Name)
 			} else {
-				fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %s\n", ctr.Name, ctr.Image, backendType, ctr.Status)
+				// Print header once
+				if !headerPrinted {
+					fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %-10s  %s\n",
+						"NAME", "IMAGE", "BACKEND", "MEMORY", "STATUS")
+					headerPrinted = true
+				}
+
+				// Format memory usage
+				memStr := formatMemoryUsage(ctr.MemoryUsage, ctr.IsRunning)
+
+				fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %-10s  %s\n",
+					ctr.Name, ctr.Image, backendType, memStr, ctr.Status)
 			}
 		}
 	}
@@ -1288,6 +1305,19 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	}
 
 	return nil
+}
+
+// formatMemoryUsage returns a human-readable memory string.
+// For stopped containers, returns "-".
+// For running containers with 0 bytes (stats unavailable), returns "N/A".
+func formatMemoryUsage(bytes uint64, isRunning bool) string {
+	if !isRunning {
+		return "-"
+	}
+	if bytes == 0 {
+		return "N/A"
+	}
+	return humanize.IBytes(bytes)
 }
 
 // expandPath expands ~ to the user's home directory
