@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -438,25 +439,51 @@ func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 		return nil, fmt.Errorf("failed to parse container list: %w", err)
 	}
 
-	var result []backend.ContainerInfo
+	// First pass: collect silo containers and identify running ones
+	type containerData struct {
+		info      backend.ContainerInfo
+		id        string
+		isRunning bool
+	}
+	var siloContainers []containerData
+
 	for _, ctr := range containers {
 		// Check if it's a silo container by image name prefix
 		if strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
 			isRunning := strings.ToLower(ctr.Status) == "running"
-			var memUsage uint64
-
-			if isRunning {
-				memUsage = c.getContainerMemoryUsage(ctx, ctr.Configuration.ID)
-			}
-
-			result = append(result, backend.ContainerInfo{
-				Name:        ctr.Configuration.ID,
-				Image:       ctr.Configuration.Image.Reference,
-				Status:      ctr.Status,
-				MemoryUsage: memUsage,
-				IsRunning:   isRunning,
+			siloContainers = append(siloContainers, containerData{
+				info: backend.ContainerInfo{
+					Name:      ctr.Configuration.ID,
+					Image:     ctr.Configuration.Image.Reference,
+					Status:    ctr.Status,
+					IsRunning: isRunning,
+				},
+				id:        ctr.Configuration.ID,
+				isRunning: isRunning,
 			})
 		}
+	}
+
+	// Fetch memory stats concurrently for running containers
+	var wg sync.WaitGroup
+	memUsages := make([]uint64, len(siloContainers))
+
+	for i, ctr := range siloContainers {
+		if ctr.isRunning {
+			wg.Add(1)
+			go func(idx int, containerID string) {
+				defer wg.Done()
+				memUsages[idx] = c.getContainerMemoryUsage(ctx, containerID)
+			}(i, ctr.id)
+		}
+	}
+	wg.Wait()
+
+	// Build result with memory stats
+	result := make([]backend.ContainerInfo, len(siloContainers))
+	for i, ctr := range siloContainers {
+		ctr.info.MemoryUsage = memUsages[i]
+		result[i] = ctr.info
 	}
 
 	return result, nil

@@ -1574,7 +1574,16 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	}
 
 	hasContainers := false
-	headerPrinted := false
+
+	// Collect all container info first to calculate column widths
+	type containerRow struct {
+		name        string
+		image       string
+		backendType string
+		memory      string
+		status      string
+	}
+	var rows []containerRow
 
 	for _, backendType := range backends {
 		var backendClient backend.Backend
@@ -1615,19 +1624,48 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 			if quietFlag {
 				fmt.Fprintln(stdout, ctr.Name)
 			} else {
-				// Print header once
-				if !headerPrinted {
-					fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %-10s  %s\n",
-						"NAME", "IMAGE", "BACKEND", "MEMORY", "STATUS")
-					headerPrinted = true
-				}
-
-				// Format memory usage
-				memStr := formatMemoryUsage(ctr.MemoryUsage, ctr.IsRunning)
-
-				fmt.Fprintf(stdout, "%-20s  %-40s  %-10s  %-10s  %s\n",
-					ctr.Name, ctr.Image, backendType, memStr, ctr.Status)
+				rows = append(rows, containerRow{
+					name:        ctr.Name,
+					image:       ctr.Image,
+					backendType: backendType,
+					memory:      formatMemoryUsage(ctr.MemoryUsage, ctr.IsRunning),
+					status:      ctr.Status,
+				})
 			}
+		}
+	}
+
+	// Print table with dynamic column widths
+	if len(rows) > 0 {
+		// Calculate max widths for each column
+		nameWidth := len("NAME")
+		imageWidth := len("IMAGE")
+		backendWidth := len("BACKEND")
+		memoryWidth := len("MEMORY")
+
+		for _, r := range rows {
+			if len(r.name) > nameWidth {
+				nameWidth = len(r.name)
+			}
+			if len(r.image) > imageWidth {
+				imageWidth = len(r.image)
+			}
+			if len(r.backendType) > backendWidth {
+				backendWidth = len(r.backendType)
+			}
+			if len(r.memory) > memoryWidth {
+				memoryWidth = len(r.memory)
+			}
+		}
+
+		// Print header
+		format := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%-%ds  %%s\n",
+			nameWidth, imageWidth, backendWidth, memoryWidth)
+		fmt.Fprintf(stdout, format, "NAME", "IMAGE", "BACKEND", "MEMORY", "STATUS")
+
+		// Print rows
+		for _, r := range rows {
+			fmt.Fprintf(stdout, format, r.name, r.image, r.backendType, r.memory, r.status)
 		}
 	}
 
