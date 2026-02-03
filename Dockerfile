@@ -35,10 +35,11 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 # Create user with matching UID and macOS-style home path, add to docker group
 RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash -G docker ${USER}
 
-# Allow user to start Docker daemon without password (for container backend VM)
+# Allow user passwordless sudo for specific commands
 RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
-    && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/docker \
-    && chmod 0440 /etc/sudoers.d/docker
+    && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/${USER} \
+    && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt" >> /etc/sudoers.d/${USER} \
+    && chmod 0440 /etc/sudoers.d/${USER}
 
 # Set up environment
 ENV PATH="${HOME}/.local/bin:${PATH}"
