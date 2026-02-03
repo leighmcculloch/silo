@@ -72,6 +72,19 @@
           "env": ["CLAUDE_SPECIFIC_VAR"]
         }
       }]
+    },
+    "repos": {
+      "type": "object",
+      "description": "Repository-specific configuration. Each key is a substring to match against git remote URLs. When the current directory is a git repository and any remote URL contains the key as a substring, that configuration is applied.",
+      "additionalProperties": {
+        "$ref": "#/$defs/repoConfig"
+      },
+      "examples": [{
+        "github.com/myorg": {
+          "env": ["ORG_API_KEY"],
+          "post_build_hooks": ["npm install -g @myorg/cli"]
+        }
+      }]
     }
   },
   "$defs": {
@@ -113,6 +126,48 @@
             "type": "string"
           },
           "description": "Shell commands to run in the Dockerfile for this tool's build stage."
+        }
+      },
+      "additionalProperties": false
+    },
+    "repoConfig": {
+      "type": "object",
+      "description": "Configuration specific to a git repository. Applied when any git remote URL contains the key as a substring.",
+      "properties": {
+        "mounts_ro": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Read-only directories or files to mount for this repository."
+        },
+        "mounts_rw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Read-write directories or files to mount for this repository."
+        },
+        "env": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Environment variables for this repository. Same format as global env."
+        },
+        "pre_run_hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shell commands to run inside the container before the tool starts."
+        },
+        "post_build_hooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shell commands to run in the Dockerfile."
         }
       },
       "additionalProperties": false

@@ -50,7 +50,10 @@ const sampleConfig = `{
   // "pre_run_hooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  // "tools": {}
+  // "tools": {},
+  // Repository-specific configuration (applied when git remote URL contains the key)
+  // Example: "repos": { "github.com/myorg": { "env": ["ORG_API_KEY"], "post_build_hooks": ["npm install -g @myorg/cli"] } }
+  // "repos": {}
 }
 `
 
@@ -338,8 +341,16 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		toolPostBuildHooks = toolCfg.PostBuildHooks
 	}
 
+	// Get repo-specific hooks
+	var repoPreRunHooks, repoPostBuildHooks []string
+	matchedRepoNames := getMatchingRepoNames(cfg, cwd)
+	for _, repoCfg := range getMatchingRepoConfigs(cfg, cwd) {
+		repoPreRunHooks = append(repoPreRunHooks, repoCfg.PreRunHooks...)
+		repoPostBuildHooks = append(repoPostBuildHooks, repoCfg.PostBuildHooks...)
+	}
+
 	// Prepare build configuration
-	dockerfile := DockerfileWithHooks(cfg.PostBuildHooks, tool, toolPostBuildHooks)
+	dockerfile := DockerfileWithHooks(cfg.PostBuildHooks, tool, toolPostBuildHooks, repoPostBuildHooks)
 	buildArgs := map[string]string{
 		"HOME": home,
 		"USER": user,
@@ -358,13 +369,15 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		forceBuild:         forceBuild,
 		globalPostBuild:    cfg.PostBuildHooks,
 		toolPostBuildHooks: toolPostBuildHooks,
+		repoPostBuildHooks: repoPostBuildHooks,
+		matchedRepoNames:   matchedRepoNames,
 		stderr:             stderr,
 	}); err != nil {
 		return err
 	}
 
 	// Collect environment variables
-	envVars, envLog := collectEnvVars(tool, cfg)
+	envVars, envLog := collectEnvVars(tool, cfg, cwd)
 
 	// Generate container name
 	baseName := filepath.Base(cwd)
@@ -372,10 +385,10 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	containerName := backendClient.NextContainerName(ctx, baseName)
 
 	// Log configuration
-	logRunConfig(stderr, tool, mountsRO, mountsRW, envLog, cfg.PreRunHooks, toolPreRunHooks, containerName)
+	logRunConfig(stderr, tool, mountsRO, mountsRW, envLog, cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, matchedRepoNames, containerName)
 
 	// Prepare pre-run hooks
-	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, mountsRO, mountsRW)
+	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW)
 
 	// Define tool-specific commands
 	toolCommands := map[string][]string{
@@ -451,6 +464,16 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 		}
 	}
 
+	// Add repo-specific mounts (match git remote URLs)
+	for _, repoCfg := range getMatchingRepoConfigs(cfg, cwd) {
+		for _, m := range repoCfg.MountsRO {
+			mountsRO = append(mountsRO, expandPath(m))
+		}
+		for _, m := range repoCfg.MountsRW {
+			mountsRW = append(mountsRW, expandPath(m))
+		}
+	}
+
 	// Add global config mounts
 	for _, m := range cfg.MountsRO {
 		mountsRO = append(mountsRO, expandPath(m))
@@ -466,6 +489,52 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 	return mountsRO, mountsRW
 }
 
+// getMatchingRepoConfigs returns repo configs that match any of the git remote URLs
+func getMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
+	remoteURLs := backend.GetGitRemoteURLs(cwd)
+	if len(remoteURLs) == 0 {
+		return nil
+	}
+
+	var matched []config.RepoConfig
+	for pattern, repoCfg := range cfg.Repos {
+		for _, url := range remoteURLs {
+			if repoURLMatches(url, pattern) {
+				matched = append(matched, repoCfg)
+				break // Only add each repo config once
+			}
+		}
+	}
+	return matched
+}
+
+// getMatchingRepoNames returns repo config keys that match any of the git remote URLs
+func getMatchingRepoNames(cfg config.Config, cwd string) []string {
+	remoteURLs := backend.GetGitRemoteURLs(cwd)
+	if len(remoteURLs) == 0 {
+		return nil
+	}
+
+	var matched []string
+	for pattern := range cfg.Repos {
+		for _, url := range remoteURLs {
+			if repoURLMatches(url, pattern) {
+				matched = append(matched, pattern)
+				break // Only add each repo name once
+			}
+		}
+	}
+	return matched
+}
+
+// repoURLMatches checks if a git remote URL matches a pattern.
+// Both the URL and pattern have .git suffix stripped before comparison.
+func repoURLMatches(url, pattern string) bool {
+	url = strings.TrimSuffix(url, ".git")
+	pattern = strings.TrimSuffix(pattern, ".git")
+	return strings.Contains(url, pattern)
+}
+
 // buildEnvOptions contains options for building the container environment
 type buildEnvOptions struct {
 	tool               string
@@ -477,6 +546,8 @@ type buildEnvOptions struct {
 	forceBuild         bool
 	globalPostBuild    []string
 	toolPostBuildHooks []string
+	repoPostBuildHooks []string
+	matchedRepoNames   []string
 	stderr             io.Writer
 }
 
@@ -492,6 +563,12 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 	if len(opts.toolPostBuildHooks) > 0 {
 		cli.LogTo(opts.stderr, "Post-build hooks (%s):", opts.tool)
 		for _, hook := range opts.toolPostBuildHooks {
+			cli.LogBulletTo(opts.stderr, "%s", hook)
+		}
+	}
+	if len(opts.repoPostBuildHooks) > 0 {
+		cli.LogTo(opts.stderr, "Post-build hooks (repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
+		for _, hook := range opts.repoPostBuildHooks {
 			cli.LogBulletTo(opts.stderr, "%s", hook)
 		}
 	}
@@ -539,12 +616,13 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 type envLogInfo struct {
 	explicitGlobal []string // explicit from cfg.Env (KEY=VALUE)
 	explicitTool   []string // explicit from toolCfg.Env (KEY=VALUE)
+	explicitRepo   []string // explicit from repoCfg.Env (KEY=VALUE)
 	fromHost       []string // lifted from host env
 	notFound       []string // configured but not in host env
 }
 
 // collectEnvVars gathers environment variables from config and host
-func collectEnvVars(tool string, cfg config.Config) (envVars []string, log envLogInfo) {
+func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []string, log envLogInfo) {
 	// Get git identity
 	gitName, gitEmail := backend.GetGitIdentity()
 	if gitName != "" {
@@ -588,11 +666,26 @@ func collectEnvVars(tool string, cfg config.Config) (envVars []string, log envLo
 		}
 	}
 
+	// Repo-specific env vars
+	for _, repoCfg := range getMatchingRepoConfigs(cfg, cwd) {
+		for _, e := range repoCfg.Env {
+			if strings.Contains(e, "=") {
+				envVars = append(envVars, e)
+				log.explicitRepo = append(log.explicitRepo, strings.SplitN(e, "=", 2)[0])
+			} else if val := os.Getenv(e); val != "" {
+				envVars = append(envVars, e+"="+val)
+				log.fromHost = append(log.fromHost, e)
+			} else {
+				log.notFound = append(log.notFound, e)
+			}
+		}
+	}
+
 	return envVars, log
 }
 
 // logRunConfig logs the run configuration to stderr
-func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, envLog envLogInfo, globalPreRun, toolPreRun []string, containerName string) {
+func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, envLog envLogInfo, globalPreRun, toolPreRun, repoPreRun, matchedRepoNames []string, containerName string) {
 	// Get git identity for logging
 	gitName, gitEmail := backend.GetGitIdentity()
 	if gitName != "" {
@@ -639,6 +732,12 @@ func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, en
 			cli.LogBulletTo(stderr, "%s", name)
 		}
 	}
+	if len(envLog.explicitRepo) > 0 {
+		cli.LogTo(stderr, "Environment (config, repo: %s):", strings.Join(matchedRepoNames, ", "))
+		for _, name := range envLog.explicitRepo {
+			cli.LogBulletTo(stderr, "%s", name)
+		}
+	}
 	if len(envLog.fromHost) > 0 || len(envLog.notFound) > 0 {
 		cli.LogTo(stderr, "Environment (host):")
 		for _, name := range envLog.fromHost {
@@ -662,13 +761,20 @@ func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, en
 			cli.LogBulletTo(stderr, "%s", hook)
 		}
 	}
+	if len(repoPreRun) > 0 {
+		cli.LogTo(stderr, "Pre-run hooks (repo: %s):", strings.Join(matchedRepoNames, ", "))
+		for _, hook := range repoPreRun {
+			cli.LogBulletTo(stderr, "%s", hook)
+		}
+	}
 
 	cli.LogTo(stderr, "Container name: %s", containerName)
 }
 
 // preparePreRunHooks combines and prepares pre-run hooks including mount wait
-func preparePreRunHooks(globalHooks, toolHooks []string, mountsRO, mountsRW []string) []string {
+func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mountsRW []string) []string {
 	preRunHooks := append(globalHooks, toolHooks...)
+	preRunHooks = append(preRunHooks, repoHooks...)
 
 	// Collect all mount paths that exist for the mount wait script
 	var allMountPaths []string
@@ -909,6 +1015,86 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "    }%s\n", toolComma)
 	}
+	fmt.Fprintln(stdout, "  },")
+
+	// Repos
+	fmt.Fprintf(stdout, "  %s: {\n", key("repos"))
+	repoNames := make([]string, 0, len(cfg.Repos))
+	for name := range cfg.Repos {
+		repoNames = append(repoNames, name)
+	}
+	slices.Sort(repoNames)
+
+	for ri, repoName := range repoNames {
+		repoCfg := cfg.Repos[repoName]
+		fmt.Fprintf(stdout, "    %s: {\n", key(repoName))
+
+		// Repo mounts_ro
+		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_ro"))
+		for i, v := range repoCfg.MountsRO {
+			comma := ","
+			if i == len(repoCfg.MountsRO)-1 {
+				comma = ""
+			}
+			source := sources.RepoMountsRO[repoName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Repo mounts_rw
+		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_rw"))
+		for i, v := range repoCfg.MountsRW {
+			comma := ","
+			if i == len(repoCfg.MountsRW)-1 {
+				comma = ""
+			}
+			source := sources.RepoMountsRW[repoName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Repo env
+		fmt.Fprintf(stdout, "      %s: [\n", key("env"))
+		for i, v := range repoCfg.Env {
+			comma := ","
+			if i == len(repoCfg.Env)-1 {
+				comma = ""
+			}
+			source := sources.RepoEnv[repoName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Repo pre_run_hooks
+		fmt.Fprintf(stdout, "      %s: [\n", key("pre_run_hooks"))
+		for i, v := range repoCfg.PreRunHooks {
+			comma := ","
+			if i == len(repoCfg.PreRunHooks)-1 {
+				comma = ""
+			}
+			source := sources.RepoPreRunHooks[repoName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ],")
+
+		// Repo post_build_hooks
+		fmt.Fprintf(stdout, "      %s: [\n", key("post_build_hooks"))
+		for i, v := range repoCfg.PostBuildHooks {
+			comma := ","
+			if i == len(repoCfg.PostBuildHooks)-1 {
+				comma = ""
+			}
+			source := sources.RepoPostBuildHooks[repoName][v]
+			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
+		}
+		fmt.Fprintln(stdout, "      ]")
+
+		repoComma := ","
+		if ri == len(repoNames)-1 {
+			repoComma = ""
+		}
+		fmt.Fprintf(stdout, "    }%s\n", repoComma)
+	}
 	fmt.Fprintln(stdout, "  }")
 
 	fmt.Fprintln(stdout, "}")
@@ -1056,7 +1242,10 @@ func runConfigDefault(_ *cobra.Command, _ []string, stdout io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "    }%s\n", toolComma)
 	}
-	fmt.Fprintln(stdout, "  }")
+	fmt.Fprintln(stdout, "  },")
+
+	// Repos (empty by default)
+	fmt.Fprintln(stdout, "  \"repos\": {}")
 
 	fmt.Fprintln(stdout, "}")
 	return nil

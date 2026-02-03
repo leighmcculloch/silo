@@ -15,8 +15,9 @@ func Dockerfile() string {
 }
 
 // DockerfileWithHooks returns the Dockerfile with post-build hooks injected
-// globalHooks are injected into the base stage, toolHooks are injected into the specific tool stage
-func DockerfileWithHooks(globalHooks []string, tool string, toolHooks []string) string {
+// globalHooks are injected into the base stage, toolHooks are injected into the specific tool stage,
+// repoHooks are also injected into the tool stage (after toolHooks)
+func DockerfileWithHooks(globalHooks []string, tool string, toolHooks []string, repoHooks []string) string {
 	result := dockerfile
 
 	// Inject global hooks at base stage marker
@@ -30,11 +31,12 @@ func DockerfileWithHooks(globalHooks []string, tool string, toolHooks []string) 
 		result = strings.Replace(result, "# SILO_POST_BUILD_HOOKS\n", runCmds.String()+"# SILO_POST_BUILD_HOOKS\n", 1)
 	}
 
-	// Inject tool-specific hooks at tool stage marker
-	if len(toolHooks) > 0 {
+	// Inject tool-specific and repo-specific hooks at tool stage marker
+	allToolStageHooks := append(toolHooks, repoHooks...)
+	if len(allToolStageHooks) > 0 {
 		toolMarker := fmt.Sprintf("# SILO_POST_BUILD_HOOKS_%s\n", strings.ToUpper(tool))
 		var runCmds strings.Builder
-		for _, hook := range toolHooks {
+		for _, hook := range allToolStageHooks {
 			runCmds.WriteString("RUN ")
 			runCmds.WriteString(hook)
 			runCmds.WriteString("\n")

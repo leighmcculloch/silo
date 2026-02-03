@@ -81,3 +81,31 @@ func GetGitIdentity() (name, email string) {
 
 	return name, email
 }
+
+// GetGitRemoteURLs returns all remote URLs for the git repository in the given directory.
+// If the directory is not a git repository, it returns an empty slice.
+func GetGitRemoteURLs(dir string) []string {
+	// Get list of remotes
+	cmd := exec.Command("git", "-C", dir, "remote")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+
+	remotes := strings.Fields(string(out))
+	var urls []string
+
+	for _, remote := range remotes {
+		urlCmd := exec.Command("git", "-C", dir, "remote", "get-url", remote)
+		urlOut, err := urlCmd.Output()
+		if err != nil {
+			continue
+		}
+		url := strings.TrimSpace(string(urlOut))
+		if url != "" {
+			urls = append(urls, url)
+		}
+	}
+
+	return urls
+}

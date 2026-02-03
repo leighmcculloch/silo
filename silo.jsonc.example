@@ -15,5 +15,8 @@
   // "pre_run_hooks": [],
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  // "tools": {}
+  // "tools": {},
+  // Repository-specific configuration (applied when git remote URL contains the key)
+  // Example: "repos": { "github.com/myorg": { "env": ["ORG_API_KEY"], "post_build_hooks": ["npm install -g @myorg/cli"] } }
+  // "repos": {}
 }

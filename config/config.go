@@ -37,6 +37,10 @@ type Config struct {
 
 	// Tools defines available AI tools with their configurations
 	Tools map[string]ToolConfig `json:"tools,omitempty"`
+
+	// Repos defines repository-specific configurations that are applied when
+	// a git remote URL contains the specified key as a substring.
+	Repos map[string]RepoConfig `json:"repos,omitempty"`
 }
 
 // ToolConfig represents configuration for a specific AI tool
@@ -57,6 +61,25 @@ type ToolConfig struct {
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
 }
 
+// RepoConfig represents configuration for a specific git repository.
+// It is applied when any git remote URL contains the map key as a substring.
+type RepoConfig struct {
+	// MountsRO are read-only mounts specific to this repository
+	MountsRO []string `json:"mounts_ro,omitempty"`
+
+	// MountsRW are read-write mounts specific to this repository
+	MountsRW []string `json:"mounts_rw,omitempty"`
+
+	// Env specific to this repository (same format as Config.Env)
+	Env []string `json:"env,omitempty"`
+
+	// PreRunHooks are shell commands to run inside the container before the tool
+	PreRunHooks []string `json:"pre_run_hooks,omitempty"`
+
+	// PostBuildHooks are shell commands to run in the Dockerfile
+	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
+}
+
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
 	Backend            string                       // source path for backend setting
@@ -71,6 +94,11 @@ type SourceInfo struct {
 	ToolEnv            map[string]map[string]string // tool -> value -> source
 	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
 	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
+	RepoMountsRO       map[string]map[string]string // repo -> value -> source
+	RepoMountsRW       map[string]map[string]string // repo -> value -> source
+	RepoEnv            map[string]map[string]string // repo -> value -> source
+	RepoPreRunHooks    map[string]map[string]string // repo -> value -> source
+	RepoPostBuildHooks map[string]map[string]string // repo -> value -> source
 }
 
 // ConfigPath represents a config file path with its status
@@ -183,6 +211,23 @@ func Merge(base, overlay Config) Config {
 		}
 	}
 
+	// Merge repos map
+	if result.Repos == nil {
+		result.Repos = make(map[string]RepoConfig)
+	}
+	for name, repo := range overlay.Repos {
+		if existing, ok := result.Repos[name]; ok {
+			existing.MountsRO = append(existing.MountsRO, repo.MountsRO...)
+			existing.MountsRW = append(existing.MountsRW, repo.MountsRW...)
+			existing.Env = append(existing.Env, repo.Env...)
+			existing.PreRunHooks = append(existing.PreRunHooks, repo.PreRunHooks...)
+			existing.PostBuildHooks = append(existing.PostBuildHooks, repo.PostBuildHooks...)
+			result.Repos[name] = existing
+		} else {
+			result.Repos[name] = repo
+		}
+	}
+
 	return result
 }
 
@@ -199,6 +244,11 @@ func NewSourceInfo() *SourceInfo {
 		ToolEnv:            make(map[string]map[string]string),
 		ToolPreRunHooks:    make(map[string]map[string]string),
 		ToolPostBuildHooks: make(map[string]map[string]string),
+		RepoMountsRO:       make(map[string]map[string]string),
+		RepoMountsRW:       make(map[string]map[string]string),
+		RepoEnv:            make(map[string]map[string]string),
+		RepoPreRunHooks:    make(map[string]map[string]string),
+		RepoPostBuildHooks: make(map[string]map[string]string),
 	}
 }
 
@@ -342,6 +392,38 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 		for _, v := range toolCfg.PostBuildHooks {
 			info.ToolPostBuildHooks[toolName][v] = source
+		}
+	}
+	for repoName, repoCfg := range cfg.Repos {
+		if info.RepoMountsRO[repoName] == nil {
+			info.RepoMountsRO[repoName] = make(map[string]string)
+		}
+		if info.RepoMountsRW[repoName] == nil {
+			info.RepoMountsRW[repoName] = make(map[string]string)
+		}
+		if info.RepoEnv[repoName] == nil {
+			info.RepoEnv[repoName] = make(map[string]string)
+		}
+		if info.RepoPreRunHooks[repoName] == nil {
+			info.RepoPreRunHooks[repoName] = make(map[string]string)
+		}
+		if info.RepoPostBuildHooks[repoName] == nil {
+			info.RepoPostBuildHooks[repoName] = make(map[string]string)
+		}
+		for _, v := range repoCfg.MountsRO {
+			info.RepoMountsRO[repoName][v] = source
+		}
+		for _, v := range repoCfg.MountsRW {
+			info.RepoMountsRW[repoName][v] = source
+		}
+		for _, v := range repoCfg.Env {
+			info.RepoEnv[repoName][v] = source
+		}
+		for _, v := range repoCfg.PreRunHooks {
+			info.RepoPreRunHooks[repoName][v] = source
+		}
+		for _, v := range repoCfg.PostBuildHooks {
+			info.RepoPostBuildHooks[repoName][v] = source
 		}
 	}
 }

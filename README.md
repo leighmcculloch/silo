@@ -196,6 +196,14 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
       "mounts_rw": ["~/.claude.json", "~/.claude"],
       "env": ["CLAUDE_SPECIFIC_VAR"]
     }
+  },
+
+  // Repository-specific configuration (applied when git remote URL contains the key)
+  "repos": {
+    "github.com/myorg": {
+      "env": ["ORG_API_KEY"],
+      "post_build_hooks": ["npm install -g @myorg/cli"]
+    }
   }
 }
 ```
@@ -484,6 +492,36 @@ silo --backend container claude
   }
 }
 ```
+
+### Repository-specific Configuration
+
+Apply configuration automatically based on git remote URLs. When you run silo in a git repository, it checks if any remote URL contains the specified pattern and applies that configuration.
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "repos": {
+    "github.com/mycompany": {
+      "env": ["COMPANY_API_KEY"],
+      "post_build_hooks": ["npm install -g @mycompany/internal-cli"],
+      "mounts_ro": ["~/.mycompany-config"]
+    },
+    "gitlab.com/client-project": {
+      "env": ["CLIENT_TOKEN"],
+      "pre_run_hooks": ["echo 'Working on client project'"]
+    }
+  }
+}
+```
+
+This is useful for:
+- Setting organization-specific API keys or tokens
+- Installing internal tools needed for specific repositories
+- Mounting configuration files only relevant to certain projects
+
+The pattern matching is substring-based, so `"github.com/myorg"` matches remotes like:
+- `git@github.com:myorg/repo.git`
+- `https://github.com/myorg/repo.git`
 
 ## License
 
