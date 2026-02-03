@@ -107,7 +107,7 @@ Configuration is loaded from (in order, merged):
 
   # Pass arguments to the tool
   silo claude -- --help`,
-		Args:              cobra.MaximumNArgs(1),
+		Args:              cobra.ArbitraryArgs,
 		ValidArgsFunction: completeTools,
 		SilenceUsage:      true,
 		SilenceErrors:     true,
@@ -225,13 +225,22 @@ func completeTools(cmd *cobra.Command, args []string, toComplete string) ([]stri
 }
 
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
+	// Determine number of args before -- (tool args come after --)
+	argsBeforeDash := len(args)
+	if cmd.ArgsLenAtDash() > -1 {
+		argsBeforeDash = cmd.ArgsLenAtDash()
+	}
+	if argsBeforeDash > 1 {
+		return fmt.Errorf("accepts at most 1 arg(s), received %d", argsBeforeDash)
+	}
+
 	// Load configuration
 	cfg := config.LoadAll()
 
 	// Determine tool
 	var tool string
 	var err error
-	if len(args) > 0 {
+	if argsBeforeDash > 0 {
 		tool = args[0]
 	} else if cfg.Tool != "" {
 		tool = cfg.Tool

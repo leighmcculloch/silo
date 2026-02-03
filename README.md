@@ -73,6 +73,10 @@ silo
 silo claude
 silo opencode
 silo copilot
+
+# Pass arguments to the tool (after --)
+silo claude -- --help
+silo opencode -- --version
 ```
 
 ### Choosing a Backend

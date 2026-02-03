@@ -342,31 +342,33 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}()
 
 	// Copy stdin to container, intercepting double Ctrl-C to kill
-	var lastCtrlC time.Time
-	buf := make([]byte, 256)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if n > 0 {
-			// Check for Ctrl-C (0x03)
-			for i := 0; i < n; i++ {
-				if buf[i] == 0x03 {
-					now := time.Now()
-					if now.Sub(lastCtrlC) < time.Second {
-						// Double Ctrl-C - kill container
-						if opts.Name != "" {
-							exec.Command("container", "rm", "-f", opts.Name).Run()
+	go func() {
+		var lastCtrlC time.Time
+		buf := make([]byte, 256)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				// Check for Ctrl-C (0x03)
+				for i := 0; i < n; i++ {
+					if buf[i] == 0x03 {
+						now := time.Now()
+						if now.Sub(lastCtrlC) < time.Second {
+							// Double Ctrl-C - kill container
+							if opts.Name != "" {
+								exec.Command("container", "rm", "-f", opts.Name).Run()
+							}
+							return
 						}
-						return nil
+						lastCtrlC = now
 					}
-					lastCtrlC = now
 				}
+				ptmx.Write(buf[:n])
 			}
-			ptmx.Write(buf[:n])
+			if err != nil {
+				break
+			}
 		}
-		if err != nil {
-			break
-		}
-	}
+	}()
 
 	waitErr := cmd.Wait()
 	if waitErr != nil {

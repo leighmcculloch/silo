@@ -238,6 +238,9 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 	defer attachResp.Close()
 
+	// Start waiting for container BEFORE starting it to avoid race with AutoRemove
+	statusCh, errCh := c.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+
 	// Start the container
 	if err := c.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
@@ -272,10 +275,20 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}()
 
 	// Copy stdin to container, intercepting double Ctrl-C to kill
+	// Use a context to stop the goroutine when the container exits
+	stdinCtx, stdinCancel := context.WithCancel(ctx)
+	defer stdinCancel()
 	go func() {
 		var lastCtrlC time.Time
 		buf := make([]byte, 256)
 		for {
+			// Check if we should stop
+			select {
+			case <-stdinCtx.Done():
+				return
+			default:
+			}
+
 			n, err := os.Stdin.Read(buf)
 			if n > 0 {
 				// Check for Ctrl-C (0x03)
@@ -302,8 +315,10 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Copy container output to stdout
 	io.Copy(os.Stdout, attachResp.Reader)
 
+	// Container output is done, cancel stdin copying
+	stdinCancel()
+
 	// Wait for the container to finish
-	statusCh, errCh := c.cli.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		if err != nil {
