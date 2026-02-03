@@ -96,17 +96,14 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	args = append(args, tmpDir)
 
 	cmd := exec.Command("container", args...)
-	cmd.Stderr = os.Stderr
 
-	// Stream stdout for progress
-	stdout, err := cmd.StdoutPipe()
+	// Use a pty to make the container CLI think it's connected to a terminal,
+	// which enables progress output
+	ptmx, err := pty.Start(cmd)
 	if err != nil {
-		return "", fmt.Errorf("failed to get stdout pipe: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("failed to start build: %w", err)
 	}
+	defer ptmx.Close()
 
 	// Forward context cancellation as SIGTERM so intermediate build
 	// containers are cleaned up gracefully.
@@ -115,10 +112,13 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		cmd.Process.Signal(syscall.SIGTERM)
 	}()
 
-	scanner := bufio.NewScanner(stdout)
+	// Read output from pty
+	// Use a custom scanner that splits on both \n and \r to handle terminal progress output
+	scanner := bufio.NewScanner(ptmx)
+	scanner.Split(scanLinesOrCR)
 	for scanner.Scan() {
 		if opts.OnProgress != nil {
-			opts.OnProgress(scanner.Text() + "\n")
+			opts.OnProgress(scanner.Text())
 		}
 	}
 
@@ -564,4 +564,25 @@ func stageFileMount(filePath string) (hostDir, containerDir string, err error) {
 		return "", "", err
 	}
 	return hostDir, containerDir, nil
+}
+
+// scanLinesOrCR is a split function for bufio.Scanner that splits on both \n and \r.
+// This handles terminal progress output that uses carriage returns to update in place.
+func scanLinesOrCR(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	// Look for \n or \r
+	for i, b := range data {
+		if b == '\n' || b == '\r' {
+			// Skip the delimiter and return the line
+			return i + 1, data[0:i], nil
+		}
+	}
+	// If at EOF and we have data, return it
+	if atEOF {
+		return len(data), data, nil
+	}
+	// Request more data
+	return 0, nil, nil
 }

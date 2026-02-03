@@ -8,9 +8,10 @@ import (
 )
 
 // GenerateScript generates a bash script that waits for all mount paths to exist.
-// It polls each path at 1ms intervals for up to 10s total timeout, with logging.
+// It polls each path at 1ms intervals for up to 10s total timeout.
+// If verbose is true, it logs progress to stderr.
 // This should be prepended to pre-run hooks to ensure mounts are ready before other commands run.
-func GenerateScript(paths []string) string {
+func GenerateScript(paths []string, verbose bool) string {
 	if len(paths) == 0 {
 		return ""
 	}
@@ -18,9 +19,11 @@ func GenerateScript(paths []string) string {
 	for _, p := range paths {
 		quotedPaths = append(quotedPaths, shellquote.Join(p))
 	}
-	// ANSI color codes matching cli/cli.go styles:
-	// - Info (==>) color 86, Success (✓) color 82, Error (✗) color 196
-	return fmt.Sprintf(`__silo_tilde() { case "$1" in "$HOME"*) echo "~${1#$HOME}";; *) echo "$1";; esac; }
+
+	if verbose {
+		// ANSI color codes matching cli/cli.go styles:
+		// - Info (==>) color 86, Success (✓) color 82, Error (✗) color 196
+		return fmt.Sprintf(`__silo_tilde() { case "$1" in "$HOME"*) echo "~${1#$HOME}";; *) echo "$1";; esac; }
 __silo_wait_for_mount() {
   local p=$1 timeout=10000 i=0
   local c_success=$'\033[38;5;82m' c_error=$'\033[38;5;196m' c_reset=$'\033[0m'
@@ -57,5 +60,34 @@ __silo_wait_for_mounts() {
     exit 1
   fi
   printf "  ${c_success}✓ All mounts ready${c_reset}\n" >&2
+}; __silo_wait_for_mounts`, strings.Join(quotedPaths, " "))
+	}
+
+	// Quiet version - no output unless there's an error
+	return fmt.Sprintf(`__silo_wait_for_mount() {
+  local p=$1 timeout=10000 i=0
+  [ -e "$p" ] && return 0
+  while [ ! -e "$p" ] && [ $i -lt $timeout ]; do
+    sleep 0.001
+    i=$((i+1))
+  done
+  [ -e "$p" ] && return 0
+  printf "Error: mount timed out: %%s\n" "$p" >&2
+  return 1
+}
+__silo_wait_for_mounts() {
+  local paths=(%s)
+  local pids=() p
+  for p in "${paths[@]}"; do
+    __silo_wait_for_mount "$p" &
+    pids+=($!)
+  done
+  local failed=0
+  for pid in "${pids[@]}"; do
+    wait $pid || failed=1
+  done
+  if [ $failed -eq 1 ]; then
+    exit 1
+  fi
 }; __silo_wait_for_mounts`, strings.Join(quotedPaths, " "))
 }

@@ -122,6 +122,7 @@ Configuration is loaded from (in order, merged):
 
 	rootCmd.Flags().String("backend", "", "Backend to use: docker, container")
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
+	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 
 	configCmd := &cobra.Command{
 		Use:   "config",
@@ -276,8 +277,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get force-build flag
 	forceBuild, _ := cmd.Flags().GetBool("force-build")
 
+	// Get verbose flag
+	verbose, _ := cmd.Flags().GetBool("verbose")
+
 	// Run the tool
-	return runTool(tool, toolArgs, cfg, forceBuild, stdout, stderr)
+	return runTool(tool, toolArgs, cfg, forceBuild, verbose, stdout, stderr)
 }
 
 func selectTool() (string, error) {
@@ -306,21 +310,57 @@ func selectTool() (string, error) {
 	return selected, nil
 }
 
-func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool, _, stderr io.Writer) error {
+func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool, verbose bool, _, stderr io.Writer) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle signals
+	// Define progress sections
+	progressSections := []string{
+		"Backend",
+		"Post-build hooks",
+		"Building environment",
+		"Git identity",
+		"Mounts",
+		"Environment",
+		"Pre-run hooks",
+		"Container",
+		"Running",
+	}
+
+	// Create progress bar (only used when not verbose)
+	var progress *cli.Progress
+	if !verbose {
+		progress = cli.NewProgress(stderr, progressSections)
+		progress.Start()
+	}
+
+	// Handle signals - clean up progress bar on interrupt
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigCh
+		if progress != nil {
+			progress.Complete()
+		}
 		cancel()
 	}()
 
+	// Helper to log only in verbose mode
+	logSection := func(format string, args ...any) {
+		if verbose {
+			cli.LogTo(stderr, format, args...)
+		}
+	}
+
 	// Select and create backend
-	backendClient, err := createBackend(cfg.Backend, stderr)
+	if progress != nil {
+		progress.SetSection("Backend")
+	}
+	backendClient, err := createBackend(cfg.Backend, stderr, verbose)
 	if err != nil {
+		if progress != nil {
+			progress.Complete()
+		}
 		return err
 	}
 	defer backendClient.Close()
@@ -359,6 +399,9 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	imageTag := buildImageTag(tool, dockerfile, buildArgs)
 
 	// Build or use cached image
+	if progress != nil {
+		progress.SetSection("Post-build hooks")
+	}
 	if err := buildEnvironment(ctx, backendClient, buildEnvOptions{
 		tool:               tool,
 		dockerfile:         dockerfile,
@@ -372,7 +415,12 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		repoPostBuildHooks: repoPostBuildHooks,
 		matchedRepoNames:   matchedRepoNames,
 		stderr:             stderr,
+		verbose:            verbose,
+		progress:           progress,
 	}); err != nil {
+		if progress != nil {
+			progress.Complete()
+		}
 		return err
 	}
 
@@ -385,10 +433,26 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 	containerName := backendClient.NextContainerName(ctx, baseName)
 
 	// Log configuration
-	logRunConfig(stderr, tool, mountsRO, mountsRW, envLog, cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, matchedRepoNames, containerName)
+	if progress != nil {
+		progress.SetSection("Git identity")
+	}
+	logRunConfig(logRunConfigOptions{
+		stderr:           stderr,
+		tool:             tool,
+		mountsRO:         mountsRO,
+		mountsRW:         mountsRW,
+		envLog:           envLog,
+		globalPreRun:     cfg.PreRunHooks,
+		toolPreRun:       toolPreRunHooks,
+		repoPreRun:       repoPreRunHooks,
+		matchedRepoNames: matchedRepoNames,
+		containerName:    containerName,
+		verbose:          verbose,
+		progress:         progress,
+	})
 
 	// Prepare pre-run hooks
-	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW)
+	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW, verbose)
 
 	// Define tool-specific commands
 	toolCommands := map[string][]string{
@@ -397,7 +461,15 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
 	}
 
-	cli.LogTo(stderr, "Running %s...", tool)
+	if progress != nil {
+		progress.SetSection("Running")
+	}
+	logSection("Running %s...", tool)
+
+	// Complete the progress bar before running the tool
+	if progress != nil {
+		progress.Complete()
+	}
 
 	// Run the container/VM
 	err = backendClient.Run(ctx, backend.RunOptions{
@@ -420,7 +492,7 @@ func runTool(tool string, toolArgs []string, cfg config.Config, forceBuild bool,
 }
 
 // createBackend creates the appropriate backend based on configuration
-func createBackend(backendType string, stderr io.Writer) (backend.Backend, error) {
+func createBackend(backendType string, stderr io.Writer, verbose bool) (backend.Backend, error) {
 	if backendType == "" {
 		// Default to container if available, otherwise docker
 		if _, err := exec.LookPath("container"); err == nil {
@@ -432,14 +504,18 @@ func createBackend(backendType string, stderr io.Writer) (backend.Backend, error
 
 	switch backendType {
 	case "docker":
-		cli.LogTo(stderr, "Using docker backend...")
+		if verbose {
+			cli.LogTo(stderr, "Using docker backend...")
+		}
 		client, err := docker.NewClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to Docker: %w", err)
 		}
 		return client, nil
 	case "container":
-		cli.LogTo(stderr, "Using apple container (lightweight vms) backend...")
+		if verbose {
+			cli.LogTo(stderr, "Using apple container (lightweight vms) backend...")
+		}
 		client, err := applecontainer.NewClient()
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize container backend: %w", err)
@@ -549,27 +625,46 @@ type buildEnvOptions struct {
 	repoPostBuildHooks []string
 	matchedRepoNames   []string
 	stderr             io.Writer
+	verbose            bool
+	progress           *cli.Progress
 }
 
 // buildEnvironment builds or uses cached container image
 func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts buildEnvOptions) error {
+	// Helper to log only in verbose mode
+	logSection := func(format string, args ...any) {
+		if opts.verbose {
+			cli.LogTo(opts.stderr, format, args...)
+		}
+	}
+	logBullet := func(format string, args ...any) {
+		if opts.verbose {
+			cli.LogBulletTo(opts.stderr, format, args...)
+		}
+	}
+	logSuccessBullet := func(format string, args ...any) {
+		if opts.verbose {
+			cli.LogSuccessBulletTo(opts.stderr, format, args...)
+		}
+	}
+
 	// Log post-build hooks (before building so user knows what will be run)
 	if len(opts.globalPostBuild) > 0 {
-		cli.LogTo(opts.stderr, "Post-build hooks:")
+		logSection("Post-build hooks:")
 		for _, hook := range opts.globalPostBuild {
-			cli.LogBulletTo(opts.stderr, "%s", hook)
+			logBullet("%s", hook)
 		}
 	}
 	if len(opts.toolPostBuildHooks) > 0 {
-		cli.LogTo(opts.stderr, "Post-build hooks (%s):", opts.tool)
+		logSection("Post-build hooks (%s):", opts.tool)
 		for _, hook := range opts.toolPostBuildHooks {
-			cli.LogBulletTo(opts.stderr, "%s", hook)
+			logBullet("%s", hook)
 		}
 	}
 	if len(opts.repoPostBuildHooks) > 0 {
-		cli.LogTo(opts.stderr, "Post-build hooks (repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
+		logSection("Post-build hooks (repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
 		for _, hook := range opts.repoPostBuildHooks {
-			cli.LogBulletTo(opts.stderr, "%s", hook)
+			logBullet("%s", hook)
 		}
 	}
 
@@ -583,13 +678,16 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		}
 	}
 
-	cli.LogTo(opts.stderr, "Building environment for %s...", opts.tool)
+	if opts.progress != nil {
+		opts.progress.SetSection("Building environment")
+	}
+	logSection("Building environment for %s...", opts.tool)
 	if opts.forceBuild {
-		cli.LogBulletTo(opts.stderr, "Force rebuild requested, ignoring cache")
+		logBullet("Force rebuild requested, ignoring cache")
 	}
 
 	if exists {
-		cli.LogSuccessBulletTo(opts.stderr, "Environment cached")
+		logSuccessBullet("Environment cached")
 		return nil
 	}
 
@@ -602,13 +700,17 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		MountsRW:   opts.mountsRW,
 		NoCache:    opts.forceBuild,
 		OnProgress: func(msg string) {
-			fmt.Fprint(opts.stderr, msg)
+			if opts.verbose {
+				fmt.Fprint(opts.stderr, msg)
+			} else if opts.progress != nil {
+				opts.progress.SetDetail(msg)
+			}
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build environment: %w", err)
 	}
-	cli.LogSuccessBulletTo(opts.stderr, "Environment ready")
+	logSuccessBullet("Environment ready")
 	return nil
 }
 
@@ -684,19 +786,50 @@ func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []strin
 	return envVars, log
 }
 
+// logRunConfigOptions contains options for logging run configuration
+type logRunConfigOptions struct {
+	stderr           io.Writer
+	tool             string
+	mountsRO         []string
+	mountsRW         []string
+	envLog           envLogInfo
+	globalPreRun     []string
+	toolPreRun       []string
+	repoPreRun       []string
+	matchedRepoNames []string
+	containerName    string
+	verbose          bool
+	progress         *cli.Progress
+}
+
 // logRunConfig logs the run configuration to stderr
-func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, envLog envLogInfo, globalPreRun, toolPreRun, repoPreRun, matchedRepoNames []string, containerName string) {
+func logRunConfig(opts logRunConfigOptions) {
+	// Helper to log only in verbose mode
+	logSection := func(format string, args ...any) {
+		if opts.verbose {
+			cli.LogTo(opts.stderr, format, args...)
+		}
+	}
+	logBullet := func(format string, args ...any) {
+		if opts.verbose {
+			cli.LogBulletTo(opts.stderr, format, args...)
+		}
+	}
+
 	// Get git identity for logging
 	gitName, gitEmail := backend.GetGitIdentity()
 	if gitName != "" {
-		cli.LogTo(stderr, "Git identity: %s <%s>", gitName, gitEmail)
+		logSection("Git identity: %s <%s>", gitName, gitEmail)
 	}
 
 	// Log mounts
+	if opts.progress != nil {
+		opts.progress.SetSection("Mounts")
+	}
 	seen := make(map[string]bool)
-	if len(mountsRO) > 0 {
-		cli.LogTo(stderr, "Mounts (read-only):")
-		for _, m := range mountsRO {
+	if len(opts.mountsRO) > 0 {
+		logSection("Mounts (read-only):")
+		for _, m := range opts.mountsRO {
 			if _, err := os.Lstat(m); err != nil {
 				continue
 			}
@@ -704,11 +837,11 @@ func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, en
 				continue
 			}
 			seen[m] = true
-			cli.LogBulletTo(stderr, "%s", tilde.Path(m))
+			logBullet("%s", tilde.Path(m))
 		}
 	}
-	cli.LogTo(stderr, "Mounts (read-write):")
-	for _, m := range mountsRW {
+	logSection("Mounts (read-write):")
+	for _, m := range opts.mountsRW {
 		if _, err := os.Lstat(m); err != nil {
 			continue
 		}
@@ -716,63 +849,72 @@ func logRunConfig(stderr io.Writer, tool string, mountsRO, mountsRW []string, en
 			continue
 		}
 		seen[m] = true
-		cli.LogBulletTo(stderr, "%s", tilde.Path(m))
+		logBullet("%s", tilde.Path(m))
 	}
 
 	// Log environment variables
-	if len(envLog.explicitGlobal) > 0 {
-		cli.LogTo(stderr, "Environment (config):")
-		for _, name := range envLog.explicitGlobal {
-			cli.LogBulletTo(stderr, "%s", name)
+	if opts.progress != nil {
+		opts.progress.SetSection("Environment")
+	}
+	if len(opts.envLog.explicitGlobal) > 0 {
+		logSection("Environment (config):")
+		for _, name := range opts.envLog.explicitGlobal {
+			logBullet("%s", name)
 		}
 	}
-	if len(envLog.explicitTool) > 0 {
-		cli.LogTo(stderr, "Environment (config, %s):", tool)
-		for _, name := range envLog.explicitTool {
-			cli.LogBulletTo(stderr, "%s", name)
+	if len(opts.envLog.explicitTool) > 0 {
+		logSection("Environment (config, %s):", opts.tool)
+		for _, name := range opts.envLog.explicitTool {
+			logBullet("%s", name)
 		}
 	}
-	if len(envLog.explicitRepo) > 0 {
-		cli.LogTo(stderr, "Environment (config, repo: %s):", strings.Join(matchedRepoNames, ", "))
-		for _, name := range envLog.explicitRepo {
-			cli.LogBulletTo(stderr, "%s", name)
+	if len(opts.envLog.explicitRepo) > 0 {
+		logSection("Environment (config, repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
+		for _, name := range opts.envLog.explicitRepo {
+			logBullet("%s", name)
 		}
 	}
-	if len(envLog.fromHost) > 0 || len(envLog.notFound) > 0 {
-		cli.LogTo(stderr, "Environment (host):")
-		for _, name := range envLog.fromHost {
-			cli.LogBulletTo(stderr, "%s", name)
+	if len(opts.envLog.fromHost) > 0 || len(opts.envLog.notFound) > 0 {
+		logSection("Environment (host):")
+		for _, name := range opts.envLog.fromHost {
+			logBullet("%s", name)
 		}
-		for _, name := range envLog.notFound {
-			cli.LogBulletTo(stderr, "%s (not set)", name)
+		for _, name := range opts.envLog.notFound {
+			logBullet("%s (not set)", name)
 		}
 	}
 
 	// Log pre-run hooks
-	if len(globalPreRun) > 0 {
-		cli.LogTo(stderr, "Pre-run hooks:")
-		for _, hook := range globalPreRun {
-			cli.LogBulletTo(stderr, "%s", hook)
+	if opts.progress != nil {
+		opts.progress.SetSection("Pre-run hooks")
+	}
+	if len(opts.globalPreRun) > 0 {
+		logSection("Pre-run hooks:")
+		for _, hook := range opts.globalPreRun {
+			logBullet("%s", hook)
 		}
 	}
-	if len(toolPreRun) > 0 {
-		cli.LogTo(stderr, "Pre-run hooks (%s):", tool)
-		for _, hook := range toolPreRun {
-			cli.LogBulletTo(stderr, "%s", hook)
+	if len(opts.toolPreRun) > 0 {
+		logSection("Pre-run hooks (%s):", opts.tool)
+		for _, hook := range opts.toolPreRun {
+			logBullet("%s", hook)
 		}
 	}
-	if len(repoPreRun) > 0 {
-		cli.LogTo(stderr, "Pre-run hooks (repo: %s):", strings.Join(matchedRepoNames, ", "))
-		for _, hook := range repoPreRun {
-			cli.LogBulletTo(stderr, "%s", hook)
+	if len(opts.repoPreRun) > 0 {
+		logSection("Pre-run hooks (repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
+		for _, hook := range opts.repoPreRun {
+			logBullet("%s", hook)
 		}
 	}
 
-	cli.LogTo(stderr, "Container name: %s", containerName)
+	if opts.progress != nil {
+		opts.progress.SetSection("Container")
+	}
+	logSection("Container name: %s", opts.containerName)
 }
 
 // preparePreRunHooks combines and prepares pre-run hooks including mount wait
-func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mountsRW []string) []string {
+func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mountsRW []string, verbose bool) []string {
 	preRunHooks := append(globalHooks, toolHooks...)
 	preRunHooks = append(preRunHooks, repoHooks...)
 
@@ -791,7 +933,7 @@ func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mo
 	sort.Strings(allMountPaths)
 
 	// Prepend mount wait hook to ensure mounts are ready before other hooks run
-	if mountWaitHook := mountwait.GenerateScript(allMountPaths); mountWaitHook != "" {
+	if mountWaitHook := mountwait.GenerateScript(allMountPaths, verbose); mountWaitHook != "" {
 		preRunHooks = append([]string{mountWaitHook}, preRunHooks...)
 	}
 
