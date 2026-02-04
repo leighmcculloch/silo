@@ -119,7 +119,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	scanner.Split(scanLinesOrCR)
 	for scanner.Scan() {
 		if opts.OnProgress != nil {
-			opts.OnProgress(scanner.Text())
+			opts.OnProgress(scanner.Text() + "\n")
 		}
 	}
 
@@ -601,8 +601,17 @@ func scanLinesOrCR(data []byte, atEOF bool) (advance int, token []byte, err erro
 	}
 	// Look for \n or \r
 	for i, b := range data {
-		if b == '\n' || b == '\r' {
-			// Skip the delimiter and return the line
+		if b == '\n' {
+			// Return the line, skipping the \n
+			return i + 1, data[0:i], nil
+		}
+		if b == '\r' {
+			// Check if next char is \n (CRLF sequence)
+			if i+1 < len(data) && data[i+1] == '\n' {
+				// Skip both \r and \n
+				return i + 2, data[0:i], nil
+			}
+			// Just \r (carriage return for progress updates)
 			return i + 1, data[0:i], nil
 		}
 	}
