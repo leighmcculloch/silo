@@ -506,6 +506,10 @@ Apply configuration automatically based on git remote URLs. When you run silo in
       "post_build_hooks": ["npm install -g @mycompany/internal-cli"],
       "mounts_ro": ["~/.mycompany-config"]
     },
+    "github.com/mycompany/special-repo": {
+      "env": ["SPECIAL_TOKEN"],
+      "pre_run_hooks": ["echo 'Setting up special-repo'"]
+    },
     "gitlab.com/client-project": {
       "env": ["CLIENT_TOKEN"],
       "pre_run_hooks": ["echo 'Working on client project'"]
@@ -519,9 +523,13 @@ This is useful for:
 - Installing internal tools needed for specific repositories
 - Mounting configuration files only relevant to certain projects
 
-The pattern matching is substring-based, so `"github.com/myorg"` matches remotes like:
+The pattern matching is substring-based (prefix matching), so `"github.com/myorg"` matches remotes like:
 - `git@github.com:myorg/repo.git`
 - `https://github.com/myorg/repo.git`
+
+When multiple patterns match, they are merged in order of specificity (shortest pattern first). In the example above, if you're in `github.com/mycompany/special-repo`:
+1. First `github.com/mycompany` config is applied (COMPANY_API_KEY, post_build_hooks, mounts_ro)
+2. Then `github.com/mycompany/special-repo` config is merged (adds SPECIAL_TOKEN and pre_run_hooks)
 
 ## License
 

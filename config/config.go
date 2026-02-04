@@ -62,8 +62,14 @@ type ToolConfig struct {
 }
 
 // RepoConfig represents configuration for a specific git repository.
-// It is applied when any git remote URL contains the map key as a substring.
+// It is applied when any git remote URL contains the map key as a substring,
+// allowing for prefix matching (e.g., "github.com/stellar" matches all stellar repos).
+// When multiple patterns match, they are applied in order of specificity (shortest first),
+// so more specific patterns override or extend less specific ones.
 type RepoConfig struct {
+	// Tool specifies which tool to use for this repository
+	Tool string `json:"tool,omitempty"`
+
 	// MountsRO are read-only mounts specific to this repository
 	MountsRO []string `json:"mounts_ro,omitempty"`
 
@@ -94,6 +100,7 @@ type SourceInfo struct {
 	ToolEnv            map[string]map[string]string // tool -> value -> source
 	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
 	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
+	RepoTool           map[string]string            // repo -> source path
 	RepoMountsRO       map[string]map[string]string // repo -> value -> source
 	RepoMountsRW       map[string]map[string]string // repo -> value -> source
 	RepoEnv            map[string]map[string]string // repo -> value -> source
@@ -244,6 +251,7 @@ func NewSourceInfo() *SourceInfo {
 		ToolEnv:            make(map[string]map[string]string),
 		ToolPreRunHooks:    make(map[string]map[string]string),
 		ToolPostBuildHooks: make(map[string]map[string]string),
+		RepoTool:           make(map[string]string),
 		RepoMountsRO:       make(map[string]map[string]string),
 		RepoMountsRW:       make(map[string]map[string]string),
 		RepoEnv:            make(map[string]map[string]string),
@@ -395,6 +403,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 	}
 	for repoName, repoCfg := range cfg.Repos {
+		if repoCfg.Tool != "" {
+			info.RepoTool[repoName] = source
+		}
 		if info.RepoMountsRO[repoName] == nil {
 			info.RepoMountsRO[repoName] = make(map[string]string)
 		}

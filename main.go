@@ -51,8 +51,12 @@ const sampleConfig = `{
   // Tool-specific configuration (merged with global config above)
   // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
   // "tools": {},
-  // Repository-specific configuration (applied when git remote URL contains the key)
-  // Example: "repos": { "github.com/myorg": { "env": ["ORG_API_KEY"], "post_build_hooks": ["npm install -g @myorg/cli"] } }
+  // Repository-specific configuration (applied when git remote URL contains the key).
+  // Multiple patterns can match; they are merged in order of specificity (shortest first).
+  // Example: "repos": {
+  //   "github.com/myorg": { "env": ["ORG_API_KEY"] },
+  //   "github.com/myorg/specific-repo": { "post_build_hooks": ["npm install -g @myorg/cli"] }
+  // }
   // "repos": {}
 }
 `
@@ -242,18 +246,31 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Load configuration
 	cfg := config.LoadAll()
 
-	// Determine tool
+	// Get cwd for repo matching
+	cwd, _ := os.Getwd()
+
+	// Determine tool (priority: CLI arg > repo config > global config > interactive)
 	var tool string
 	var err error
 	if argsBeforeDash > 0 {
 		tool = args[0]
-	} else if cfg.Tool != "" {
-		tool = cfg.Tool
 	} else {
-		// Interactive selection
-		tool, err = selectTool()
-		if err != nil {
-			return err
+		// Check repo-specific tool setting (applied in specificity order)
+		for _, repoCfg := range getMatchingRepoConfigs(cfg, cwd) {
+			if repoCfg.Tool != "" {
+				tool = repoCfg.Tool
+			}
+		}
+		// Fall back to global config tool
+		if tool == "" && cfg.Tool != "" {
+			tool = cfg.Tool
+		}
+		// Interactive selection as last resort
+		if tool == "" {
+			tool, err = selectTool()
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -565,26 +582,45 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 	return mountsRO, mountsRW
 }
 
-// getMatchingRepoConfigs returns repo configs that match any of the git remote URLs
+// getMatchingRepoConfigs returns repo configs that match any of the git remote URLs,
+// sorted by pattern length (shortest first) so more specific configs are applied last.
 func getMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
 	remoteURLs := backend.GetGitRemoteURLs(cwd)
 	if len(remoteURLs) == 0 {
 		return nil
 	}
 
-	var matched []config.RepoConfig
+	// Collect matching patterns with their configs
+	type match struct {
+		pattern string
+		config  config.RepoConfig
+	}
+	var matches []match
+
 	for pattern, repoCfg := range cfg.Repos {
 		for _, url := range remoteURLs {
 			if repoURLMatches(url, pattern) {
-				matched = append(matched, repoCfg)
+				matches = append(matches, match{pattern: pattern, config: repoCfg})
 				break // Only add each repo config once
 			}
 		}
 	}
-	return matched
+
+	// Sort by pattern length (shortest first = less specific first)
+	sort.Slice(matches, func(i, j int) bool {
+		return len(matches[i].pattern) < len(matches[j].pattern)
+	})
+
+	// Extract configs in sorted order
+	result := make([]config.RepoConfig, len(matches))
+	for i, m := range matches {
+		result[i] = m.config
+	}
+	return result
 }
 
-// getMatchingRepoNames returns repo config keys that match any of the git remote URLs
+// getMatchingRepoNames returns repo config keys that match any of the git remote URLs,
+// sorted by pattern length (shortest first) so more specific configs are applied last.
 func getMatchingRepoNames(cfg config.Config, cwd string) []string {
 	remoteURLs := backend.GetGitRemoteURLs(cwd)
 	if len(remoteURLs) == 0 {
@@ -600,14 +636,30 @@ func getMatchingRepoNames(cfg config.Config, cwd string) []string {
 			}
 		}
 	}
+
+	// Sort by pattern length (shortest first = less specific first)
+	sort.Slice(matched, func(i, j int) bool {
+		return len(matched[i]) < len(matched[j])
+	})
+
 	return matched
 }
 
 // repoURLMatches checks if a git remote URL matches a pattern.
 // Both the URL and pattern have .git suffix stripped before comparison.
+// The pattern matches if it is a substring of the URL, allowing for prefix matching
+// (e.g., "github.com/stellar" matches "github.com/stellar/stellar-core").
+// SSH URLs (git@host:path) are normalized to host/path format for matching.
 func repoURLMatches(url, pattern string) bool {
 	url = strings.TrimSuffix(url, ".git")
 	pattern = strings.TrimSuffix(pattern, ".git")
+
+	// Normalize SSH URL format (git@github.com:org/repo -> github.com/org/repo)
+	if strings.HasPrefix(url, "git@") {
+		url = strings.TrimPrefix(url, "git@")
+		url = strings.Replace(url, ":", "/", 1)
+	}
+
 	return strings.Contains(url, pattern)
 }
 
@@ -1170,6 +1222,17 @@ func runConfigShow(_ *cobra.Command, _ []string, stdout io.Writer) error {
 	for ri, repoName := range repoNames {
 		repoCfg := cfg.Repos[repoName]
 		fmt.Fprintf(stdout, "    %s: {\n", key(repoName))
+
+		// Repo tool
+		toolSource := sources.RepoTool[repoName]
+		if toolSource == "" {
+			toolSource = "default"
+		}
+		if repoCfg.Tool != "" {
+			fmt.Fprintf(stdout, "      %s: %s, %s\n", key("tool"), str(repoCfg.Tool), comment(toolSource))
+		} else {
+			fmt.Fprintf(stdout, "      %s: null, %s\n", key("tool"), comment(toolSource))
+		}
 
 		// Repo mounts_ro
 		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_ro"))

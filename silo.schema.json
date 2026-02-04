@@ -75,7 +75,7 @@
     },
     "repos": {
       "type": "object",
-      "description": "Repository-specific configuration. Each key is a substring to match against git remote URLs. When the current directory is a git repository and any remote URL contains the key as a substring, that configuration is applied.",
+      "description": "Repository-specific configuration. Each key is a substring to match against git remote URLs (prefix matching). When the current directory is a git repository and any remote URL contains the key as a substring, that configuration is applied. Multiple patterns can match the same repo; they are applied in order of specificity (shortest pattern first), so more specific patterns extend or override less specific ones.",
       "additionalProperties": {
         "$ref": "#/$defs/repoConfig"
       },
@@ -83,6 +83,10 @@
         "github.com/myorg": {
           "env": ["ORG_API_KEY"],
           "post_build_hooks": ["npm install -g @myorg/cli"]
+        },
+        "github.com/myorg/specific-repo": {
+          "env": ["REPO_SPECIFIC_VAR"],
+          "pre_run_hooks": ["echo 'Setting up specific-repo'"]
         }
       }]
     }
@@ -132,8 +136,12 @@
     },
     "repoConfig": {
       "type": "object",
-      "description": "Configuration specific to a git repository. Applied when any git remote URL contains the key as a substring.",
+      "description": "Configuration specific to a git repository. Applied when any git remote URL contains the key as a substring. When multiple patterns match, configs are merged in order of specificity (shortest pattern first).",
       "properties": {
+        "tool": {
+          "type": "string",
+          "description": "Tool to use for this repository (e.g., 'claude', 'opencode', 'copilot')."
+        },
         "mounts_ro": {
           "type": "array",
           "items": {
