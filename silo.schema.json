@@ -81,10 +81,12 @@
       },
       "examples": [{
         "github.com/myorg": {
+          "tool": "opencode",
           "env": ["ORG_API_KEY"],
           "post_build_hooks": ["npm install -g @myorg/cli"]
         },
         "github.com/myorg/specific-repo": {
+          "tool": "claude",
           "env": ["REPO_SPECIFIC_VAR"],
           "pre_run_hooks": ["echo 'Setting up specific-repo'"]
         }

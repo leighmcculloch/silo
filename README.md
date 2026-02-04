@@ -502,11 +502,13 @@ Apply configuration automatically based on git remote URLs. When you run silo in
 {
   "repos": {
     "github.com/mycompany": {
+      "tool": "opencode",
       "env": ["COMPANY_API_KEY"],
       "post_build_hooks": ["npm install -g @mycompany/internal-cli"],
       "mounts_ro": ["~/.mycompany-config"]
     },
     "github.com/mycompany/special-repo": {
+      "tool": "claude",
       "env": ["SPECIAL_TOKEN"],
       "pre_run_hooks": ["echo 'Setting up special-repo'"]
     },
@@ -519,6 +521,7 @@ Apply configuration automatically based on git remote URLs. When you run silo in
 ```
 
 This is useful for:
+- Setting a default tool for an organization or specific repository
 - Setting organization-specific API keys or tokens
 - Installing internal tools needed for specific repositories
 - Mounting configuration files only relevant to certain projects
@@ -528,8 +531,8 @@ The pattern matching is substring-based (prefix matching), so `"github.com/myorg
 - `https://github.com/myorg/repo.git`
 
 When multiple patterns match, they are merged in order of specificity (shortest pattern first). In the example above, if you're in `github.com/mycompany/special-repo`:
-1. First `github.com/mycompany` config is applied (COMPANY_API_KEY, post_build_hooks, mounts_ro)
-2. Then `github.com/mycompany/special-repo` config is merged (adds SPECIAL_TOKEN and pre_run_hooks)
+1. First `github.com/mycompany` config is applied (tool=opencode, COMPANY_API_KEY, post_build_hooks, mounts_ro)
+2. Then `github.com/mycompany/special-repo` config is merged (overrides tool=claude, adds SPECIAL_TOKEN and pre_run_hooks)
 
 ## License
 
