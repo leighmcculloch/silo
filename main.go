@@ -1612,7 +1612,8 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 		removed, err := backendClient.Remove(ctx, args)
 		backendClient.Close()
 		if err != nil {
-			return fmt.Errorf("failed to remove containers (%s): %w", backendType, err)
+			cli.LogWarningTo(stderr, "failed to remove containers (%s): %v", backendType, err)
+			continue
 		}
 
 		for _, name := range removed {
