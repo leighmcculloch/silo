@@ -11,18 +11,78 @@ import (
 	"github.com/leighmcculloch/silo/tilde"
 )
 
-// Show outputs the current merged configuration as JSONC with source comments.
-func Show(stdout io.Writer) error {
-	cfg, sources := config.LoadAllWithSources()
+// writer handles JSONC output with optional syntax highlighting and source comments.
+type writer struct {
+	w   io.Writer
+	key func(string) string // renders a JSON key (with optional color)
+	str func(string) string // renders a JSON string value (with optional color)
+	src func(string) string // renders a source comment; nil = no comments
+}
 
-	// Check if stdout is a TTY for color output
+// suffix returns the trailing comma and optional source comment for a value.
+func (w *writer) suffix(source string, comma bool) string {
+	s := ""
+	if comma {
+		s = ","
+	}
+	if w.src != nil {
+		s += " " + w.src(source)
+	}
+	return s
+}
+
+// stringField writes a JSON string field: "key": "value"[, // source]
+func (w *writer) stringField(indent, name, value, source string, comma bool) {
+	fmt.Fprintf(w.w, "%s%s: %s%s\n", indent, w.key(name), w.str(value), w.suffix(source, comma))
+}
+
+// nullableString writes a JSON string field that may be null.
+func (w *writer) nullableString(indent, name, value, source string, comma bool) {
+	if value != "" {
+		w.stringField(indent, name, value, source, comma)
+	} else {
+		fmt.Fprintf(w.w, "%s%s: null%s\n", indent, w.key(name), w.suffix(source, comma))
+	}
+}
+
+// array writes a JSON array field with optional per-element source comments.
+func (w *writer) array(indent, name string, values []string, sources map[string]string, comma bool) {
+	fmt.Fprintf(w.w, "%s%s: [\n", indent, w.key(name))
+	for i, v := range values {
+		src := ""
+		if sources != nil {
+			src = sources[v]
+		}
+		fmt.Fprintf(w.w, "%s  %s%s\n", indent, w.str(v), w.suffix(src, i < len(values)-1))
+	}
+	c := ""
+	if comma {
+		c = ","
+	}
+	fmt.Fprintf(w.w, "%s]%s\n", indent, c)
+}
+
+// openObject writes the opening of a JSON object field.
+func (w *writer) openObject(indent, name string) {
+	fmt.Fprintf(w.w, "%s%s: {\n", indent, w.key(name))
+}
+
+// closeObject writes the closing brace of a JSON object.
+func (w *writer) closeObject(indent string, comma bool) {
+	c := ""
+	if comma {
+		c = ","
+	}
+	fmt.Fprintf(w.w, "%s}%s\n", indent, c)
+}
+
+func newShowWriter(stdout io.Writer) *writer {
 	isTTY := false
 	if f, ok := stdout.(*os.File); ok {
 		stat, _ := f.Stat()
 		isTTY = (stat.Mode() & os.ModeCharDevice) != 0
 	}
 
-	// Color styles for syntax highlighting
 	keyStyle := lipgloss.NewStyle()
 	stringStyle := lipgloss.NewStyle()
 	commentStyle := lipgloss.NewStyle()
@@ -32,271 +92,83 @@ func Show(stdout io.Writer) error {
 		commentStyle = commentStyle.Foreground(lipgloss.Color("8")) // Gray
 	}
 
-	// Helper functions for colored output
-	key := func(k string) string {
-		return keyStyle.Render(fmt.Sprintf("%q", k))
+	return &writer{
+		w:   stdout,
+		key: func(k string) string { return keyStyle.Render(fmt.Sprintf("%q", k)) },
+		str: func(s string) string { return stringStyle.Render(fmt.Sprintf("%q", s)) },
+		src: func(s string) string { return commentStyle.Render("// " + tilde.Path(s)) },
 	}
-	str := func(s string) string {
-		return stringStyle.Render(fmt.Sprintf("%q", s))
-	}
-	comment := func(c string) string {
-		return commentStyle.Render("// " + tilde.Path(c))
-	}
+}
 
-	// Output JSONC with source comments
+func newDefaultWriter(stdout io.Writer) *writer {
+	return &writer{
+		w:   stdout,
+		key: func(k string) string { return fmt.Sprintf("%q", k) },
+		str: func(s string) string { return fmt.Sprintf("%q", s) },
+	}
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+func def(s, fallback string) string {
+	if s == "" {
+		return fallback
+	}
+	return s
+}
+
+// Show outputs the current merged configuration as JSONC with source comments.
+func Show(stdout io.Writer) error {
+	cfg, src := config.LoadAllWithSources()
+	w := newShowWriter(stdout)
+
 	fmt.Fprintln(stdout, "{")
 
-	// Backend
-	backendValue := cfg.Backend
-	if backendValue == "" {
-		backendValue = "docker"
-	}
-	backendSource := sources.Backend
-	if backendSource == "" {
-		backendSource = "default"
-	}
-	fmt.Fprintf(stdout, "  %s: %s, %s\n", key("backend"), str(backendValue), comment(backendSource))
-
-	// Tool
-	toolValue := cfg.Tool
-	if toolValue == "" {
-		toolValue = ""
-	}
-	toolSource := sources.Tool
-	if toolSource == "" {
-		toolSource = "default"
-	}
-	if toolValue != "" {
-		fmt.Fprintf(stdout, "  %s: %s, %s\n", key("tool"), str(toolValue), comment(toolSource))
-	} else {
-		fmt.Fprintf(stdout, "  %s: null, %s\n", key("tool"), comment(toolSource))
-	}
-
-	// MountsRO
-	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_ro"))
-	for i, v := range cfg.MountsRO {
-		comma := ","
-		if i == len(cfg.MountsRO)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.MountsRO[v]))
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// MountsRW
-	fmt.Fprintf(stdout, "  %s: [\n", key("mounts_rw"))
-	for i, v := range cfg.MountsRW {
-		comma := ","
-		if i == len(cfg.MountsRW)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.MountsRW[v]))
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// Env
-	fmt.Fprintf(stdout, "  %s: [\n", key("env"))
-	for i, v := range cfg.Env {
-		comma := ","
-		if i == len(cfg.Env)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.Env[v]))
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// PostBuildHooks
-	fmt.Fprintf(stdout, "  %s: [\n", key("post_build_hooks"))
-	for i, v := range cfg.PostBuildHooks {
-		comma := ","
-		if i == len(cfg.PostBuildHooks)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.PostBuildHooks[v]))
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// PreRunHooks
-	fmt.Fprintf(stdout, "  %s: [\n", key("pre_run_hooks"))
-	for i, v := range cfg.PreRunHooks {
-		comma := ","
-		if i == len(cfg.PreRunHooks)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %s%s %s\n", str(v), comma, comment(sources.PreRunHooks[v]))
-	}
-	fmt.Fprintln(stdout, "  ],")
+	w.stringField("  ", "backend", def(cfg.Backend, "docker"), def(src.Backend, "default"), true)
+	w.nullableString("  ", "tool", cfg.Tool, def(src.Tool, "default"), true)
+	w.array("  ", "mounts_ro", cfg.MountsRO, src.MountsRO, true)
+	w.array("  ", "mounts_rw", cfg.MountsRW, src.MountsRW, true)
+	w.array("  ", "env", cfg.Env, src.Env, true)
+	w.array("  ", "post_build_hooks", cfg.PostBuildHooks, src.PostBuildHooks, true)
+	w.array("  ", "pre_run_hooks", cfg.PreRunHooks, src.PreRunHooks, true)
 
 	// Tools
-	fmt.Fprintf(stdout, "  %s: {\n", key("tools"))
-	toolNames := make([]string, 0, len(cfg.Tools))
-	for name := range cfg.Tools {
-		toolNames = append(toolNames, name)
+	toolNames := sortedKeys(cfg.Tools)
+	w.openObject("  ", "tools")
+	for ti, tn := range toolNames {
+		tc := cfg.Tools[tn]
+		w.openObject("    ", tn)
+		w.array("      ", "mounts_ro", tc.MountsRO, src.ToolMountsRO[tn], true)
+		w.array("      ", "mounts_rw", tc.MountsRW, src.ToolMountsRW[tn], true)
+		w.array("      ", "env", tc.Env, src.ToolEnv[tn], true)
+		w.array("      ", "pre_run_hooks", tc.PreRunHooks, src.ToolPreRunHooks[tn], true)
+		w.array("      ", "post_build_hooks", tc.PostBuildHooks, src.ToolPostBuildHooks[tn], false)
+		w.closeObject("    ", ti < len(toolNames)-1)
 	}
-	slices.Sort(toolNames)
-
-	for ti, toolName := range toolNames {
-		toolCfg := cfg.Tools[toolName]
-		fmt.Fprintf(stdout, "    %s: {\n", key(toolName))
-
-		// Tool mounts_ro
-		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_ro"))
-		for i, v := range toolCfg.MountsRO {
-			comma := ","
-			if i == len(toolCfg.MountsRO)-1 {
-				comma = ""
-			}
-			source := sources.ToolMountsRO[toolName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Tool mounts_rw
-		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_rw"))
-		for i, v := range toolCfg.MountsRW {
-			comma := ","
-			if i == len(toolCfg.MountsRW)-1 {
-				comma = ""
-			}
-			source := sources.ToolMountsRW[toolName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Tool env
-		fmt.Fprintf(stdout, "      %s: [\n", key("env"))
-		for i, v := range toolCfg.Env {
-			comma := ","
-			if i == len(toolCfg.Env)-1 {
-				comma = ""
-			}
-			source := sources.ToolEnv[toolName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Tool pre_run_hooks
-		fmt.Fprintf(stdout, "      %s: [\n", key("pre_run_hooks"))
-		for i, v := range toolCfg.PreRunHooks {
-			comma := ","
-			if i == len(toolCfg.PreRunHooks)-1 {
-				comma = ""
-			}
-			source := sources.ToolPreRunHooks[toolName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Tool post_build_hooks
-		fmt.Fprintf(stdout, "      %s: [\n", key("post_build_hooks"))
-		for i, v := range toolCfg.PostBuildHooks {
-			comma := ","
-			if i == len(toolCfg.PostBuildHooks)-1 {
-				comma = ""
-			}
-			source := sources.ToolPostBuildHooks[toolName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ]")
-
-		toolComma := ","
-		if ti == len(toolNames)-1 {
-			toolComma = ""
-		}
-		fmt.Fprintf(stdout, "    }%s\n", toolComma)
-	}
-	fmt.Fprintln(stdout, "  },")
+	w.closeObject("  ", true)
 
 	// Repos
-	fmt.Fprintf(stdout, "  %s: {\n", key("repos"))
-	repoNames := make([]string, 0, len(cfg.Repos))
-	for name := range cfg.Repos {
-		repoNames = append(repoNames, name)
+	repoNames := sortedKeys(cfg.Repos)
+	w.openObject("  ", "repos")
+	for ri, rn := range repoNames {
+		rc := cfg.Repos[rn]
+		w.openObject("    ", rn)
+		w.nullableString("      ", "tool", rc.Tool, def(src.RepoTool[rn], "default"), true)
+		w.array("      ", "mounts_ro", rc.MountsRO, src.RepoMountsRO[rn], true)
+		w.array("      ", "mounts_rw", rc.MountsRW, src.RepoMountsRW[rn], true)
+		w.array("      ", "env", rc.Env, src.RepoEnv[rn], true)
+		w.array("      ", "pre_run_hooks", rc.PreRunHooks, src.RepoPreRunHooks[rn], true)
+		w.array("      ", "post_build_hooks", rc.PostBuildHooks, src.RepoPostBuildHooks[rn], false)
+		w.closeObject("    ", ri < len(repoNames)-1)
 	}
-	slices.Sort(repoNames)
-
-	for ri, repoName := range repoNames {
-		repoCfg := cfg.Repos[repoName]
-		fmt.Fprintf(stdout, "    %s: {\n", key(repoName))
-
-		// Repo tool
-		toolSource := sources.RepoTool[repoName]
-		if toolSource == "" {
-			toolSource = "default"
-		}
-		if repoCfg.Tool != "" {
-			fmt.Fprintf(stdout, "      %s: %s, %s\n", key("tool"), str(repoCfg.Tool), comment(toolSource))
-		} else {
-			fmt.Fprintf(stdout, "      %s: null, %s\n", key("tool"), comment(toolSource))
-		}
-
-		// Repo mounts_ro
-		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_ro"))
-		for i, v := range repoCfg.MountsRO {
-			comma := ","
-			if i == len(repoCfg.MountsRO)-1 {
-				comma = ""
-			}
-			source := sources.RepoMountsRO[repoName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Repo mounts_rw
-		fmt.Fprintf(stdout, "      %s: [\n", key("mounts_rw"))
-		for i, v := range repoCfg.MountsRW {
-			comma := ","
-			if i == len(repoCfg.MountsRW)-1 {
-				comma = ""
-			}
-			source := sources.RepoMountsRW[repoName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Repo env
-		fmt.Fprintf(stdout, "      %s: [\n", key("env"))
-		for i, v := range repoCfg.Env {
-			comma := ","
-			if i == len(repoCfg.Env)-1 {
-				comma = ""
-			}
-			source := sources.RepoEnv[repoName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Repo pre_run_hooks
-		fmt.Fprintf(stdout, "      %s: [\n", key("pre_run_hooks"))
-		for i, v := range repoCfg.PreRunHooks {
-			comma := ","
-			if i == len(repoCfg.PreRunHooks)-1 {
-				comma = ""
-			}
-			source := sources.RepoPreRunHooks[repoName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		// Repo post_build_hooks
-		fmt.Fprintf(stdout, "      %s: [\n", key("post_build_hooks"))
-		for i, v := range repoCfg.PostBuildHooks {
-			comma := ","
-			if i == len(repoCfg.PostBuildHooks)-1 {
-				comma = ""
-			}
-			source := sources.RepoPostBuildHooks[repoName][v]
-			fmt.Fprintf(stdout, "        %s%s %s\n", str(v), comma, comment(source))
-		}
-		fmt.Fprintln(stdout, "      ]")
-
-		repoComma := ","
-		if ri == len(repoNames)-1 {
-			repoComma = ""
-		}
-		fmt.Fprintf(stdout, "    }%s\n", repoComma)
-	}
-	fmt.Fprintln(stdout, "  }")
+	w.closeObject("  ", false)
 
 	fmt.Fprintln(stdout, "}")
 	return nil
@@ -305,137 +177,33 @@ func Show(stdout io.Writer) error {
 // Default outputs the default configuration as JSON.
 func Default(stdout io.Writer) error {
 	cfg := config.DefaultConfig()
+	w := newDefaultWriter(stdout)
 
-	// Output as JSON
 	fmt.Fprintln(stdout, "{")
 
-	// MountsRO
-	fmt.Fprintln(stdout, "  \"mounts_ro\": [")
-	for i, v := range cfg.MountsRO {
-		comma := ","
-		if i == len(cfg.MountsRO)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// MountsRW
-	fmt.Fprintln(stdout, "  \"mounts_rw\": [")
-	for i, v := range cfg.MountsRW {
-		comma := ","
-		if i == len(cfg.MountsRW)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// Env
-	fmt.Fprintln(stdout, "  \"env\": [")
-	for i, v := range cfg.Env {
-		comma := ","
-		if i == len(cfg.Env)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// PostBuildHooks
-	fmt.Fprintln(stdout, "  \"post_build_hooks\": [")
-	for i, v := range cfg.PostBuildHooks {
-		comma := ","
-		if i == len(cfg.PostBuildHooks)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
-	}
-	fmt.Fprintln(stdout, "  ],")
-
-	// PreRunHooks
-	fmt.Fprintln(stdout, "  \"pre_run_hooks\": [")
-	for i, v := range cfg.PreRunHooks {
-		comma := ","
-		if i == len(cfg.PreRunHooks)-1 {
-			comma = ""
-		}
-		fmt.Fprintf(stdout, "    %q%s\n", v, comma)
-	}
-	fmt.Fprintln(stdout, "  ],")
+	w.array("  ", "mounts_ro", cfg.MountsRO, nil, true)
+	w.array("  ", "mounts_rw", cfg.MountsRW, nil, true)
+	w.array("  ", "env", cfg.Env, nil, true)
+	w.array("  ", "post_build_hooks", cfg.PostBuildHooks, nil, true)
+	w.array("  ", "pre_run_hooks", cfg.PreRunHooks, nil, true)
 
 	// Tools
-	fmt.Fprintln(stdout, "  \"tools\": {")
-	toolNames := make([]string, 0, len(cfg.Tools))
-	for name := range cfg.Tools {
-		toolNames = append(toolNames, name)
+	toolNames := sortedKeys(cfg.Tools)
+	w.openObject("  ", "tools")
+	for ti, tn := range toolNames {
+		tc := cfg.Tools[tn]
+		w.openObject("    ", tn)
+		w.array("      ", "mounts_ro", tc.MountsRO, nil, true)
+		w.array("      ", "mounts_rw", tc.MountsRW, nil, true)
+		w.array("      ", "env", tc.Env, nil, true)
+		w.array("      ", "pre_run_hooks", tc.PreRunHooks, nil, true)
+		w.array("      ", "post_build_hooks", tc.PostBuildHooks, nil, false)
+		w.closeObject("    ", ti < len(toolNames)-1)
 	}
-	slices.Sort(toolNames)
-
-	for ti, toolName := range toolNames {
-		toolCfg := cfg.Tools[toolName]
-		fmt.Fprintf(stdout, "    %q: {\n", toolName)
-
-		fmt.Fprintln(stdout, "      \"mounts_ro\": [")
-		for i, v := range toolCfg.MountsRO {
-			comma := ","
-			if i == len(toolCfg.MountsRO)-1 {
-				comma = ""
-			}
-			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		fmt.Fprintln(stdout, "      \"mounts_rw\": [")
-		for i, v := range toolCfg.MountsRW {
-			comma := ","
-			if i == len(toolCfg.MountsRW)-1 {
-				comma = ""
-			}
-			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		fmt.Fprintln(stdout, "      \"env\": [")
-		for i, v := range toolCfg.Env {
-			comma := ","
-			if i == len(toolCfg.Env)-1 {
-				comma = ""
-			}
-			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		fmt.Fprintln(stdout, "      \"pre_run_hooks\": [")
-		for i, v := range toolCfg.PreRunHooks {
-			comma := ","
-			if i == len(toolCfg.PreRunHooks)-1 {
-				comma = ""
-			}
-			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
-		}
-		fmt.Fprintln(stdout, "      ],")
-
-		fmt.Fprintln(stdout, "      \"post_build_hooks\": [")
-		for i, v := range toolCfg.PostBuildHooks {
-			comma := ","
-			if i == len(toolCfg.PostBuildHooks)-1 {
-				comma = ""
-			}
-			fmt.Fprintf(stdout, "        %q%s\n", v, comma)
-		}
-		fmt.Fprintln(stdout, "      ]")
-
-		toolComma := ","
-		if ti == len(toolNames)-1 {
-			toolComma = ""
-		}
-		fmt.Fprintf(stdout, "    }%s\n", toolComma)
-	}
-	fmt.Fprintln(stdout, "  },")
+	w.closeObject("  ", true)
 
 	// Repos (empty by default)
-	fmt.Fprintln(stdout, "  \"repos\": {}")
+	fmt.Fprintf(stdout, "  %s: {}\n", w.key("repos"))
 
 	fmt.Fprintln(stdout, "}")
 	return nil

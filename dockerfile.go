@@ -8,6 +8,9 @@ import (
 //go:embed Dockerfile
 var dockerfile string
 
+//go:embed silo.jsonc.example
+var sampleConfig string
+
 // Dockerfile returns the embedded Dockerfile content
 func Dockerfile() string {
 	return dockerfile

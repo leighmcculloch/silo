@@ -27,36 +27,6 @@ var (
 	version = "dev"
 )
 
-const sampleConfig = `{
-  "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
-  // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
-  // "backend": "docker",
-  // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)
-  // "tool": "claude",
-  // Read-only directories or files to mount into the container
-  // "mounts_ro": [],
-  // Read-write directories or files to mount into the container
-  // "mounts_rw": [],
-  // Environment variables: names without '=' pass through from host,
-  // names with '=' set explicitly (e.g., "FOO=bar")
-  // "env": [],
-  // Shell commands to run inside the container after building the image
-  // "post_build_hooks": [],
-  // Shell commands to run inside the container before the tool
-  // "pre_run_hooks": [],
-  // Tool-specific configuration (merged with global config above)
-  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  // "tools": {},
-  // Repository-specific configuration (applied when git remote URL contains the key).
-  // Multiple patterns can match; they are merged in order of specificity (shortest first).
-  // Example: "repos": {
-  //   "github.com/myorg": { "env": ["ORG_API_KEY"] },
-  //   "github.com/myorg/specific-repo": { "post_build_hooks": ["npm install -g @myorg/cli"] }
-  // }
-  // "repos": {}
-}
-`
-
 func main() {
 	os.Exit(runMain(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }
