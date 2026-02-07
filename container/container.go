@@ -559,12 +559,12 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	return removed, nil
 }
 
-// resourceArgs returns CLI flags for --cpus (all CPUs) and --memory (1/6 system RAM).
+// resourceArgs returns CLI flags for --cpus (all CPUs) and --memory (40% system RAM).
 func resourceArgs() []string {
 	cpus := runtime.NumCPU()
 	var memMB uint64
 	if memBytes, err := unix.SysctlUint64("hw.memsize"); err == nil {
-		memMB = memBytes / 6 / (1024 * 1024) // sixth, in MiB
+		memMB = memBytes * 2 / 5 / (1024 * 1024) // 40%, in MiB
 	}
 	args := []string{"-c", fmt.Sprintf("%d", cpus)}
 	if memMB > 0 {
