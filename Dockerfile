@@ -20,7 +20,6 @@ RUN apt-get update && apt-get install -y \
     jq \
     ncurses-base \
     zsh \
-    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE (for container backend which runs in a VM)
@@ -41,76 +40,6 @@ RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/${USER} \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt" >> /etc/sudoers.d/${USER} \
     && chmod 0440 /etc/sudoers.d/${USER}
-
-# Configure tmux for use inside silo (e.g. Claude Code agent teams).
-# Default prefix: Ctrl+Space. Override with SILO_TMUX_PREFIX env var.
-# Lives in /etc/tmux.conf so ~/.tmux.conf mounts naturally override/extend it.
-# The session-created hook applies the env var prefix after all configs are loaded.
-RUN cat > /etc/tmux.conf << 'TMUXEOF'
-# Prefix: Ctrl+Space (override with SILO_TMUX_PREFIX env var)
-unbind C-b
-set -g prefix C-Space
-bind C-Space send-prefix
-
-# Terminal
-set -g default-terminal "xterm-256color"
-set -ga terminal-overrides ",xterm-256color:Tc"
-
-# General
-set -g mouse on
-set -g history-limit 50000
-set -g base-index 1
-setw -g pane-base-index 1
-set -g renumber-windows on
-set -s escape-time 0
-set -g focus-events on
-
-# Vi mode
-setw -g mode-keys vi
-bind -T copy-mode-vi v send -X begin-selection
-bind -T copy-mode-vi y send -X copy-selection-and-cancel
-
-# Pane navigation (vim keys)
-bind h select-pane -L
-bind j select-pane -D
-bind k select-pane -U
-bind l select-pane -R
-
-# Pane splitting
-bind | split-window -h -c "#{pane_current_path}"
-bind - split-window -v -c "#{pane_current_path}"
-
-# Pane resizing
-bind -r H resize-pane -L 5
-bind -r J resize-pane -D 5
-bind -r K resize-pane -U 5
-bind -r L resize-pane -R 5
-
-# Status bar - minimal dark theme
-set -g status-position bottom
-set -g status-style "bg=#1a1b26,fg=#a9b1d6"
-set -g status-left-length 30
-set -g status-right-length 50
-set -g status-left "#[fg=#1a1b26,bg=#7aa2f7,bold] #S #[fg=#7aa2f7,bg=#1a1b26] "
-set -g status-right "#[fg=#565f89] %H:%M "
-set -g status-justify centre
-
-# Window status
-setw -g window-status-format "#[fg=#565f89] #I:#W "
-setw -g window-status-current-format "#[fg=#7aa2f7,bold] #I:#W "
-setw -g window-status-separator ""
-
-# Pane borders
-set -g pane-border-style "fg=#3b4261"
-set -g pane-active-border-style "fg=#7aa2f7"
-
-# Messages
-set -g message-style "bg=#1a1b26,fg=#7aa2f7"
-set -g message-command-style "bg=#1a1b26,fg=#7aa2f7"
-
-# Apply SILO_TMUX_PREFIX env var override after all configs (including ~/.tmux.conf) are loaded
-set-hook -g session-created 'run-shell "test -n \"$SILO_TMUX_PREFIX\" && tmux set -g prefix \"$SILO_TMUX_PREFIX\" && tmux bind \"$SILO_TMUX_PREFIX\" send-prefix || true"'
-TMUXEOF
 
 # Set up environment
 ENV PATH="${HOME}/.local/bin:${PATH}"
@@ -179,7 +108,6 @@ ARG HOME
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
 ENV PATH="${HOME}/.claude/bin:${PATH}"
-ENV CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
 # SILO_POST_BUILD_HOOKS_CLAUDE
 
