@@ -42,48 +42,12 @@ RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt" >> /etc/sudoers.d/${USER} \
     && chmod 0440 /etc/sudoers.d/${USER}
 
-# Set up environment
-ENV PATH="${HOME}/.local/bin:${PATH}"
-USER ${USER}
-WORKDIR ${HOME}
-
-# Install Go
-ENV GOPATH="${HOME}/go"
-ENV GOROOT="${HOME}/.local/go"
-ENV PATH="${HOME}/.local/go/bin:${HOME}/go/bin:${PATH}"
-RUN mkdir -p ${HOME}/.local \
-    && ARCH=$(dpkg --print-architecture) \
-    && GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//') \
-    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz \
-    && go install golang.org/x/tools/gopls@latest
-
-# Install Node.js and npm
-ENV PATH="${HOME}/.local/node/bin:${PATH}"
-RUN ARCH=$(dpkg --print-architecture) \
-    && NODE_VERSION=$(curl -fsSL https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
-    && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${ARCH} ${HOME}/.local/node
-
-# Install Rust (stable + nightly) with wasm32v1-none target and rust-analyzer
-ENV PATH="${HOME}/.cargo/bin:${PATH}"
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
-    && . ${HOME}/.cargo/env \
-    && rustup toolchain install stable \
-    && rustup target add wasm32v1-none --toolchain stable \
-    && rustup component add rust-analyzer
-
-# Install GitHub CLI
-RUN ARCH=$(dpkg --print-architecture) \
-    && GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
-
-# Install MCP servers
-RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
-
 # Configure tmux for use inside silo (e.g. Claude Code agent teams).
-# Uses Ctrl+Space as prefix to avoid conflicts with host tmux (typically Ctrl+A or Ctrl+B).
-RUN cat > ${HOME}/.tmux.conf << 'TMUXEOF'
-# Prefix: Ctrl+Space (no conflict with host tmux Ctrl+A or Ctrl+B)
+# Default prefix: Ctrl+Space. Override with SILO_TMUX_PREFIX env var.
+# Lives in /etc/tmux.conf so ~/.tmux.conf mounts naturally override/extend it.
+# The session-created hook applies the env var prefix after all configs are loaded.
+RUN cat > /etc/tmux.conf << 'TMUXEOF'
+# Prefix: Ctrl+Space (override with SILO_TMUX_PREFIX env var)
 unbind C-b
 set -g prefix C-Space
 bind C-Space send-prefix
@@ -143,7 +107,48 @@ set -g pane-active-border-style "fg=#7aa2f7"
 # Messages
 set -g message-style "bg=#1a1b26,fg=#7aa2f7"
 set -g message-command-style "bg=#1a1b26,fg=#7aa2f7"
+
+# Apply SILO_TMUX_PREFIX env var override after all configs (including ~/.tmux.conf) are loaded
+set-hook -g session-created 'run-shell "test -n \"$SILO_TMUX_PREFIX\" && tmux set -g prefix \"$SILO_TMUX_PREFIX\" && tmux bind \"$SILO_TMUX_PREFIX\" send-prefix || true"'
 TMUXEOF
+
+# Set up environment
+ENV PATH="${HOME}/.local/bin:${PATH}"
+USER ${USER}
+WORKDIR ${HOME}
+
+# Install Go
+ENV GOPATH="${HOME}/go"
+ENV GOROOT="${HOME}/.local/go"
+ENV PATH="${HOME}/.local/go/bin:${HOME}/go/bin:${PATH}"
+RUN mkdir -p ${HOME}/.local \
+    && ARCH=$(dpkg --print-architecture) \
+    && GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//') \
+    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz \
+    && go install golang.org/x/tools/gopls@latest
+
+# Install Node.js and npm
+ENV PATH="${HOME}/.local/node/bin:${PATH}"
+RUN ARCH=$(dpkg --print-architecture) \
+    && NODE_VERSION=$(curl -fsSL https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
+    && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${ARCH} ${HOME}/.local/node
+
+# Install Rust (stable + nightly) with wasm32v1-none target and rust-analyzer
+ENV PATH="${HOME}/.cargo/bin:${PATH}"
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && . ${HOME}/.cargo/env \
+    && rustup toolchain install stable \
+    && rustup target add wasm32v1-none --toolchain stable \
+    && rustup component add rust-analyzer
+
+# Install GitHub CLI
+RUN ARCH=$(dpkg --print-architecture) \
+    && GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
+
+# Install MCP servers
+RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
 
 # SILO_POST_BUILD_HOOKS
 
