@@ -185,7 +185,7 @@ func Tool(opts Options) error {
 
 	// Define tool-specific commands
 	toolCommands := map[string][]string{
-		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
+		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions", "--teammate-mode", "tmux"},
 		"opencode": {"opencode"},
 		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
 	}
