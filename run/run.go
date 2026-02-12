@@ -20,6 +20,7 @@ import (
 	"github.com/leighmcculloch/silo/docker"
 	"github.com/leighmcculloch/silo/mountwait"
 	"github.com/leighmcculloch/silo/tilde"
+	"github.com/leighmcculloch/silo/toolversion"
 )
 
 // Options configures a tool run.
@@ -94,6 +95,9 @@ func Tool(opts Options) error {
 	}
 	defer backendClient.Close()
 
+	// Start async version fetch (updates cache for this or next run)
+	go toolversion.FetchAndCache(ctx, tool)
+
 	// Get current user info
 	home := os.Getenv("HOME")
 	user := os.Getenv("USER")
@@ -125,6 +129,14 @@ func Tool(opts Options) error {
 		"USER": user,
 		"UID":  fmt.Sprintf("%d", uid),
 	}
+
+	// Read cached tool version for cache-busting
+	toolVersion := toolversion.ReadCached(tool)
+	if toolVersion != "" {
+		logSection("Tool version (cached): %s", toolVersion)
+		buildArgs["CACHE_BUST"] = toolVersion
+	}
+
 	imageTag := buildImageTag(tool, dockerfile, buildArgs)
 
 	// Build or use cached image

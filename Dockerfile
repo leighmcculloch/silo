@@ -104,6 +104,7 @@ ENV OPENCODE_EXPERIMENTAL=true
 FROM base AS claude
 
 ARG HOME
+ARG CACHE_BUST
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
