@@ -19,8 +19,12 @@ Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot
 ## Quick Start
 
 ```bash
-# Install
-go install github.com/leighmcculloch/silo@latest
+# Install (or: go install github.com/leighmcculloch/silo@latest)
+brew tap leighmcculloch/silo
+brew install --HEAD silo
+
+# Upgrade
+brew upgrade --fetch-head silo
 
 # Run (interactive tool selection)
 silo
@@ -50,6 +54,15 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 
 ## Installation
+
+### Homebrew
+
+```
+brew tap leighmcculloch/silo
+brew install --HEAD silo
+```
+
+### Go
 
 ```bash
 go install github.com/leighmcculloch/silo@latest
@@ -358,6 +371,12 @@ This means:
 - Images are only rebuilt when something changes
 - Multiple users with the same setup share cached images
 - Different tools have separate images
+
+### Auto-rebuild on Tool Updates
+
+Silo automatically detects when a new version of Claude Code is available and triggers a rebuild. On each run, a background fetch checks the latest version and caches it to disk. The cached version is included in the image hash, so when a new release is published the image tag changes and a rebuild is triggered on the next run.
+
+This adds zero latency — the version fetch happens asynchronously and the cached value from the previous run is used. New versions are picked up on the run after they are detected. Use `--force-build` to force a rebuild at any time.
 
 ### Container Naming
 
