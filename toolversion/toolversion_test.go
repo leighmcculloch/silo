@@ -26,13 +26,9 @@ func TestFetchAndCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	orig := versionURLs["claude"]
-	versionURLs["claude"] = srv.URL
-	defer func() { versionURLs["claude"] = orig }()
-
 	overrideCachePath(t)
 
-	FetchAndCache(context.Background(), "claude")
+	FetchAndCache(context.Background(), "claude", srv.URL)
 
 	got := ReadCached("claude")
 	if got != "1.2.3" {
@@ -55,16 +51,12 @@ func TestFetchAndCacheNetworkFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	orig := versionURLs["claude"]
-	versionURLs["claude"] = srv.URL
-	defer func() { versionURLs["claude"] = orig }()
-
 	tmp := overrideCachePath(t)
 
 	// Pre-populate cache
 	os.WriteFile(filepath.Join(tmp, "claude"), []byte("1.0.0"), 0o644)
 
-	FetchAndCache(context.Background(), "claude")
+	FetchAndCache(context.Background(), "claude", srv.URL)
 
 	// Existing cache should not be overwritten on failure
 	got := ReadCached("claude")
@@ -73,13 +65,13 @@ func TestFetchAndCacheNetworkFailure(t *testing.T) {
 	}
 }
 
-func TestFetchAndCacheUnsupportedTool(t *testing.T) {
+func TestFetchAndCacheEmptyURL(t *testing.T) {
 	overrideCachePath(t)
 
-	FetchAndCache(context.Background(), "unsupported-tool")
+	FetchAndCache(context.Background(), "unsupported-tool", "")
 
 	got := ReadCached("unsupported-tool")
 	if got != "" {
-		t.Errorf("ReadCached = %q, want empty string for unsupported tool", got)
+		t.Errorf("ReadCached = %q, want empty string for tool with no version URL", got)
 	}
 }

@@ -9,7 +9,12 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
-	cfg := DefaultConfig()
+	toolDefaults := map[string]ToolConfig{
+		"claude":   {MountsRW: []string{"~/.claude.json", "~/.claude"}},
+		"opencode": {MountsRW: []string{"~/.config/opencode"}},
+		"copilot":  {MountsRW: []string{"~/.config/.copilot"}},
+	}
+	cfg := DefaultConfig(toolDefaults)
 
 	if _, ok := cfg.Tools["claude"]; !ok {
 		t.Error("expected claude tool config to exist")
@@ -309,7 +314,7 @@ func TestLoadAll(t *testing.T) {
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
 	xdg.Reload()
 
-	cfg := LoadAll()
+	cfg := LoadAll(nil)
 
 	// Check that both global and local mounts are present
 	hasGlobal := false

@@ -125,8 +125,8 @@ func def(s, fallback string) string {
 }
 
 // Show outputs the current merged configuration as JSONC with source comments.
-func Show(stdout io.Writer) error {
-	cfg, src := config.LoadAllWithSources()
+func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
+	cfg, src := config.LoadAllWithSources(toolDefaults)
 	w := newShowWriter(stdout)
 
 	fmt.Fprintln(stdout, "{")
@@ -175,8 +175,8 @@ func Show(stdout io.Writer) error {
 }
 
 // Default outputs the default configuration as JSON.
-func Default(stdout io.Writer) error {
-	cfg := config.DefaultConfig()
+func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
+	cfg := config.DefaultConfig(toolDefaults)
 	w := newDefaultWriter(stdout)
 
 	fmt.Fprintln(stdout, "{")

@@ -6,7 +6,7 @@ import (
 )
 
 func TestDockerfile(t *testing.T) {
-	df := Dockerfile()
+	df := Dockerfile(supportedTools)
 
 	if df == "" {
 		t.Error("expected dockerfile to not be empty")
@@ -45,7 +45,7 @@ func TestDockerfile(t *testing.T) {
 }
 
 func TestAvailableTools(t *testing.T) {
-	tools := AvailableTools()
+	tools := AvailableTools(supportedTools)
 
 	if len(tools) == 0 {
 		t.Fatal("expected at least one tool")
@@ -82,7 +82,7 @@ func TestToolDescription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.tool, func(t *testing.T) {
-			desc := ToolDescription(tt.tool)
+			desc := ToolDescription(supportedTools, tt.tool)
 			if !strings.Contains(desc, tt.contains) {
 				t.Errorf("expected description for %s to contain %q, got %q", tt.tool, tt.contains, desc)
 			}

@@ -12,17 +12,11 @@ import (
 	"github.com/adrg/xdg"
 )
 
-// versionURLs maps tool names to the URL that returns the latest version as
-// plain text. Exported as a var so tests can override it.
-var versionURLs = map[string]string{
-	"claude": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
-}
-
-// FetchAndCache fetches the latest version for tool and writes it to the cache
-// file. Intended to be called from a goroutine. Errors are silently ignored.
-func FetchAndCache(ctx context.Context, tool string) {
-	url, ok := versionURLs[tool]
-	if !ok {
+// FetchAndCache fetches the latest version for tool from url and writes it to
+// the cache file. Intended to be called from a goroutine. Errors are silently
+// ignored. If url is empty the call is a no-op.
+func FetchAndCache(ctx context.Context, tool, url string) {
+	if url == "" {
 		return
 	}
 

@@ -29,7 +29,9 @@ type Options struct {
 	Tool       string
 	ToolArgs   []string
 	Config     config.Config
-	Dockerfile string // raw Dockerfile template (before hook injection)
+	Dockerfile string                     // raw Dockerfile template (before hook injection)
+	Command    func(home string) []string // container entrypoint + args
+	VersionURL string                     // optional latest-version URL for cache-busting
 	ForceBuild bool
 	Verbose    bool
 	Stdout     io.Writer
@@ -97,7 +99,7 @@ func Tool(opts Options) error {
 	defer backendClient.Close()
 
 	// Start async version fetch (updates cache for this or next run)
-	go toolversion.FetchAndCache(ctx, tool)
+	go toolversion.FetchAndCache(ctx, tool, opts.VersionURL)
 
 	// Get current user info
 	home := os.Getenv("HOME")
@@ -196,13 +198,6 @@ func Tool(opts Options) error {
 	// Prepare pre-run hooks
 	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW, opts.Verbose)
 
-	// Define tool-specific commands
-	toolCommands := map[string][]string{
-		"claude":   {"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"},
-		"opencode": {"opencode"},
-		"copilot":  {"copilot", "--allow-all", "--disable-builtin-mcps"},
-	}
-
 	if progress != nil {
 		progress.SetSection("Running")
 	}
@@ -221,7 +216,7 @@ func Tool(opts Options) error {
 		MountsRO:    mountsRO,
 		MountsRW:    mountsRW,
 		Env:         envVars,
-		Command:     toolCommands[tool],
+		Command:     opts.Command(home),
 		Args:        opts.ToolArgs,
 		PreRunHooks: preRunHooks,
 	})

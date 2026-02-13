@@ -20,12 +20,40 @@ import (
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
 	"github.com/leighmcculloch/silo/run"
+	"github.com/leighmcculloch/silo/tools"
+	"github.com/leighmcculloch/silo/tools/claudecode"
+	"github.com/leighmcculloch/silo/tools/copilotcli"
+	"github.com/leighmcculloch/silo/tools/opencode"
 	"github.com/spf13/cobra"
 )
 
 var (
 	version = "dev"
+
+	// supportedTools is the single source of truth for which tools silo
+	// supports. To add a tool: create tools/<name>/, define its Tool, and
+	// add it here. To remove a tool: delete from this slice.
+	supportedTools = []tools.Tool{
+		claudecode.Tool,
+		opencode.Tool,
+		copilotcli.Tool,
+	}
 )
+
+// toolDefaults returns the default ToolConfig map derived from supportedTools.
+func toolDefaults() map[string]config.ToolConfig {
+	return tools.DefaultToolConfigs(supportedTools)
+}
+
+// findTool returns the Tool definition for the given name, or nil if not found.
+func findTool(name string) *tools.Tool {
+	for i := range supportedTools {
+		if supportedTools[i].Name == name {
+			return &supportedTools[i]
+		}
+	}
+	return nil
+}
 
 func main() {
 	os.Exit(runMain(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
@@ -103,7 +131,7 @@ Configuration is loaded from (in order, merged):
 		Use:   "show",
 		Short: "Show the current merged configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return configshow.Show(stdout)
+			return configshow.Show(stdout, toolDefaults())
 		},
 	}
 
@@ -127,7 +155,7 @@ Configuration is loaded from (in order, merged):
 		Use:   "default",
 		Short: "Show the default configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return configshow.Default(stdout)
+			return configshow.Default(stdout, toolDefaults())
 		},
 	}
 
@@ -189,11 +217,11 @@ func completeTools(cmd *cobra.Command, args []string, toComplete string) ([]stri
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	tools := AvailableTools()
+	names := AvailableTools(supportedTools)
 	var completions []string
-	for _, t := range tools {
+	for _, t := range names {
 		if strings.HasPrefix(t, toComplete) {
-			completions = append(completions, fmt.Sprintf("%s\t%s", t, ToolDescription(t)))
+			completions = append(completions, fmt.Sprintf("%s\t%s", t, ToolDescription(supportedTools, t)))
 		}
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
@@ -210,7 +238,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	}
 
 	// Load configuration
-	cfg := config.LoadAll()
+	cfg := config.LoadAll(toolDefaults())
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
@@ -241,9 +269,15 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	}
 
 	// Validate tool
-	validTools := AvailableTools()
+	validTools := AvailableTools(supportedTools)
 	if !slices.Contains(validTools, tool) {
 		return fmt.Errorf("invalid tool: %s (valid tools: %s)", tool, strings.Join(validTools, ", "))
+	}
+
+	// Find tool definition
+	toolDef := findTool(tool)
+	if toolDef == nil {
+		return fmt.Errorf("tool definition not found: %s", tool)
 	}
 
 	// Get tool-specific args (everything after --)
@@ -268,7 +302,9 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		Tool:       tool,
 		ToolArgs:   toolArgs,
 		Config:     cfg,
-		Dockerfile: Dockerfile(),
+		Dockerfile: Dockerfile(supportedTools),
+		Command:    toolDef.Command,
+		VersionURL: toolDef.VersionURL,
 		ForceBuild: forceBuild,
 		Verbose:    verbose,
 		Stdout:     stdout,
@@ -277,11 +313,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 }
 
 func selectTool() (string, error) {
-	tools := AvailableTools()
+	names := AvailableTools(supportedTools)
 
 	var options []huh.Option[string]
-	for _, t := range tools {
-		options = append(options, huh.NewOption(ToolDescription(t), t))
+	for _, t := range names {
+		options = append(options, huh.NewOption(ToolDescription(supportedTools, t), t))
 	}
 
 	var selected string

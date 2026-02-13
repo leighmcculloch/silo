@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/adrg/xdg"
-	"github.com/leighmcculloch/silo/tilde"
 	"github.com/tidwall/jsonc"
 )
 
@@ -114,46 +113,21 @@ type ConfigPath struct {
 	Exists bool
 }
 
-// DefaultConfig returns the default configuration
-func DefaultConfig() Config {
+// DefaultConfig returns the default configuration. toolDefaults supplies
+// per-tool default configs (mounts, env, hooks) so the config package does
+// not need to know about individual tools.
+func DefaultConfig(toolDefaults map[string]ToolConfig) Config {
+	tools := make(map[string]ToolConfig, len(toolDefaults))
+	for k, v := range toolDefaults {
+		tools[k] = v
+	}
 	return Config{
 		MountsRO:       []string{},
 		MountsRW:       []string{},
 		Env:            []string{},
 		PreRunHooks:    []string{},
 		PostBuildHooks: []string{},
-		Tools: map[string]ToolConfig{
-			"claude": {
-				MountsRW: []string{
-					"~/.claude.json",
-					"~/.claude",
-				},
-			},
-			"opencode": {
-				MountsRW: []string{
-					tilde.Path(filepath.Join(xdgConfigHome(), "opencode")),
-					tilde.Path(filepath.Join(xdgDataHome(), "opencode")),
-					tilde.Path(filepath.Join(xdgStateHome(), "opencode")),
-				},
-				MountsRO: []string{
-					"~/.claude",
-				},
-				Env: []string{
-					"OPENCODE_DISABLE_DEFAULT_PLUGINS=1",
-				},
-			},
-			"copilot": {
-				MountsRW: []string{
-					tilde.Path(filepath.Join(xdgConfigHome(), ".copilot")),
-				},
-				MountsRO: []string{
-					"~/.claude",
-				},
-				Env: []string{
-					"COPILOT_GITHUB_TOKEN",
-				},
-			},
-		},
+		Tools:          tools,
 	}
 }
 
@@ -295,14 +269,14 @@ func GetConfigPaths() []ConfigPath {
 
 // LoadAll loads and merges all configuration files from XDG config home and current/parent directories.
 // Missing or invalid config files are silently ignored - only defaults and valid configs are merged.
-func LoadAll() Config {
-	cfg, _ := LoadAllWithSources()
+func LoadAll(toolDefaults map[string]ToolConfig) Config {
+	cfg, _ := LoadAllWithSources(toolDefaults)
 	return cfg
 }
 
 // LoadAllWithSources loads and merges all configs, tracking the source of each value
-func LoadAllWithSources() (Config, *SourceInfo) {
-	cfg := DefaultConfig()
+func LoadAllWithSources(toolDefaults map[string]ToolConfig) (Config, *SourceInfo) {
+	cfg := DefaultConfig(toolDefaults)
 	sources := NewSourceInfo()
 
 	// Track defaults
@@ -439,24 +413,24 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	}
 }
 
-// xdgConfigHome returns XDG_CONFIG_HOME or the default ~/.config
-func xdgConfigHome() string {
+// XDGConfigHomeDir returns XDG_CONFIG_HOME or the default ~/.config
+func XDGConfigHomeDir() string {
 	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
 		return v
 	}
 	return filepath.Join(xdg.Home, ".config")
 }
 
-// xdgDataHome returns XDG_DATA_HOME or the default ~/.local/share
-func xdgDataHome() string {
+// XDGDataHomeDir returns XDG_DATA_HOME or the default ~/.local/share
+func XDGDataHomeDir() string {
 	if v := os.Getenv("XDG_DATA_HOME"); v != "" {
 		return v
 	}
 	return filepath.Join(xdg.Home, ".local", "share")
 }
 
-// xdgStateHome returns XDG_STATE_HOME or the default ~/.local/state
-func xdgStateHome() string {
+// XDGStateHomeDir returns XDG_STATE_HOME or the default ~/.local/state
+func XDGStateHomeDir() string {
 	if v := os.Getenv("XDG_STATE_HOME"); v != "" {
 		return v
 	}
