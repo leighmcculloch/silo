@@ -3,7 +3,7 @@ package docker
 import (
 	"testing"
 
-	"github.com/leighmcculloch/silo/backend"
+	"github.com/leighmcculloch/silo/backend" // parent package
 )
 
 func TestBuildOptions(t *testing.T) {

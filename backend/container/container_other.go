@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/leighmcculloch/silo/backend"
+	"github.com/leighmcculloch/silo/backend" // parent package
 )
 
 // Client is a stub for non-Darwin platforms.

@@ -14,11 +14,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
 	"github.com/leighmcculloch/silo/backend"
+	applecontainer "github.com/leighmcculloch/silo/backend/container"
+	"github.com/leighmcculloch/silo/backend/docker"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
-	applecontainer "github.com/leighmcculloch/silo/container"
-	"github.com/leighmcculloch/silo/docker"
 	"github.com/leighmcculloch/silo/run"
 	"github.com/spf13/cobra"
 )

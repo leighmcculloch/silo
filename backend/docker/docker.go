@@ -20,7 +20,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/kballard/go-shellquote"
-	"github.com/leighmcculloch/silo/backend"
+	"github.com/leighmcculloch/silo/backend" // parent package
 	"github.com/moby/term"
 )
 

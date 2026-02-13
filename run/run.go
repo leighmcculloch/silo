@@ -14,10 +14,11 @@ import (
 	"syscall"
 
 	"github.com/leighmcculloch/silo/backend"
+	applecontainer "github.com/leighmcculloch/silo/backend/container"
+	"github.com/leighmcculloch/silo/backend/docker"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
-	applecontainer "github.com/leighmcculloch/silo/container"
-	"github.com/leighmcculloch/silo/docker"
+	"github.com/leighmcculloch/silo/git"
 	"github.com/leighmcculloch/silo/mountwait"
 	"github.com/leighmcculloch/silo/tilde"
 	"github.com/leighmcculloch/silo/toolversion"
@@ -235,7 +236,7 @@ func Tool(opts Options) error {
 // GetMatchingRepoConfigs returns repo configs that match any of the git remote URLs,
 // sorted by pattern length (shortest first) so more specific configs are applied last.
 func GetMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
-	remoteURLs := backend.GetGitRemoteURLs(cwd)
+	remoteURLs := git.GetGitRemoteURLs(cwd)
 	if len(remoteURLs) == 0 {
 		return nil
 	}
@@ -272,7 +273,7 @@ func GetMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
 // getMatchingRepoNames returns repo config keys that match any of the git remote URLs,
 // sorted by pattern length (shortest first) so more specific configs are applied last.
 func getMatchingRepoNames(cfg config.Config, cwd string) []string {
-	remoteURLs := backend.GetGitRemoteURLs(cwd)
+	remoteURLs := git.GetGitRemoteURLs(cwd)
 	if len(remoteURLs) == 0 {
 		return nil
 	}
@@ -381,7 +382,7 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 	}
 
 	// Add git worktree roots (read-write for git operations)
-	worktreeRoots, _ := backend.GetGitWorktreeRoots(cwd)
+	worktreeRoots, _ := git.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
 	return mountsRO, mountsRW
@@ -502,7 +503,7 @@ type envLogInfo struct {
 // collectEnvVars gathers environment variables from config and host.
 func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []string, log envLogInfo) {
 	// Get git identity
-	gitName, gitEmail := backend.GetGitIdentity()
+	gitName, gitEmail := git.GetGitIdentity()
 	if gitName != "" {
 		envVars = append(envVars,
 			"GIT_AUTHOR_NAME="+gitName,
@@ -593,7 +594,7 @@ func logRunConfig(opts logRunConfigOptions) {
 	}
 
 	// Get git identity for logging
-	gitName, gitEmail := backend.GetGitIdentity()
+	gitName, gitEmail := git.GetGitIdentity()
 	if gitName != "" {
 		logSection("Git identity: %s <%s>", gitName, gitEmail)
 	}

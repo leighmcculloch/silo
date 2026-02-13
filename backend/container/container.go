@@ -25,7 +25,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/creack/pty"
 	"github.com/kballard/go-shellquote"
-	"github.com/leighmcculloch/silo/backend"
+	"github.com/leighmcculloch/silo/backend" // parent package
 )
 
 // dockerStartHook is a pre-run hook that starts the Docker daemon in the VM.
