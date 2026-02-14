@@ -1,7 +1,11 @@
 package copilotcli
 
 import (
+	"context"
 	_ "embed"
+	"encoding/json"
+	"io"
+	"net/http"
 	"path/filepath"
 
 	"github.com/leighmcculloch/silo/config"
@@ -33,4 +37,38 @@ var Tool = tools.Tool{
 			},
 		}
 	},
+	LatestVersion: fetchLatestRelease,
+}
+
+// fetchLatestRelease queries the GitHub releases API for the latest copilot-cli
+// version tag.
+func fetchLatestRelease(ctx context.Context) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/github/copilot-cli/releases/latest", nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(body, &release); err != nil {
+		return ""
+	}
+	return release.TagName
 }

@@ -28,7 +28,7 @@ func TestFetchVersion(t *testing.T) {
 
 	overrideCachePath(t)
 
-	tool := Tool{Name: "claude", VersionURL: srv.URL}
+	tool := Tool{Name: "claude", LatestVersion: FetchURLVersion(srv.URL)}
 	tool.FetchVersion(context.Background())
 
 	got := tool.CachedVersion()
@@ -58,7 +58,7 @@ func TestFetchVersionNetworkFailure(t *testing.T) {
 	// Pre-populate cache
 	os.WriteFile(filepath.Join(tmp, "claude"), []byte("1.0.0"), 0o644)
 
-	tool := Tool{Name: "claude", VersionURL: srv.URL}
+	tool := Tool{Name: "claude", LatestVersion: FetchURLVersion(srv.URL)}
 	tool.FetchVersion(context.Background())
 
 	// Existing cache should not be overwritten on failure
@@ -68,7 +68,7 @@ func TestFetchVersionNetworkFailure(t *testing.T) {
 	}
 }
 
-func TestFetchVersionEmptyURL(t *testing.T) {
+func TestFetchVersionNilFunc(t *testing.T) {
 	overrideCachePath(t)
 
 	tool := Tool{Name: "unsupported-tool"}
@@ -76,6 +76,6 @@ func TestFetchVersionEmptyURL(t *testing.T) {
 
 	got := tool.CachedVersion()
 	if got != "" {
-		t.Errorf("CachedVersion = %q, want empty string for tool with no version URL", got)
+		t.Errorf("CachedVersion = %q, want empty string for tool with no LatestVersion", got)
 	}
 }

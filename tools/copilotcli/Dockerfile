@@ -4,6 +4,7 @@
 FROM base AS copilot
 
 ARG HOME
+ARG CACHE_BUST
 
 RUN curl -fsSL https://gh.io/copilot-install | bash
 
