@@ -21,17 +21,15 @@ import (
 	"github.com/leighmcculloch/silo/git"
 	"github.com/leighmcculloch/silo/mountwait"
 	"github.com/leighmcculloch/silo/tilde"
-	"github.com/leighmcculloch/silo/toolversion"
+	"github.com/leighmcculloch/silo/tools"
 )
 
 // Options configures a tool run.
 type Options struct {
-	Tool       string
+	ToolDef    tools.Tool
 	ToolArgs   []string
 	Config     config.Config
-	Dockerfile string                     // raw Dockerfile template (before hook injection)
-	Command    func(home string) []string // container entrypoint + args
-	VersionURL string                     // optional latest-version URL for cache-busting
+	Dockerfile string // raw Dockerfile template (before hook injection)
 	ForceBuild bool
 	Verbose    bool
 	Stdout     io.Writer
@@ -40,7 +38,7 @@ type Options struct {
 
 // Tool runs a tool inside a container.
 func Tool(opts Options) error {
-	tool := opts.Tool
+	tool := opts.ToolDef.Name
 	cfg := opts.Config
 	stderr := opts.Stderr
 
@@ -99,7 +97,7 @@ func Tool(opts Options) error {
 	defer backendClient.Close()
 
 	// Start async version fetch (updates cache for this or next run)
-	go toolversion.FetchAndCache(ctx, tool, opts.VersionURL)
+	go opts.ToolDef.FetchVersion(ctx)
 
 	// Get current user info
 	home := os.Getenv("HOME")
@@ -134,7 +132,7 @@ func Tool(opts Options) error {
 	}
 
 	// Read cached tool version for cache-busting
-	toolVersion := toolversion.ReadCached(tool)
+	toolVersion := opts.ToolDef.CachedVersion()
 	if toolVersion != "" {
 		logSection("Tool version (cached): %s", toolVersion)
 		buildArgs["CACHE_BUST"] = toolVersion
@@ -216,7 +214,7 @@ func Tool(opts Options) error {
 		MountsRO:    mountsRO,
 		MountsRW:    mountsRW,
 		Env:         envVars,
-		Command:     opts.Command(home),
+		Command:     opts.ToolDef.Command(home),
 		Args:        opts.ToolArgs,
 		PreRunHooks: preRunHooks,
 	})

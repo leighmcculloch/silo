@@ -299,12 +299,10 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 
 	// Run the tool
 	return run.Tool(run.Options{
-		Tool:       tool,
+		ToolDef:    *toolDef,
 		ToolArgs:   toolArgs,
 		Config:     cfg,
 		Dockerfile: Dockerfile(supportedTools),
-		Command:    toolDef.Command,
-		VersionURL: toolDef.VersionURL,
 		ForceBuild: forceBuild,
 		Verbose:    verbose,
 		Stdout:     stdout,
