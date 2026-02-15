@@ -44,9 +44,17 @@ func TestHelp(t *testing.T) {
 		t.Error("expected examples section in help output")
 	}
 
-	// Check for available commands
-	if !strings.Contains(stdout, "Available Commands:") {
-		t.Error("expected available commands section in help output")
+	// Check for command groups
+	if !strings.Contains(stdout, "Tools:") {
+		t.Error("expected Tools group in help output")
+	}
+
+	if !strings.Contains(stdout, "Container Commands:") {
+		t.Error("expected Container Commands group in help output")
+	}
+
+	if !strings.Contains(stdout, "Configuration:") {
+		t.Error("expected Configuration group in help output")
 	}
 
 	// Check for config command
@@ -263,8 +271,8 @@ func TestInvalidTool(t *testing.T) {
 		t.Error("expected failure for invalid tool")
 	}
 
-	if !strings.Contains(stderr, "invalid tool") {
-		t.Errorf("expected 'invalid tool' error, got: %s", stderr)
+	if !strings.Contains(stderr, "unknown command") {
+		t.Errorf("expected 'unknown command' error, got: %s", stderr)
 	}
 }
 

@@ -76,7 +76,7 @@ func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "silo [tool] [-- args...]",
+		Use:   "silo",
 		Short: "Run AI coding tools in isolated Docker containers",
 		Long: lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(`
   ███████╗██╗██╗      ██████╗
@@ -109,10 +109,8 @@ Configuration is loaded from (in order, merged):
 
   # Pass arguments to the tool
   silo claude -- --help`,
-		Args:              cobra.ArbitraryArgs,
-		ValidArgsFunction: completeTools,
-		SilenceUsage:      true,
-		SilenceErrors:     true,
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSilo(cmd, args, stdout, stderr)
 		},
@@ -122,9 +120,35 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 
+	// Define command groups (order here determines display order in --help)
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "tools", Title: "Tools:"},
+		&cobra.Group{ID: "container", Title: "Container Commands:"},
+		&cobra.Group{ID: "config", Title: "Configuration:"},
+	)
+
+	// Register each tool as a subcommand
+	for _, t := range supportedTools {
+		toolDef := t // capture loop variable
+		toolCmd := &cobra.Command{
+			Use:     toolDef.Name + " [-- args...]",
+			Short:   toolDef.Description,
+			GroupID: "tools",
+			Args:    cobra.ArbitraryArgs,
+			RunE: func(cmd *cobra.Command, args []string) error {
+				return runTool(cmd, toolDef, args, stdout, stderr)
+			},
+		}
+		toolCmd.Flags().String("backend", "", "Backend to use: docker, container")
+		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
+		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
+		rootCmd.AddCommand(toolCmd)
+	}
+
 	configCmd := &cobra.Command{
-		Use:   "config",
-		Short: "Configuration management commands",
+		Use:     "config",
+		Short:   "Configuration management commands",
+		GroupID: "config",
 	}
 
 	configShowCmd := &cobra.Command{
@@ -185,8 +209,9 @@ Use --local or --global to skip the prompt.`,
 	rootCmd.AddCommand(configCmd)
 
 	lsCmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List all silo-created containers",
+		Use:     "ls",
+		Short:   "List all silo-created containers",
+		GroupID: "container",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runList(cmd, args, stdout, stderr)
 		},
@@ -196,9 +221,10 @@ Use --local or --global to skip the prompt.`,
 	rootCmd.AddCommand(lsCmd)
 
 	rmCmd := &cobra.Command{
-		Use:   "rm [container...]",
-		Short: "Remove silo containers",
-		Args:  cobra.MinimumNArgs(1),
+		Use:     "rm [container...]",
+		Short:   "Remove silo containers",
+		GroupID: "container",
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRemove(cmd, args, stderr)
 		},
@@ -207,9 +233,10 @@ Use --local or --global to skip the prompt.`,
 	rootCmd.AddCommand(rmCmd)
 
 	execCmd := &cobra.Command{
-		Use:   "exec [container] [command] [args...]",
-		Short: "Run a command in a running silo container",
-		Long:  `Execute an arbitrary command inside a running silo container with an interactive TTY.`,
+		Use:     "exec [container] [command] [args...]",
+		Short:   "Run a command in a running silo container",
+		GroupID: "container",
+		Long:    `Execute an arbitrary command inside a running silo container with an interactive TTY.`,
 		Example: `  # Run bash in a container
   silo exec silo-myproject-1 /bin/bash
 
@@ -227,6 +254,7 @@ Use --local or --global to skip the prompt.`,
 	shellCmd := &cobra.Command{
 		Use:               "shell [container]",
 		Short:             "Open a shell in a running silo container",
+		GroupID:           "container",
 		Long:              `Open an interactive /bin/bash shell inside a running silo container.`,
 		Example:           `  silo shell silo-myproject-1`,
 		Args:              cobra.ExactArgs(1),
@@ -244,59 +272,32 @@ Use --local or --global to skip the prompt.`,
 	return rootCmd
 }
 
-func completeTools(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	names := AvailableTools(supportedTools)
-	var completions []string
-	for _, t := range names {
-		if strings.HasPrefix(t, toComplete) {
-			completions = append(completions, fmt.Sprintf("%s\t%s", t, ToolDescription(supportedTools, t)))
-		}
-	}
-	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
-	// Determine number of args before -- (tool args come after --)
-	argsBeforeDash := len(args)
-	if cmd.ArgsLenAtDash() > -1 {
-		argsBeforeDash = cmd.ArgsLenAtDash()
-	}
-	if argsBeforeDash > 1 {
-		return fmt.Errorf("accepts at most 1 arg(s), received %d", argsBeforeDash)
-	}
-
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
 
-	// Determine tool (priority: CLI arg > repo config > global config > interactive)
+	// Determine tool (priority: repo config > global config > interactive)
 	var tool string
 	var err error
-	if argsBeforeDash > 0 {
-		tool = args[0]
-	} else {
-		// Check repo-specific tool setting (applied in specificity order)
-		for _, m := range run.GetMatchingRepos(cfg, cwd) {
-			if m.Config.Tool != "" {
-				tool = m.Config.Tool
-			}
+
+	// Check repo-specific tool setting (applied in specificity order)
+	for _, m := range run.GetMatchingRepos(cfg, cwd) {
+		if m.Config.Tool != "" {
+			tool = m.Config.Tool
 		}
-		// Fall back to global config tool
-		if tool == "" && cfg.Tool != "" {
-			tool = cfg.Tool
-		}
-		// Interactive selection as last resort
-		if tool == "" {
-			tool, err = selectTool()
-			if err != nil {
-				return err
-			}
+	}
+	// Fall back to global config tool
+	if tool == "" && cfg.Tool != "" {
+		tool = cfg.Tool
+	}
+	// Interactive selection as last resort
+	if tool == "" {
+		tool, err = selectTool()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -311,6 +312,33 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	if toolDef == nil {
 		return fmt.Errorf("tool definition not found: %s", tool)
 	}
+
+	// Override backend from flag
+	if b, _ := cmd.Flags().GetString("backend"); b != "" {
+		cfg.Backend = b
+	}
+
+	// Get force-build flag
+	forceBuild, _ := cmd.Flags().GetBool("force-build")
+
+	// Get verbose flag
+	verbose, _ := cmd.Flags().GetBool("verbose")
+
+	// Run the tool
+	return run.Tool(run.Options{
+		ToolDef:    *toolDef,
+		Config:     cfg,
+		Dockerfile: Dockerfile(supportedTools),
+		ForceBuild: forceBuild,
+		Verbose:    verbose,
+		Stdout:     stdout,
+		Stderr:     stderr,
+	})
+}
+
+func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stderr io.Writer) error {
+	// Load configuration
+	cfg := config.LoadAll(toolDefaults())
 
 	// Get tool-specific args (everything after --)
 	var toolArgs []string
@@ -331,7 +359,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:    *toolDef,
+		ToolDef:    toolDef,
 		ToolArgs:   toolArgs,
 		Config:     cfg,
 		Dockerfile: Dockerfile(supportedTools),
