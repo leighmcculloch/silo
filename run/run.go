@@ -117,10 +117,11 @@ func Tool(opts Options) error {
 
 	// Get repo-specific hooks
 	var repoPreRunHooks, repoPostBuildHooks []string
-	matchedRepoNames := getMatchingRepoNames(cfg, cwd)
-	for _, repoCfg := range GetMatchingRepoConfigs(cfg, cwd) {
-		repoPreRunHooks = append(repoPreRunHooks, repoCfg.PreRunHooks...)
-		repoPostBuildHooks = append(repoPostBuildHooks, repoCfg.PostBuildHooks...)
+	var matchedRepoNames []string
+	for _, m := range GetMatchingRepos(cfg, cwd) {
+		matchedRepoNames = append(matchedRepoNames, m.Name)
+		repoPreRunHooks = append(repoPreRunHooks, m.Config.PreRunHooks...)
+		repoPostBuildHooks = append(repoPostBuildHooks, m.Config.PostBuildHooks...)
 	}
 
 	// Prepare build configuration
@@ -226,25 +227,26 @@ func Tool(opts Options) error {
 	return nil
 }
 
-// GetMatchingRepoConfigs returns repo configs that match any of the git remote URLs,
-// sorted by pattern length (shortest first) so more specific configs are applied last.
-func GetMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
+// RepoMatch holds a matched repo pattern name and its associated config.
+type RepoMatch struct {
+	Name   string
+	Config config.RepoConfig
+}
+
+// GetMatchingRepos returns repo matches (name + config) for repos whose pattern
+// matches any of the git remote URLs, sorted by pattern length (shortest first)
+// so more specific configs are applied last.
+func GetMatchingRepos(cfg config.Config, cwd string) []RepoMatch {
 	remoteURLs := git.GetGitRemoteURLs(cwd)
 	if len(remoteURLs) == 0 {
 		return nil
 	}
 
-	// Collect matching patterns with their configs
-	type match struct {
-		pattern string
-		config  config.RepoConfig
-	}
-	var matches []match
-
+	var matches []RepoMatch
 	for pattern, repoCfg := range cfg.Repos {
 		for _, url := range remoteURLs {
 			if repoURLMatches(url, pattern) {
-				matches = append(matches, match{pattern: pattern, config: repoCfg})
+				matches = append(matches, RepoMatch{Name: pattern, Config: repoCfg})
 				break // Only add each repo config once
 			}
 		}
@@ -252,41 +254,10 @@ func GetMatchingRepoConfigs(cfg config.Config, cwd string) []config.RepoConfig {
 
 	// Sort by pattern length (shortest first = less specific first)
 	sort.Slice(matches, func(i, j int) bool {
-		return len(matches[i].pattern) < len(matches[j].pattern)
+		return len(matches[i].Name) < len(matches[j].Name)
 	})
 
-	// Extract configs in sorted order
-	result := make([]config.RepoConfig, len(matches))
-	for i, m := range matches {
-		result[i] = m.config
-	}
-	return result
-}
-
-// getMatchingRepoNames returns repo config keys that match any of the git remote URLs,
-// sorted by pattern length (shortest first) so more specific configs are applied last.
-func getMatchingRepoNames(cfg config.Config, cwd string) []string {
-	remoteURLs := git.GetGitRemoteURLs(cwd)
-	if len(remoteURLs) == 0 {
-		return nil
-	}
-
-	var matched []string
-	for pattern := range cfg.Repos {
-		for _, url := range remoteURLs {
-			if repoURLMatches(url, pattern) {
-				matched = append(matched, pattern)
-				break // Only add each repo name once
-			}
-		}
-	}
-
-	// Sort by pattern length (shortest first = less specific first)
-	sort.Slice(matched, func(i, j int) bool {
-		return len(matched[i]) < len(matched[j])
-	})
-
-	return matched
+	return matches
 }
 
 // repoURLMatches checks if a git remote URL matches a pattern.
@@ -357,11 +328,11 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 	}
 
 	// Add repo-specific mounts (match git remote URLs)
-	for _, repoCfg := range GetMatchingRepoConfigs(cfg, cwd) {
-		for _, m := range repoCfg.MountsRO {
+	for _, rm := range GetMatchingRepos(cfg, cwd) {
+		for _, m := range rm.Config.MountsRO {
 			mountsRO = append(mountsRO, expandPath(m))
 		}
-		for _, m := range repoCfg.MountsRW {
+		for _, m := range rm.Config.MountsRW {
 			mountsRW = append(mountsRW, expandPath(m))
 		}
 	}
@@ -539,8 +510,8 @@ func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []strin
 	}
 
 	// Repo-specific env vars
-	for _, repoCfg := range GetMatchingRepoConfigs(cfg, cwd) {
-		for _, e := range repoCfg.Env {
+	for _, rm := range GetMatchingRepos(cfg, cwd) {
+		for _, e := range rm.Config.Env {
 			if strings.Contains(e, "=") {
 				envVars = append(envVars, e)
 				log.explicitRepo = append(log.explicitRepo, strings.SplitN(e, "=", 2)[0])

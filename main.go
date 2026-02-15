@@ -250,9 +250,9 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		tool = args[0]
 	} else {
 		// Check repo-specific tool setting (applied in specificity order)
-		for _, repoCfg := range run.GetMatchingRepoConfigs(cfg, cwd) {
-			if repoCfg.Tool != "" {
-				tool = repoCfg.Tool
+		for _, m := range run.GetMatchingRepos(cfg, cwd) {
+			if m.Config.Tool != "" {
+				tool = m.Config.Tool
 			}
 		}
 		// Fall back to global config tool
