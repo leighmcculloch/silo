@@ -132,8 +132,9 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 // Run runs a container using the container CLI.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
-	// Prepend Docker daemon startup hook for VM environments
-	opts.PreRunHooks = append([]string{dockerStartHook}, opts.PreRunHooks...)
+	// Append Docker daemon startup hook so mount-wait and other hooks run first.
+	// dockerd is already backgrounded (& in the hook) so it doesn't block.
+	opts.PreRunHooks = append(opts.PreRunHooks, dockerStartHook)
 
 	// Build full command: Command + Args
 	fullCmd := append(opts.Command, opts.Args...)
@@ -183,13 +184,21 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	// Mounts — Apple's container CLI only supports directories, so file
 	// mounts are staged into a directory and symlinked inside the container.
+	type fileMount struct {
+		path         string
+		readOnly     bool
+		hostDir      string
+		containerDir string
+		err          error
+	}
+
 	var symlinkCmds []string
+	var fileMounts []*fileMount
+
 	for _, m := range opts.MountsRO {
-		// Check if path exists (use Lstat to not follow symlinks for existence check)
 		if _, err := os.Lstat(m); err != nil {
 			continue
 		}
-		// Get info following symlinks to check if target is a directory
 		info, err := os.Stat(m)
 		if err != nil {
 			continue
@@ -197,24 +206,13 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		if info.IsDir() {
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", m, m))
 		} else {
-			stagingDir, containerDir, err := stageFileMount(m)
-			if err != nil {
-				return fmt.Errorf("staging file mount %s: %w", m, err)
-			}
-			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s,readonly", stagingDir, containerDir))
-			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
-				shellquote.Join(filepath.Dir(m)),
-				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
-				shellquote.Join(m),
-			))
+			fileMounts = append(fileMounts, &fileMount{path: m, readOnly: true})
 		}
 	}
 	for _, m := range opts.MountsRW {
-		// Check if path exists (use Lstat to not follow symlinks for existence check)
 		if _, err := os.Lstat(m); err != nil {
 			continue
 		}
-		// Get info following symlinks to check if target is a directory
 		info, err := os.Stat(m)
 		if err != nil {
 			continue
@@ -222,17 +220,35 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		if info.IsDir() {
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m, m))
 		} else {
-			stagingDir, containerDir, err := stageFileMount(m)
-			if err != nil {
-				return fmt.Errorf("staging file mount %s: %w", m, err)
-			}
-			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", stagingDir, containerDir))
-			symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
-				shellquote.Join(filepath.Dir(m)),
-				shellquote.Join(filepath.Join(containerDir, filepath.Base(m))),
-				shellquote.Join(m),
-			))
+			fileMounts = append(fileMounts, &fileMount{path: m, readOnly: false})
 		}
+	}
+
+	// Stage file mounts concurrently.
+	var fmWg sync.WaitGroup
+	for _, fm := range fileMounts {
+		fmWg.Add(1)
+		go func(fm *fileMount) {
+			defer fmWg.Done()
+			fm.hostDir, fm.containerDir, fm.err = stageFileMount(fm.path)
+		}(fm)
+	}
+	fmWg.Wait()
+
+	for _, fm := range fileMounts {
+		if fm.err != nil {
+			return fmt.Errorf("staging file mount %s: %w", fm.path, fm.err)
+		}
+		mountOpt := fmt.Sprintf("type=bind,source=%s,target=%s", fm.hostDir, fm.containerDir)
+		if fm.readOnly {
+			mountOpt += ",readonly"
+		}
+		args = append(args, "--mount", mountOpt)
+		symlinkCmds = append(symlinkCmds, fmt.Sprintf("mkdir -p %s && ln -sf %s %s",
+			shellquote.Join(filepath.Dir(fm.path)),
+			shellquote.Join(filepath.Join(fm.containerDir, filepath.Base(fm.path))),
+			shellquote.Join(fm.path),
+		))
 	}
 
 	// Build the complete list of pre-run hooks in order:
