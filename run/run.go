@@ -165,8 +165,9 @@ func Tool(opts Options) error {
 	var envVars []string
 	var envLog envLogInfo
 	var containerName string
+	var imageExists bool
 	var opsWg sync.WaitGroup
-	opsWg.Add(3)
+	opsWg.Add(4)
 	go func() {
 		defer opsWg.Done()
 		mountsRO, mountsRW = collectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
@@ -180,6 +181,15 @@ func Tool(opts Options) error {
 		baseName := filepath.Base(cwd)
 		baseName = strings.ReplaceAll(baseName, ".", "")
 		containerName = backendClient.NextContainerName(ctx, baseName)
+	}()
+	go func() {
+		defer opsWg.Done()
+		if !opts.ForceBuild {
+			exists, err := backendClient.ImageExists(ctx, imageTag)
+			if err == nil {
+				imageExists = exists
+			}
+		}
 	}()
 	opsWg.Wait()
 
@@ -195,6 +205,7 @@ func Tool(opts Options) error {
 		mountsRO:           mountsRO,
 		mountsRW:           mountsRW,
 		forceBuild:         opts.ForceBuild,
+		imageExists:        imageExists,
 		globalPostBuild:    cfg.PostBuildHooks,
 		toolPostBuildHooks: toolPostBuildHooks,
 		repoPostBuildHooks: repoPostBuildHooks,
@@ -401,6 +412,7 @@ type buildEnvOptions struct {
 	mountsRO           []string
 	mountsRW           []string
 	forceBuild         bool
+	imageExists        bool // pre-checked image existence (from parallel phase)
 	globalPostBuild    []string
 	toolPostBuildHooks []string
 	repoPostBuildHooks []string
@@ -449,16 +461,6 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		}
 	}
 
-	// Check if image already exists (skip if force rebuild requested)
-	exists := false
-	if !opts.forceBuild {
-		var err error
-		exists, err = backendClient.ImageExists(ctx, opts.imageTag)
-		if err != nil {
-			exists = false
-		}
-	}
-
 	if opts.progress != nil {
 		opts.progress.SetSection("Building environment")
 	}
@@ -467,7 +469,7 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		logBullet("Force rebuild requested, ignoring cache")
 	}
 
-	if exists {
+	if opts.imageExists {
 		logSuccessBullet("Environment cached")
 		return nil
 	}
