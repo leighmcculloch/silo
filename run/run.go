@@ -178,8 +178,7 @@ func Tool(opts Options) error {
 	}()
 	go func() {
 		defer opsWg.Done()
-		baseName := filepath.Base(cwd)
-		baseName = strings.ReplaceAll(baseName, ".", "")
+		baseName := sanitizeContainerName(filepath.Base(cwd))
 		containerName = backendClient.NextContainerName(ctx, baseName)
 	}()
 	go func() {
@@ -778,6 +777,29 @@ func dockerfileWithHooks(dockerfileTemplate string, globalHooks []string, tool s
 	}
 
 	return result
+}
+
+// sanitizeContainerName converts a directory name into a valid container name.
+// Container names must match [a-zA-Z0-9][a-zA-Z0-9_.-]. Invalid characters
+// are replaced with hyphens, and leading/trailing/consecutive hyphens are
+// collapsed.
+func sanitizeContainerName(name string) string {
+	var b strings.Builder
+	prevHyphen := true // treat start as hyphen to strip leading hyphens
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			prevHyphen = false
+		} else if !prevHyphen {
+			b.WriteByte('-')
+			prevHyphen = true
+		}
+	}
+	s := strings.TrimRight(b.String(), "-")
+	if s == "" {
+		return "silo"
+	}
+	return strings.ToLower(s)
 }
 
 // expandPath expands ~ to the user's home directory.
