@@ -105,8 +105,14 @@ func Tool(opts Options) error {
 	uid := os.Getuid()
 	cwd, _ := os.Getwd()
 
+	// Pre-fetch git data once to avoid repeated subprocess calls
+	remoteURLs := git.GetGitRemoteURLs(cwd)
+	repoMatches := matchRepos(cfg, remoteURLs)
+	worktreeRoots, _ := git.GetGitWorktreeRoots(cwd)
+	gitName, gitEmail := git.GetGitIdentity()
+
 	// Collect mounts from config
-	mountsRO, mountsRW := collectMounts(tool, cfg, cwd)
+	mountsRO, mountsRW := collectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
 
 	// Get tool-specific hooks
 	var toolPreRunHooks, toolPostBuildHooks []string
@@ -118,7 +124,7 @@ func Tool(opts Options) error {
 	// Get repo-specific hooks
 	var repoPreRunHooks, repoPostBuildHooks []string
 	var matchedRepoNames []string
-	for _, m := range GetMatchingRepos(cfg, cwd) {
+	for _, m := range repoMatches {
 		matchedRepoNames = append(matchedRepoNames, m.Name)
 		repoPreRunHooks = append(repoPreRunHooks, m.Config.PreRunHooks...)
 		repoPostBuildHooks = append(repoPostBuildHooks, m.Config.PostBuildHooks...)
@@ -168,7 +174,7 @@ func Tool(opts Options) error {
 	}
 
 	// Collect environment variables
-	envVars, envLog := collectEnvVars(tool, cfg, cwd)
+	envVars, envLog := collectEnvVars(tool, cfg, repoMatches, gitName, gitEmail)
 
 	// Generate container name
 	baseName := filepath.Base(cwd)
@@ -190,6 +196,8 @@ func Tool(opts Options) error {
 		repoPreRun:       repoPreRunHooks,
 		matchedRepoNames: matchedRepoNames,
 		containerName:    containerName,
+		gitName:          gitName,
+		gitEmail:         gitEmail,
 		verbose:          opts.Verbose,
 		progress:         progress,
 	})
@@ -235,9 +243,14 @@ type RepoMatch struct {
 
 // GetMatchingRepos returns repo matches (name + config) for repos whose pattern
 // matches any of the git remote URLs, sorted by pattern length (shortest first)
-// so more specific configs are applied last.
+// so more specific configs are applied last. This is a convenience wrapper that
+// fetches remote URLs internally; use matchRepos to supply pre-fetched URLs.
 func GetMatchingRepos(cfg config.Config, cwd string) []RepoMatch {
-	remoteURLs := git.GetGitRemoteURLs(cwd)
+	return matchRepos(cfg, git.GetGitRemoteURLs(cwd))
+}
+
+// matchRepos returns repo matches for pre-fetched remote URLs.
+func matchRepos(cfg config.Config, remoteURLs []string) []RepoMatch {
 	if len(remoteURLs) == 0 {
 		return nil
 	}
@@ -314,7 +327,7 @@ func createBackend(backendType string, stderr io.Writer, verbose bool) (backend.
 }
 
 // collectMounts gathers all mount paths from config for a specific tool.
-func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mountsRW []string) {
+func collectMounts(tool string, cfg config.Config, cwd string, repoMatches []RepoMatch, worktreeRoots []string) (mountsRO, mountsRW []string) {
 	mountsRW = []string{cwd}
 
 	// Add tool-specific mounts
@@ -327,8 +340,8 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 		}
 	}
 
-	// Add repo-specific mounts (match git remote URLs)
-	for _, rm := range GetMatchingRepos(cfg, cwd) {
+	// Add repo-specific mounts
+	for _, rm := range repoMatches {
 		for _, m := range rm.Config.MountsRO {
 			mountsRO = append(mountsRO, expandPath(m))
 		}
@@ -346,7 +359,6 @@ func collectMounts(tool string, cfg config.Config, cwd string) (mountsRO, mounts
 	}
 
 	// Add git worktree roots (read-write for git operations)
-	worktreeRoots, _ := git.GetGitWorktreeRoots(cwd)
 	mountsRW = append(mountsRW, worktreeRoots...)
 
 	return mountsRO, mountsRW
@@ -465,9 +477,8 @@ type envLogInfo struct {
 }
 
 // collectEnvVars gathers environment variables from config and host.
-func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []string, log envLogInfo) {
-	// Get git identity
-	gitName, gitEmail := git.GetGitIdentity()
+func collectEnvVars(tool string, cfg config.Config, repoMatches []RepoMatch, gitName, gitEmail string) (envVars []string, log envLogInfo) {
+	// Set git identity
 	if gitName != "" {
 		envVars = append(envVars,
 			"GIT_AUTHOR_NAME="+gitName,
@@ -510,7 +521,7 @@ func collectEnvVars(tool string, cfg config.Config, cwd string) (envVars []strin
 	}
 
 	// Repo-specific env vars
-	for _, rm := range GetMatchingRepos(cfg, cwd) {
+	for _, rm := range repoMatches {
 		for _, e := range rm.Config.Env {
 			if strings.Contains(e, "=") {
 				envVars = append(envVars, e)
@@ -539,6 +550,8 @@ type logRunConfigOptions struct {
 	repoPreRun       []string
 	matchedRepoNames []string
 	containerName    string
+	gitName          string
+	gitEmail         string
 	verbose          bool
 	progress         *cli.Progress
 }
@@ -557,10 +570,9 @@ func logRunConfig(opts logRunConfigOptions) {
 		}
 	}
 
-	// Get git identity for logging
-	gitName, gitEmail := git.GetGitIdentity()
-	if gitName != "" {
-		logSection("Git identity: %s <%s>", gitName, gitEmail)
+	// Log git identity
+	if opts.gitName != "" {
+		logSection("Git identity: %s <%s>", opts.gitName, opts.gitEmail)
 	}
 
 	// Log mounts
