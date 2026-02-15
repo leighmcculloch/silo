@@ -20,6 +20,11 @@ type Backend interface {
 	// Run executes a command in the prepared environment
 	Run(ctx context.Context, opts RunOptions) error
 
+	// Exec runs a command inside a running container with interactive TTY.
+	// The container must already be running. Returns an error if the
+	// container is not found or not running.
+	Exec(ctx context.Context, name string, command []string) error
+
 	// List returns all silo-created containers
 	List(ctx context.Context) ([]ContainerInfo, error)
 

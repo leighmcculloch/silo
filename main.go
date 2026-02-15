@@ -206,6 +206,38 @@ Use --local or --global to skip the prompt.`,
 	rmCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
 	rootCmd.AddCommand(rmCmd)
 
+	execCmd := &cobra.Command{
+		Use:   "exec [container] [command] [args...]",
+		Short: "Run a command in a running silo container",
+		Long:  `Execute an arbitrary command inside a running silo container with an interactive TTY.`,
+		Example: `  # Run bash in a container
+  silo exec silo-myproject-1 /bin/bash
+
+  # Run a specific command
+  silo exec silo-myproject-1 ls -la /app`,
+		Args:              cobra.MinimumNArgs(2),
+		ValidArgsFunction: completeContainerNames,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExec(cmd, args[0], args[1:], stderr)
+		},
+	}
+	execCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rootCmd.AddCommand(execCmd)
+
+	shellCmd := &cobra.Command{
+		Use:               "shell [container]",
+		Short:             "Open a shell in a running silo container",
+		Long:              `Open an interactive /bin/bash shell inside a running silo container.`,
+		Example:           `  silo shell silo-myproject-1`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeContainerNames,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
+		},
+	}
+	shellCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rootCmd.AddCommand(shellCmd)
+
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
 
@@ -514,6 +546,90 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	}
 
 	return nil
+}
+
+func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer) error {
+	ctx := context.Background()
+
+	backendFlag, _ := cmd.Flags().GetString("backend")
+
+	var backends []string
+	if backendFlag != "" {
+		backends = []string{backendFlag}
+	} else {
+		backends = []string{"docker", "container"}
+	}
+
+	for _, backendType := range backends {
+		var backendClient backend.Backend
+		var err error
+
+		switch backendType {
+		case "docker":
+			backendClient, err = docker.NewClient()
+			if err != nil {
+				continue
+			}
+		case "container":
+			backendClient, err = applecontainer.NewClient()
+			if err != nil {
+				continue
+			}
+		default:
+			return fmt.Errorf("unknown backend: %s", backendType)
+		}
+
+		err = backendClient.Exec(ctx, name, command)
+		backendClient.Close()
+
+		if err == nil {
+			return nil
+		}
+
+		// If the error is "not found", try the next backend.
+		// If the error is something else (not running, exec failure), return it.
+		if !strings.Contains(err.Error(), "not found") {
+			return err
+		}
+	}
+
+	return fmt.Errorf("container %s not found", name)
+}
+
+func completeContainerNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// Only complete the first arg (container name)
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	ctx := context.Background()
+	var names []string
+
+	// Try docker backend
+	if dc, err := docker.NewClient(); err == nil {
+		if containers, err := dc.List(ctx); err == nil {
+			for _, ctr := range containers {
+				if ctr.IsRunning && strings.HasPrefix(ctr.Name, toComplete) {
+					names = append(names, ctr.Name)
+				}
+			}
+		}
+		dc.Close()
+	}
+
+	// Try container backend
+	if cc, err := applecontainer.NewClient(); err == nil {
+		if containers, err := cc.List(ctx); err == nil {
+			for _, ctr := range containers {
+				if ctr.IsRunning && strings.HasPrefix(ctr.Name, toComplete) {
+					names = append(names, ctr.Name)
+				}
+			}
+		}
+		cc.Close()
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {

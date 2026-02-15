@@ -575,6 +575,154 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	return removed, nil
 }
 
+// Exec runs a command inside a running container with interactive TTY.
+func (c *Client) Exec(ctx context.Context, name string, command []string) error {
+	// Verify container exists and is running
+	if err := c.verifyRunning(ctx, name); err != nil {
+		return err
+	}
+
+	// Build command: container exec -i -t <name> <command...>
+	args := []string{"exec", "-i", "-t", name}
+	args = append(args, command...)
+	cmd := exec.Command("container", args...)
+
+	// Save terminal state and ensure it's restored on exit
+	fd := int(os.Stdin.Fd())
+	oldState, _ := unix.IoctlGetTermios(fd, unix.TIOCGETA)
+	defer func() {
+		if oldState != nil {
+			unix.IoctlSetTermios(fd, unix.TIOCSETA, oldState)
+		}
+		// Reset terminal modes (mouse tracking, alternate screen, etc.)
+		os.Stdout.WriteString("\x1b[?1000l") // Disable mouse click tracking
+		os.Stdout.WriteString("\x1b[?1002l") // Disable mouse button tracking
+		os.Stdout.WriteString("\x1b[?1003l") // Disable all mouse tracking
+		os.Stdout.WriteString("\x1b[?1006l") // Disable SGR mouse mode
+		os.Stdout.WriteString("\x1b[?25h")   // Show cursor
+		os.Stdout.WriteString("\x1b[?1049l") // Exit alternate screen buffer
+	}()
+
+	// Start command with PTY so container gets a real terminal
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to exec in container: %w", err)
+	}
+	defer ptmx.Close()
+
+	// Handle terminal resize
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGWINCH)
+	go func() {
+		for range ch {
+			pty.InheritSize(os.Stdin, ptmx)
+		}
+	}()
+	ch <- syscall.SIGWINCH // Initial resize
+	defer signal.Stop(ch)
+
+	// Put our terminal in raw mode
+	if oldState != nil {
+		newState := *oldState
+		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG | unix.IEXTEN
+		newState.Iflag &^= unix.IXON | unix.ICRNL
+		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
+	}
+
+	// Copy container output to stdout
+	go func() {
+		io.Copy(os.Stdout, ptmx)
+	}()
+
+	// On signal or context cancellation, kill the exec process
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	go func() {
+		select {
+		case <-sigCh:
+		case <-ctx.Done():
+		}
+		cmd.Process.Kill()
+	}()
+
+	// Copy stdin to container, intercepting double Ctrl-C to kill exec
+	go func() {
+		var lastCtrlC time.Time
+		buf := make([]byte, 256)
+		for {
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				for i := 0; i < n; i++ {
+					if buf[i] == 0x03 {
+						now := time.Now()
+						if now.Sub(lastCtrlC) < time.Second {
+							// Double Ctrl-C - kill exec process
+							cmd.Process.Kill()
+							return
+						}
+						lastCtrlC = now
+					}
+				}
+				ptmx.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			// Killed by signal (e.g. double Ctrl-C) is not an error
+			if exitErr.ExitCode() == -1 {
+				return nil
+			}
+			return fmt.Errorf("command exited with status %d", exitErr.ExitCode())
+		}
+		return fmt.Errorf("exec error: %w", waitErr)
+	}
+
+	return nil
+}
+
+// verifyRunning checks that a container exists and is running.
+func (c *Client) verifyRunning(ctx context.Context, name string) error {
+	cmd := exec.CommandContext(ctx, "container", "ls", "-a", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	var containers []struct {
+		Configuration struct {
+			ID    string `json:"id"`
+			Image struct {
+				Reference string `json:"reference"`
+			} `json:"image"`
+		} `json:"configuration"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(output, &containers); err != nil {
+		return fmt.Errorf("failed to parse container list: %w", err)
+	}
+
+	for _, ctr := range containers {
+		if !strings.HasPrefix(ctr.Configuration.Image.Reference, "silo-") {
+			continue
+		}
+		if ctr.Configuration.ID == name {
+			if strings.ToLower(ctr.Status) != "running" {
+				return fmt.Errorf("container %s is not running (status: %s)", name, ctr.Status)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("container %s not found", name)
+}
+
 // resourceArgs returns CLI flags for --cpus (all CPUs) and --memory (40% system RAM).
 func resourceArgs() []string {
 	cpus := runtime.NumCPU()

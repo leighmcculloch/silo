@@ -481,6 +481,157 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
 }
 
+// Exec runs a command inside a running container with interactive TTY.
+func (c *Client) Exec(ctx context.Context, name string, command []string) error {
+	// Resolve container name to ID and verify it's running
+	containerID, err := c.resolveRunningContainer(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	// Create exec instance
+	execResp, err := c.cli.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		Cmd:          command,
+		Tty:          true,
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	// Attach to exec instance
+	attachResp, err := c.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{
+		Tty: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to attach to exec: %w", err)
+	}
+	defer attachResp.Close()
+
+	// Set terminal to raw mode and handle resizing
+	fd := os.Stdin.Fd()
+	if term.IsTerminal(fd) {
+		oldState, err := term.MakeRaw(fd)
+		if err != nil {
+			return fmt.Errorf("failed to set raw terminal: %w", err)
+		}
+		defer term.RestoreTerminal(fd, oldState)
+
+		// Set initial terminal size
+		c.resizeExecTTY(ctx, execResp.ID, fd)
+
+		// Handle terminal resize signals
+		go c.monitorExecTTYSize(ctx, execResp.ID, fd)
+	}
+
+	// Copy stdin to exec, intercepting double Ctrl-C to exit
+	stdinCtx, stdinCancel := context.WithCancel(ctx)
+	defer stdinCancel()
+	go func() {
+		var lastCtrlC time.Time
+		buf := make([]byte, 256)
+		for {
+			select {
+			case <-stdinCtx.Done():
+				return
+			default:
+			}
+
+			n, err := os.Stdin.Read(buf)
+			if n > 0 {
+				for i := 0; i < n; i++ {
+					if buf[i] == 0x03 {
+						now := time.Now()
+						if now.Sub(lastCtrlC) < time.Second {
+							return
+						}
+						lastCtrlC = now
+					}
+				}
+				attachResp.Conn.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+		}
+		attachResp.CloseWrite()
+	}()
+
+	// Copy exec output to stdout
+	io.Copy(os.Stdout, attachResp.Reader)
+
+	// Exec output is done, cancel stdin copying
+	stdinCancel()
+
+	// Get exit code
+	inspectResp, err := c.cli.ContainerExecInspect(ctx, execResp.ID)
+	if err != nil {
+		return fmt.Errorf("failed to inspect exec: %w", err)
+	}
+	if inspectResp.ExitCode != 0 {
+		return fmt.Errorf("command exited with status %d", inspectResp.ExitCode)
+	}
+
+	return nil
+}
+
+// resolveRunningContainer finds a silo container by name and returns its ID.
+// Returns an error if the container is not found or not running.
+func (c *Client) resolveRunningContainer(ctx context.Context, name string) (string, error) {
+	containers, err := c.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		return "", fmt.Errorf("failed to list containers: %w", err)
+	}
+
+	for _, ctr := range containers {
+		if !strings.HasPrefix(ctr.Image, "silo-") {
+			continue
+		}
+		ctrName := ctr.ID[:12]
+		if len(ctr.Names) > 0 {
+			ctrName = strings.TrimPrefix(ctr.Names[0], "/")
+		}
+		if ctrName == name {
+			if ctr.State != "running" {
+				return "", fmt.Errorf("container %s is not running (status: %s)", name, ctr.Status)
+			}
+			return ctr.ID, nil
+		}
+	}
+	return "", fmt.Errorf("container %s not found", name)
+}
+
+// resizeExecTTY resizes the exec session's TTY to match the terminal size
+func (c *Client) resizeExecTTY(ctx context.Context, execID string, fd uintptr) {
+	winsize, err := term.GetWinsize(fd)
+	if err != nil {
+		return
+	}
+
+	c.cli.ContainerExecResize(ctx, execID, container.ResizeOptions{
+		Height: uint(winsize.Height),
+		Width:  uint(winsize.Width),
+	})
+}
+
+// monitorExecTTYSize monitors for terminal resize signals and updates the exec session
+func (c *Client) monitorExecTTYSize(ctx context.Context, execID string, fd uintptr) {
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGWINCH)
+	defer signal.Stop(sigchan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-sigchan:
+			c.resizeExecTTY(ctx, execID, fd)
+		}
+	}
+}
+
 // resizeContainerTTY resizes the container's TTY to match the terminal size
 func (c *Client) resizeContainerTTY(ctx context.Context, containerID string, fd uintptr) {
 	winsize, err := term.GetWinsize(fd)
