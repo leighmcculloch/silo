@@ -47,7 +47,12 @@ func (c *Client) Close() error {
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
 	_, _, err := c.cli.ImageInspectWithRaw(ctx, name)
 	if err != nil {
-		return false, nil
+		if client.IsErrNotFound(err) {
+			return false, nil
+		}
+		// Return real errors (e.g. daemon not running, connection refused)
+		// so callers can surface them to the user.
+		return false, fmt.Errorf("docker backend error: %w", err)
 	}
 	return true, nil
 }

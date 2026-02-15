@@ -166,6 +166,7 @@ func Tool(opts Options) error {
 	var envLog envLogInfo
 	var containerName string
 	var imageExists bool
+	var imageExistsErr error
 	var opsWg sync.WaitGroup
 	opsWg.Add(4)
 	go func() {
@@ -184,13 +185,19 @@ func Tool(opts Options) error {
 	go func() {
 		defer opsWg.Done()
 		if !opts.ForceBuild {
-			exists, err := backendClient.ImageExists(ctx, imageTag)
-			if err == nil {
-				imageExists = exists
-			}
+			imageExists, imageExistsErr = backendClient.ImageExists(ctx, imageTag)
 		}
 	}()
 	opsWg.Wait()
+
+	// Surface backend errors early (e.g. daemon not running) rather than
+	// letting them manifest as a confusing "build failed" later.
+	if imageExistsErr != nil {
+		if progress != nil {
+			progress.Complete()
+		}
+		return imageExistsErr
+	}
 
 	// Build or use cached image
 	if progress != nil {

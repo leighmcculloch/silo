@@ -51,7 +51,16 @@ func (c *Client) Close() error {
 // ImageExists returns true if an image with the given name exists locally.
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "container", "image", "inspect", name)
-	if err := cmd.Run(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Distinguish "image not found" from backend errors (e.g. daemon not running).
+		// The container CLI exits non-zero for both cases, but backend errors
+		// typically produce messages that don't reference the image name.
+		out := strings.TrimSpace(string(output))
+		if out != "" && !strings.Contains(strings.ToLower(out), "not found") &&
+			!strings.Contains(strings.ToLower(out), "no such") {
+			return false, fmt.Errorf("container backend error: %s", out)
+		}
 		return false, nil
 	}
 	return true, nil
@@ -114,16 +123,47 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	}()
 
 	// Read output from pty
-	// Use a custom scanner that splits on both \n and \r to handle terminal progress output
+	// Use a custom scanner that splits on both \n and \r to handle terminal progress output.
+	// Keep the last several non-empty lines so we can include them in the error
+	// message if the build fails.
+	const tailSize = 20
+	var tailBuf [tailSize]string
+	tailIdx := 0
+	tailCount := 0
+
 	scanner := bufio.NewScanner(ptmx)
 	scanner.Split(scanLinesOrCR)
 	for scanner.Scan() {
+		line := scanner.Text()
 		if opts.OnProgress != nil {
-			opts.OnProgress(scanner.Text() + "\n")
+			opts.OnProgress(line + "\n")
+		}
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			tailBuf[tailIdx%tailSize] = trimmed
+			tailIdx++
+			tailCount++
 		}
 	}
 
 	if err := cmd.Wait(); err != nil {
+		// Include the last lines of build output in the error so users can
+		// see what actually went wrong (e.g. compiler errors, missing packages,
+		// or daemon-not-running messages).
+		var detail strings.Builder
+		start := 0
+		count := tailCount
+		if count > tailSize {
+			start = tailIdx % tailSize
+			count = tailSize
+		}
+		for i := 0; i < count; i++ {
+			detail.WriteString("  ")
+			detail.WriteString(tailBuf[(start+i)%tailSize])
+			detail.WriteString("\n")
+		}
+		if detail.Len() > 0 {
+			return "", fmt.Errorf("build failed: %w\n%s", err, detail.String())
+		}
 		return "", fmt.Errorf("build failed: %w", err)
 	}
 
