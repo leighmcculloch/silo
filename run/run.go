@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/leighmcculloch/silo/backend"
@@ -105,14 +106,26 @@ func Tool(opts Options) error {
 	uid := os.Getuid()
 	cwd, _ := os.Getwd()
 
-	// Pre-fetch git data once to avoid repeated subprocess calls
-	remoteURLs := git.GetGitRemoteURLs(cwd)
+	// Pre-fetch git data concurrently to avoid sequential subprocess calls
+	var remoteURLs []string
+	var worktreeRoots []string
+	var gitName, gitEmail string
+	var gitWg sync.WaitGroup
+	gitWg.Add(3)
+	go func() {
+		defer gitWg.Done()
+		remoteURLs = git.GetGitRemoteURLs(cwd)
+	}()
+	go func() {
+		defer gitWg.Done()
+		worktreeRoots, _ = git.GetGitWorktreeRoots(cwd)
+	}()
+	go func() {
+		defer gitWg.Done()
+		gitName, gitEmail = git.GetGitIdentity()
+	}()
+	gitWg.Wait()
 	repoMatches := matchRepos(cfg, remoteURLs)
-	worktreeRoots, _ := git.GetGitWorktreeRoots(cwd)
-	gitName, gitEmail := git.GetGitIdentity()
-
-	// Collect mounts from config
-	mountsRO, mountsRW := collectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
 
 	// Get tool-specific hooks
 	var toolPreRunHooks, toolPostBuildHooks []string
@@ -130,7 +143,7 @@ func Tool(opts Options) error {
 		repoPostBuildHooks = append(repoPostBuildHooks, m.Config.PostBuildHooks...)
 	}
 
-	// Prepare build configuration
+	// Prepare build configuration (imageTag depends only on dockerfile + buildArgs, not mounts)
 	dockerfile := dockerfileWithHooks(opts.Dockerfile, cfg.PostBuildHooks, tool, toolPostBuildHooks, repoPostBuildHooks)
 	buildArgs := map[string]string{
 		"HOME": home,
@@ -146,6 +159,29 @@ func Tool(opts Options) error {
 	}
 
 	imageTag := buildImageTag(tool, dockerfile, buildArgs)
+
+	// Run independent operations concurrently
+	var mountsRO, mountsRW []string
+	var envVars []string
+	var envLog envLogInfo
+	var containerName string
+	var opsWg sync.WaitGroup
+	opsWg.Add(3)
+	go func() {
+		defer opsWg.Done()
+		mountsRO, mountsRW = collectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
+	}()
+	go func() {
+		defer opsWg.Done()
+		envVars, envLog = collectEnvVars(tool, cfg, repoMatches, gitName, gitEmail)
+	}()
+	go func() {
+		defer opsWg.Done()
+		baseName := filepath.Base(cwd)
+		baseName = strings.ReplaceAll(baseName, ".", "")
+		containerName = backendClient.NextContainerName(ctx, baseName)
+	}()
+	opsWg.Wait()
 
 	// Build or use cached image
 	if progress != nil {
@@ -172,14 +208,6 @@ func Tool(opts Options) error {
 		}
 		return err
 	}
-
-	// Collect environment variables
-	envVars, envLog := collectEnvVars(tool, cfg, repoMatches, gitName, gitEmail)
-
-	// Generate container name
-	baseName := filepath.Base(cwd)
-	baseName = strings.ReplaceAll(baseName, ".", "")
-	containerName := backendClient.NextContainerName(ctx, baseName)
 
 	// Log configuration
 	if progress != nil {
