@@ -7,7 +7,9 @@ import (
 	"strings"
 )
 
-// GetGitWorktreeRoots returns git worktree common directories for the given directory
+// GetGitWorktreeRoots returns git worktree common directories for the given directory.
+// It detects worktrees by checking for a .git file (not directory) containing a gitdir pointer,
+// avoiding subprocess calls entirely.
 func GetGitWorktreeRoots(dir string) ([]string, error) {
 	var roots []string
 	seen := make(map[string]bool)
@@ -24,47 +26,82 @@ func GetGitWorktreeRoots(dir string) ([]string, error) {
 	}
 
 	for _, d := range dirs {
-		// Check if it's a git worktree
-		cmd := exec.Command("git", "-C", d, "rev-parse", "--is-inside-work-tree")
-		if err := cmd.Run(); err != nil {
+		commonRoot, ok := detectWorktreeRoot(d)
+		if !ok {
 			continue
 		}
-
-		// Get git dir
-		gitDirCmd := exec.Command("git", "-C", d, "rev-parse", "--git-dir")
-		gitDirOut, err := gitDirCmd.Output()
-		if err != nil {
-			continue
-		}
-		gitDir := strings.TrimSpace(string(gitDirOut))
-		if !filepath.IsAbs(gitDir) {
-			gitDir = filepath.Join(d, gitDir)
-		}
-		gitDir, _ = filepath.Abs(gitDir)
-
-		// Get git common dir
-		gitCommonDirCmd := exec.Command("git", "-C", d, "rev-parse", "--git-common-dir")
-		gitCommonDirOut, err := gitCommonDirCmd.Output()
-		if err != nil {
-			continue
-		}
-		gitCommonDir := strings.TrimSpace(string(gitCommonDirOut))
-		if !filepath.IsAbs(gitCommonDir) {
-			gitCommonDir = filepath.Join(d, gitCommonDir)
-		}
-		gitCommonDir, _ = filepath.Abs(gitCommonDir)
-
-		// If git-dir != git-common-dir, it's a worktree
-		if gitDir != gitCommonDir {
-			commonRoot := filepath.Dir(gitCommonDir)
-			if !seen[commonRoot] {
-				seen[commonRoot] = true
-				roots = append(roots, commonRoot)
-			}
+		if !seen[commonRoot] {
+			seen[commonRoot] = true
+			roots = append(roots, commonRoot)
 		}
 	}
 
 	return roots, nil
+}
+
+// detectWorktreeRoot checks if d is a git worktree by reading its .git file.
+// Git worktrees have a .git file (not directory) containing "gitdir: <path>",
+// where <path> points into the main repo's .git/worktrees/<name> directory.
+// Returns the main repo root and true if d is a worktree, or ("", false) otherwise.
+func detectWorktreeRoot(d string) (string, bool) {
+	dotGit := filepath.Join(d, ".git")
+	info, err := os.Lstat(dotGit)
+	if err != nil {
+		return "", false
+	}
+
+	// A .git directory means a standalone repo, not a worktree
+	if info.IsDir() {
+		return "", false
+	}
+
+	// A .git file means this is a worktree — read the gitdir pointer
+	data, err := os.ReadFile(dotGit)
+	if err != nil {
+		return "", false
+	}
+
+	content := strings.TrimSpace(string(data))
+	if !strings.HasPrefix(content, "gitdir: ") {
+		return "", false
+	}
+	gitDir := strings.TrimPrefix(content, "gitdir: ")
+
+	// Resolve relative paths against the worktree directory
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(d, gitDir)
+	}
+	gitDir = filepath.Clean(gitDir)
+
+	// The gitdir points to .git/worktrees/<name> in the main repo.
+	// Walk up to find the .git directory (the common dir).
+	// We look for a parent path component named "worktrees" whose parent is the .git dir.
+	commonDir := resolveCommonDir(gitDir)
+	if commonDir == "" {
+		return "", false
+	}
+
+	// The root of the main repo is the parent of its .git directory
+	commonRoot := filepath.Dir(commonDir)
+	return commonRoot, true
+}
+
+// resolveCommonDir extracts the git common directory from a worktree gitdir path.
+// Given a path like /repo/.git/worktrees/branch-name, it returns /repo/.git.
+func resolveCommonDir(gitDir string) string {
+	// Walk up the path looking for a "worktrees" component
+	current := gitDir
+	for {
+		parent := filepath.Dir(current)
+		if parent == current {
+			// Reached filesystem root without finding worktrees/
+			return ""
+		}
+		if filepath.Base(current) == "worktrees" {
+			return parent
+		}
+		current = parent
+	}
 }
 
 // GetGitIdentity returns the git user.name and user.email from global config
