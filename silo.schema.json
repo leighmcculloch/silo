@@ -11,9 +11,65 @@
     },
     "backend": {
       "type": "string",
-      "enum": ["docker", "container"],
-      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs. Default: 'container' if installed, else 'docker'",
-      "examples": ["docker", "container"]
+      "enum": ["docker", "container", "ssh"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'ssh' runs containers on a remote machine over SSH. Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container", "ssh"]
+    },
+    "backends": {
+      "type": "object",
+      "description": "Backend-specific configuration.",
+      "properties": {
+        "ssh": {
+          "type": "object",
+          "description": "Configuration for the SSH remote backend. Required when backend is 'ssh'.",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "SSH hostname or IP address to connect to."
+            },
+            "port": {
+              "type": "integer",
+              "default": 22,
+              "description": "SSH port number. Default: 22."
+            },
+            "user": {
+              "type": "string",
+              "description": "SSH username. Default: current user."
+            },
+            "identity_file": {
+              "type": "string",
+              "description": "Path to SSH private key file. Default: uses SSH agent."
+            },
+            "remote_backend": {
+              "type": "string",
+              "enum": ["docker"],
+              "default": "docker",
+              "description": "Container runtime on the remote machine. Default: 'docker'."
+            },
+            "sync_method": {
+              "type": "string",
+              "enum": ["mutagen", "rsync"],
+              "default": "mutagen",
+              "description": "File synchronization method. Default: 'mutagen'."
+            },
+            "sync_ignore": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Paths to exclude from file sync (e.g., '.git', 'node_modules')."
+            },
+            "remote_sync_root": {
+              "type": "string",
+              "default": "~/silo-sync",
+              "description": "Directory on the remote where synced files are stored. Default: '~/silo-sync'."
+            }
+          },
+          "required": ["host"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "tool": {
       "type": "string",

@@ -1,7 +1,20 @@
 {
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
-  // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
+  // Backend to use: "docker", "container", or "ssh" (default: "container" if installed, else "docker")
   // "backend": "docker",
+  // Backend-specific configuration
+  // "backends": {
+  //   "ssh": {
+  //     "host": "dev-vm.example.com",
+  //     "port": 22,
+  //     "user": "ubuntu",
+  //     "identity_file": "~/.ssh/id_ed25519",
+  //     "remote_backend": "docker",
+  //     "sync_method": "mutagen",
+  //     "sync_ignore": [".git", "node_modules"],
+  //     "remote_sync_root": "~/silo-sync"
+  //   }
+  // },
   // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)
   // "tool": "claude",
   // Read-only directories or files to mount into the container

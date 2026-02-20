@@ -36,6 +36,11 @@ func (w *writer) stringField(indent, name, value, source string, comma bool) {
 	fmt.Fprintf(w.w, "%s%s: %s%s\n", indent, w.key(name), w.str(value), w.suffix(source, comma))
 }
 
+// intField writes a JSON integer field: "key": value[, // source]
+func (w *writer) intField(indent, name string, value int, source string, comma bool) {
+	fmt.Fprintf(w.w, "%s%s: %d%s\n", indent, w.key(name), value, w.suffix(source, comma))
+}
+
 // nullableString writes a JSON string field that may be null.
 func (w *writer) nullableString(indent, name, value, source string, comma bool) {
 	if value != "" {
@@ -124,6 +129,13 @@ func def(s, fallback string) string {
 	return s
 }
 
+func defInt(v, fallback int) int {
+	if v == 0 {
+		return fallback
+	}
+	return v
+}
+
 // Show outputs the current merged configuration as JSONC with source comments.
 func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	cfg, src := config.LoadAllWithSources(toolDefaults)
@@ -132,6 +144,21 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	fmt.Fprintln(stdout, "{")
 
 	w.stringField("  ", "backend", def(cfg.Backend, "docker"), def(src.Backend, "default"), true)
+
+	// Backends
+	w.openObject("  ", "backends")
+	w.openObject("    ", "ssh")
+	w.nullableString("      ", "host", cfg.Backends.SSH.Host, def(src.SSHHost, "default"), true)
+	w.intField("      ", "port", defInt(cfg.Backends.SSH.Port, 22), def(src.SSHPort, "default"), true)
+	w.nullableString("      ", "user", cfg.Backends.SSH.User, def(src.SSHUser, "default"), true)
+	w.nullableString("      ", "identity_file", cfg.Backends.SSH.IdentityFile, def(src.SSHIdentityFile, "default"), true)
+	w.stringField("      ", "remote_backend", def(cfg.Backends.SSH.RemoteBackend, "docker"), def(src.SSHRemoteBackend, "default"), true)
+	w.stringField("      ", "sync_method", def(cfg.Backends.SSH.SyncMethod, "mutagen"), def(src.SSHSyncMethod, "default"), true)
+	w.array("      ", "sync_ignore", cfg.Backends.SSH.SyncIgnore, src.SSHSyncIgnore, true)
+	w.stringField("      ", "remote_sync_root", def(cfg.Backends.SSH.RemoteSyncRoot, "~/silo-sync"), def(src.SSHRemoteSyncRoot, "default"), false)
+	w.closeObject("    ", false)
+	w.closeObject("  ", true)
+
 	w.nullableString("  ", "tool", cfg.Tool, def(src.Tool, "default"), true)
 	w.array("  ", "mounts_ro", cfg.MountsRO, src.MountsRO, true)
 	w.array("  ", "mounts_rw", cfg.MountsRW, src.MountsRW, true)
@@ -180,6 +207,20 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w := newDefaultWriter(stdout)
 
 	fmt.Fprintln(stdout, "{")
+
+	// Backends
+	w.openObject("  ", "backends")
+	w.openObject("    ", "ssh")
+	w.nullableString("      ", "host", "", "", true)
+	w.intField("      ", "port", 22, "", true)
+	w.nullableString("      ", "user", "", "", true)
+	w.nullableString("      ", "identity_file", "", "", true)
+	w.stringField("      ", "remote_backend", "docker", "", true)
+	w.stringField("      ", "sync_method", "mutagen", "", true)
+	w.array("      ", "sync_ignore", nil, nil, true)
+	w.stringField("      ", "remote_sync_root", "~/silo-sync", "", false)
+	w.closeObject("    ", false)
+	w.closeObject("  ", true)
 
 	w.array("  ", "mounts_ro", cfg.MountsRO, nil, true)
 	w.array("  ", "mounts_rw", cfg.MountsRW, nil, true)

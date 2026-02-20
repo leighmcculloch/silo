@@ -17,6 +17,7 @@ import (
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
+	sshbackend "github.com/leighmcculloch/silo/backend/ssh"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/git"
@@ -88,7 +89,7 @@ func Tool(opts Options) error {
 	if progress != nil {
 		progress.SetSection("Backend")
 	}
-	backendClient, err := createBackend(cfg.Backend, stderr, opts.Verbose)
+	backendClient, err := createBackend(cfg, stderr, opts.Verbose)
 	if err != nil {
 		if progress != nil {
 			progress.Complete()
@@ -337,7 +338,8 @@ func repoURLMatches(url, pattern string) bool {
 }
 
 // createBackend creates the appropriate backend based on configuration.
-func createBackend(backendType string, stderr io.Writer, verbose bool) (backend.Backend, error) {
+func createBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.Backend, error) {
+	backendType := cfg.Backend
 	if backendType == "" {
 		// Default to container if available, otherwise docker
 		if _, err := exec.LookPath("container"); err == nil {
@@ -366,8 +368,20 @@ func createBackend(backendType string, stderr io.Writer, verbose bool) (backend.
 			return nil, fmt.Errorf("failed to initialize container backend: %w", err)
 		}
 		return client, nil
+	case "ssh":
+		if cfg.Backends.SSH.Host == "" {
+			return nil, fmt.Errorf("ssh backend requires backends.ssh.host to be configured")
+		}
+		if verbose {
+			cli.LogTo(stderr, "Using SSH backend (remote: %s)...", cfg.Backends.SSH.Host)
+		}
+		client, err := sshbackend.NewClient(cfg.Backends.SSH)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect via SSH: %w", err)
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, ssh)", backendType)
 	}
 }
 

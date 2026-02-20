@@ -16,6 +16,7 @@ import (
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
+	sshbackend "github.com/leighmcculloch/silo/backend/ssh"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
@@ -116,7 +117,7 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
-	rootCmd.Flags().String("backend", "", "Backend to use: docker, container")
+	rootCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh")
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 
@@ -139,7 +140,7 @@ Configuration is loaded from (in order, merged):
 				return runTool(cmd, toolDef, args, stdout, stderr)
 			},
 		}
-		toolCmd.Flags().String("backend", "", "Backend to use: docker, container")
+		toolCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh")
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 		rootCmd.AddCommand(toolCmd)
@@ -216,7 +217,7 @@ Use --local or --global to skip the prompt.`,
 			return runList(cmd, args, stdout, stderr)
 		},
 	}
-	lsCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	lsCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh (default: all)")
 	lsCmd.Flags().BoolP("quiet", "q", false, "Only display container names")
 	rootCmd.AddCommand(lsCmd)
 
@@ -229,7 +230,7 @@ Use --local or --global to skip the prompt.`,
 			return runRemove(cmd, args, stderr)
 		},
 	}
-	rmCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rmCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh (default: all)")
 	rootCmd.AddCommand(rmCmd)
 
 	execCmd := &cobra.Command{
@@ -248,7 +249,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], args[1:], stderr)
 		},
 	}
-	execCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	execCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh (default: all)")
 	rootCmd.AddCommand(execCmd)
 
 	shellCmd := &cobra.Command{
@@ -263,7 +264,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
 		},
 	}
-	shellCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	shellCmd.Flags().String("backend", "", "Backend to use: docker, container, ssh (default: all)")
 	rootCmd.AddCommand(shellCmd)
 
 	rootCmd.Version = version
@@ -532,12 +533,13 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	ctx := context.Background()
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
+	cfg := config.LoadAll(toolDefaults())
 
 	var backends []string
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container"}
+		backends = []string{"docker", "container", "ssh"}
 	}
 
 	for _, backendType := range backends {
@@ -555,6 +557,12 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 			backendClient, err = applecontainer.NewClient()
 			if err != nil {
 				cli.LogWarningTo(stderr, "Container backend not available: %v", err)
+				continue
+			}
+		case "ssh":
+			backendClient, err = sshbackend.NewClient(cfg.Backends.SSH)
+			if err != nil {
+				cli.LogWarningTo(stderr, "SSH backend not available: %v", err)
 				continue
 			}
 		default:
@@ -580,12 +588,13 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 	ctx := context.Background()
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
+	cfg := config.LoadAll(toolDefaults())
 
 	var backends []string
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container"}
+		backends = []string{"docker", "container", "ssh"}
 	}
 
 	for _, backendType := range backends {
@@ -600,6 +609,11 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 			}
 		case "container":
 			backendClient, err = applecontainer.NewClient()
+			if err != nil {
+				continue
+			}
+		case "ssh":
+			backendClient, err = sshbackend.NewClient(cfg.Backends.SSH)
 			if err != nil {
 				continue
 			}
@@ -657,6 +671,21 @@ func completeContainerNames(cmd *cobra.Command, args []string, toComplete string
 		cc.Close()
 	}
 
+	// Try SSH backend
+	cfg := config.LoadAll(toolDefaults())
+	if cfg.Backends.SSH.Host != "" {
+		if sc, err := sshbackend.NewClient(cfg.Backends.SSH); err == nil {
+			if containers, err := sc.List(ctx); err == nil {
+				for _, ctr := range containers {
+					if ctr.IsRunning && strings.HasPrefix(ctr.Name, toComplete) {
+						names = append(names, ctr.Name)
+					}
+				}
+			}
+			sc.Close()
+		}
+	}
+
 	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -665,12 +694,13 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
 	quietFlag, _ := cmd.Flags().GetBool("quiet")
+	cfg := config.LoadAll(toolDefaults())
 
 	var backends []string
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container"}
+		backends = []string{"docker", "container", "ssh"}
 	}
 
 	hasContainers := false
@@ -703,6 +733,14 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 			if err != nil {
 				if !quietFlag {
 					cli.LogWarningTo(stderr, "Container backend not available: %v", err)
+				}
+				continue
+			}
+		case "ssh":
+			backendClient, err = sshbackend.NewClient(cfg.Backends.SSH)
+			if err != nil {
+				if !quietFlag {
+					cli.LogWarningTo(stderr, "SSH backend not available: %v", err)
 				}
 				continue
 			}

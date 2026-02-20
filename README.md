@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers or Apple containers (lightweight VMs). The coding tools are configured to run in yolo mode.
+Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers, Apple containers (lightweight VMs), or on remote VMs via SSH. The coding tools are configured to run in yolo mode.
 
 > [!WARNING]
 > Use at your own risk.
@@ -73,6 +73,8 @@ go install github.com/leighmcculloch/silo@latest
 - **Go 1.25+**: To install silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
+- **SSH access to a remote host with Docker**: Required for the `ssh` backend
+- **mutagen** (optional): Recommended for file sync with the `ssh` backend (falls back to rsync)
 
 ## Usage
 
@@ -94,12 +96,13 @@ silo opencode -- --version
 
 ### Choosing a Backend
 
-Silo supports two backends and auto-detects which one to use if none specified:
+Silo supports three backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 | Docker | `--backend docker` | Uses Docker containers |
+| SSH | `--backend ssh` | Runs containers on a remote host via SSH |
 
 **Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker.
 
@@ -113,6 +116,9 @@ silo --backend docker claude
 # Explicitly use Apple container backend
 silo --backend container claude
 
+# Explicitly use SSH backend (requires backends.ssh config)
+silo --backend ssh claude
+
 # Force rebuild of the container image (ignore cache)
 silo --force-build claude
 ```
@@ -121,14 +127,14 @@ You can also set the backend in your configuration file.
 
 #### Backend Comparison
 
-| Feature | Docker | Apple Container |
-|---------|--------|-----------------|
-| Platform | Any | macOS only |
-| Isolation | Shared Linux VM | Per-container VM |
-| File mounts | Direct | Staged + symlinks |
-| Security | Dropped caps, no-new-privileges | VM isolation |
-| Resource control | Docker defaults | Explicit CPU/memory |
-| API | Docker SDK | CLI subprocess |
+| Feature | Docker | Apple Container | SSH |
+|---------|--------|-----------------|-----|
+| Platform | Any | macOS only | Any (remote host) |
+| Isolation | Shared Linux VM | Per-container VM | Remote VM + Docker |
+| File mounts | Direct | Staged + symlinks | Synced via mutagen/rsync |
+| Security | Dropped caps, no-new-privileges | VM isolation | SSH + remote Docker |
+| Resource control | Docker defaults | Explicit CPU/memory | Remote host resources |
+| API | Docker SDK | CLI subprocess | SSH + Docker CLI |
 
 
 #### Why Apple Containers on macOS?
@@ -168,7 +174,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker" or "container" (default: container if installed, else docker)
+  // Backend: "docker", "container", or "ssh" (default: container if installed, else docker)
   "backend": "container",
 
   // Default tool: "claude", "opencode", or "copilot" (if not set, interactive prompt is shown)
@@ -208,6 +214,20 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
     "claude": {
       "mounts_rw": ["~/.claude.json", "~/.claude"],
       "env": ["CLAUDE_SPECIFIC_VAR"]
+    }
+  },
+
+  // SSH backend configuration (used when backend is "ssh")
+  "backends": {
+    "ssh": {
+      "host": "my-remote-vm",          // Required: SSH hostname
+      "port": 22,                       // SSH port (default: 22)
+      "user": "ubuntu",                 // SSH username (default: $USER)
+      "identity_file": "~/.ssh/id_ed25519", // Path to SSH private key
+      "remote_backend": "docker",       // Container runtime on remote (default: "docker")
+      "sync_method": "mutagen",         // File sync: "mutagen" or "rsync" (default: "mutagen")
+      "sync_ignore": ["node_modules", ".git", "target"], // Patterns to ignore during sync
+      "remote_sync_root": "~/silo-sync" // Remote directory for synced files (default: "~/silo-sync")
     }
   },
 
@@ -404,6 +424,7 @@ silo ls
 # List from specific backend only
 silo ls --backend docker
 silo ls --backend container
+silo ls --backend ssh
 
 # Quiet mode (just container names)
 silo ls -q
@@ -425,6 +446,7 @@ silo rm $(silo ls -q)
 # Remove from specific backend only
 silo rm --backend docker myproject-1
 silo rm --backend container myproject-2
+silo rm --backend ssh myproject-3
 ```
 
 ## Examples
@@ -495,6 +517,30 @@ Or per-invocation:
 ```bash
 silo --backend container claude
 ```
+
+### Using SSH Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "ssh",
+  "backends": {
+    "ssh": {
+      "host": "dev-vm.example.com",
+      "user": "ubuntu",
+      "identity_file": "~/.ssh/id_ed25519",
+      "sync_ignore": ["node_modules", ".git", "target"]
+    }
+  }
+}
+```
+
+Or per-invocation:
+```bash
+silo --backend ssh claude
+```
+
+The SSH backend converts Dockerfile directives to shell commands and provisions the remote host via SSH. Provisioning is idempotent (hashes track what has been provisioned). Local files are synced to the remote host using mutagen (recommended) or rsync, and containers run on the remote host via Docker over SSH with PTY forwarding for interactive terminal sessions.
 
 ### Multiple Tool Configuration
 

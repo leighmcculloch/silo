@@ -9,10 +9,30 @@ import (
 	"github.com/tidwall/jsonc"
 )
 
+// BackendsConfig holds backend-specific configuration
+type BackendsConfig struct {
+	SSH SSHBackendConfig `json:"ssh,omitempty"`
+}
+
+// SSHBackendConfig configures the SSH remote backend
+type SSHBackendConfig struct {
+	Host           string   `json:"host,omitempty"`
+	Port           int      `json:"port,omitempty"`
+	User           string   `json:"user,omitempty"`
+	IdentityFile   string   `json:"identity_file,omitempty"`
+	RemoteBackend  string   `json:"remote_backend,omitempty"`
+	SyncMethod     string   `json:"sync_method,omitempty"`
+	SyncIgnore     []string `json:"sync_ignore,omitempty"`
+	RemoteSyncRoot string   `json:"remote_sync_root,omitempty"`
+}
+
 // Config represents the silo configuration
 type Config struct {
 	// Backend specifies which backend to use: "docker" (default)
 	Backend string `json:"backend,omitempty"`
+
+	// Backends holds backend-specific configuration
+	Backends BackendsConfig `json:"backends,omitempty"`
 
 	// Tool specifies the default tool to run: "claude", "opencode", or "copilot"
 	// If not set, an interactive prompt is shown
@@ -88,6 +108,14 @@ type RepoConfig struct {
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
 	Backend            string                       // source path for backend setting
+	SSHHost            string                       // source path for backends.ssh.host
+	SSHPort            string                       // source path for backends.ssh.port
+	SSHUser            string                       // source path for backends.ssh.user
+	SSHIdentityFile    string                       // source path for backends.ssh.identity_file
+	SSHRemoteBackend   string                       // source path for backends.ssh.remote_backend
+	SSHSyncMethod      string                       // source path for backends.ssh.sync_method
+	SSHSyncIgnore      map[string]string            // value -> source path
+	SSHRemoteSyncRoot  string                       // source path for backends.ssh.remote_sync_root
 	Tool               string                       // source path for tool setting
 	MountsRO           map[string]string            // value -> source path
 	MountsRW           map[string]string            // value -> source path
@@ -168,6 +196,30 @@ func Merge(base, overlay Config) Config {
 		result.Tool = overlay.Tool
 	}
 
+	// Backends: merge SSH config (overlay scalars take precedence, arrays append)
+	if overlay.Backends.SSH.Host != "" {
+		result.Backends.SSH.Host = overlay.Backends.SSH.Host
+	}
+	if overlay.Backends.SSH.Port != 0 {
+		result.Backends.SSH.Port = overlay.Backends.SSH.Port
+	}
+	if overlay.Backends.SSH.User != "" {
+		result.Backends.SSH.User = overlay.Backends.SSH.User
+	}
+	if overlay.Backends.SSH.IdentityFile != "" {
+		result.Backends.SSH.IdentityFile = overlay.Backends.SSH.IdentityFile
+	}
+	if overlay.Backends.SSH.RemoteBackend != "" {
+		result.Backends.SSH.RemoteBackend = overlay.Backends.SSH.RemoteBackend
+	}
+	if overlay.Backends.SSH.SyncMethod != "" {
+		result.Backends.SSH.SyncMethod = overlay.Backends.SSH.SyncMethod
+	}
+	result.Backends.SSH.SyncIgnore = append(result.Backends.SSH.SyncIgnore, overlay.Backends.SSH.SyncIgnore...)
+	if overlay.Backends.SSH.RemoteSyncRoot != "" {
+		result.Backends.SSH.RemoteSyncRoot = overlay.Backends.SSH.RemoteSyncRoot
+	}
+
 	// Append arrays
 	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
 	result.MountsRW = append(result.MountsRW, overlay.MountsRW...)
@@ -215,6 +267,7 @@ func Merge(base, overlay Config) Config {
 // NewSourceInfo creates a new empty SourceInfo
 func NewSourceInfo() *SourceInfo {
 	return &SourceInfo{
+		SSHSyncIgnore:      make(map[string]string),
 		MountsRO:           make(map[string]string),
 		MountsRW:           make(map[string]string),
 		Env:                make(map[string]string),
@@ -325,6 +378,30 @@ func LoadAllWithSources(toolDefaults map[string]ToolConfig) (Config, *SourceInfo
 func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	if cfg.Backend != "" {
 		info.Backend = source
+	}
+	if cfg.Backends.SSH.Host != "" {
+		info.SSHHost = source
+	}
+	if cfg.Backends.SSH.Port != 0 {
+		info.SSHPort = source
+	}
+	if cfg.Backends.SSH.User != "" {
+		info.SSHUser = source
+	}
+	if cfg.Backends.SSH.IdentityFile != "" {
+		info.SSHIdentityFile = source
+	}
+	if cfg.Backends.SSH.RemoteBackend != "" {
+		info.SSHRemoteBackend = source
+	}
+	if cfg.Backends.SSH.SyncMethod != "" {
+		info.SSHSyncMethod = source
+	}
+	for _, v := range cfg.Backends.SSH.SyncIgnore {
+		info.SSHSyncIgnore[v] = source
+	}
+	if cfg.Backends.SSH.RemoteSyncRoot != "" {
+		info.SSHRemoteSyncRoot = source
 	}
 	if cfg.Tool != "" {
 		info.Tool = source
