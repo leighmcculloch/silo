@@ -85,14 +85,14 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 // ImageExists checks whether a Docker image exists on the remote host.
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
-	cmd := fmt.Sprintf("docker image inspect %s >/dev/null 2>&1", shellQuote(name))
+	cmd := fmt.Sprintf("docker image inspect %s", shellQuote(name))
 	_, err := execRemote(c.sshConn, cmd)
 	if err != nil {
-		// docker image inspect exits non-zero if the image doesn't exist.
-		// Distinguish "image not found" from actual errors by checking the
-		// exit status. The execRemote helper wraps errors, so a non-zero
-		// exit code is the expected case for a missing image.
-		return false, nil
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "no such image") || strings.Contains(errMsg, "not found") {
+			return false, nil
+		}
+		return false, fmt.Errorf("ssh image check %s: %w", name, err)
 	}
 	return true, nil
 }
@@ -125,10 +125,23 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 // Run syncs local mounts to the remote, maps paths, and executes docker run
 // with interactive PTY forwarding over SSH.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
+	// Filter out non-existent paths (matching Docker/Container backend behavior).
+	var mountsRO, mountsRW []string
+	for _, m := range opts.MountsRO {
+		if _, err := os.Lstat(m); err == nil {
+			mountsRO = append(mountsRO, m)
+		}
+	}
+	for _, m := range opts.MountsRW {
+		if _, err := os.Lstat(m); err == nil {
+			mountsRW = append(mountsRW, m)
+		}
+	}
+
 	// Collect all local paths that need syncing.
-	allLocalPaths := make([]string, 0, len(opts.MountsRO)+len(opts.MountsRW))
-	allLocalPaths = append(allLocalPaths, opts.MountsRO...)
-	allLocalPaths = append(allLocalPaths, opts.MountsRW...)
+	allLocalPaths := make([]string, 0, len(mountsRO)+len(mountsRW))
+	allLocalPaths = append(allLocalPaths, mountsRO...)
+	allLocalPaths = append(allLocalPaths, mountsRW...)
 
 	// Push all files to remote.
 	remotePaths, err := c.syncer.Push(ctx, allLocalPaths)
@@ -137,9 +150,9 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Start background pull-back for RW mounts.
-	if len(opts.MountsRW) > 0 {
-		rwMappings := make(map[string]string, len(opts.MountsRW))
-		for _, localPath := range opts.MountsRW {
+	if len(mountsRW) > 0 {
+		rwMappings := make(map[string]string, len(mountsRW))
+		for _, localPath := range mountsRW {
 			if remotePath, ok := remotePaths[localPath]; ok {
 				rwMappings[localPath] = remotePath
 			}
@@ -149,8 +162,13 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 
-	// Build docker run command.
-	args := []string{"docker", "run", "-it", "--rm"}
+	// Build docker run command with security hardening matching the Docker backend.
+	args := []string{"docker", "run", "-it", "--rm",
+		"--init",
+		"--cap-drop", "ALL",
+		"--security-opt", "no-new-privileges:true",
+		"--ipc", "private",
+	}
 	args = append(args, "--name", opts.Name)
 
 	if opts.WorkDir != "" {
@@ -158,7 +176,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Map read-only mounts.
-	for _, localPath := range opts.MountsRO {
+	for _, localPath := range mountsRO {
 		remotePath, ok := remotePaths[localPath]
 		if !ok {
 			continue
@@ -168,7 +186,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Map read-write mounts.
-	for _, localPath := range opts.MountsRW {
+	for _, localPath := range mountsRW {
 		remotePath, ok := remotePaths[localPath]
 		if !ok {
 			continue
@@ -181,25 +199,30 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		args = append(args, "-e", env)
 	}
 
-	args = append(args, opts.Image)
-
 	// Build entrypoint/command.
-	if len(opts.Command) > 0 {
-		fullCmd := append(opts.Command, opts.Args...)
-		if len(opts.PreRunHooks) > 0 {
-			var script strings.Builder
-			for _, hook := range opts.PreRunHooks {
-				script.WriteString(hook)
-				script.WriteString(" && ")
-			}
+	fullCmd := append(opts.Command, opts.Args...)
+	if len(opts.PreRunHooks) > 0 {
+		// Hooks present: run via bash with hooks chained before the command.
+		var script strings.Builder
+		for _, hook := range opts.PreRunHooks {
+			script.WriteString(hook)
+			script.WriteString(" && ")
+		}
+		if len(fullCmd) > 0 {
 			script.WriteString("exec ")
 			script.WriteString(shellquote.Join(fullCmd...))
-			args = append(args, "/bin/bash", "-c", script.String())
 		} else {
-			args = append(args, fullCmd...)
+			script.WriteString("exec /bin/bash")
 		}
-	} else if len(opts.Args) > 0 {
-		args = append(args, opts.Args...)
+		args = append(args, "--entrypoint", "/bin/bash")
+		args = append(args, opts.Image, "-c", script.String())
+	} else if len(fullCmd) > 0 {
+		// Override entrypoint to match Docker backend behavior.
+		args = append(args, "--entrypoint", fullCmd[0])
+		args = append(args, opts.Image)
+		args = append(args, fullCmd[1:]...)
+	} else {
+		args = append(args, opts.Image)
 	}
 
 	cmd := shellquote.Join(args...)
@@ -261,9 +284,21 @@ func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 }
 
 // Remove removes the named containers on the remote host.
+// Only containers with a silo- image prefix are removed, matching the
+// Docker and Container backend safety behavior.
 func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	var removed []string
 	for _, name := range names {
+		// Verify the container has a silo- image before removing.
+		inspectCmd := fmt.Sprintf("docker inspect --format '{{.Config.Image}}' %s", shellQuote(name))
+		image, err := execRemote(c.sshConn, inspectCmd)
+		if err != nil {
+			return removed, fmt.Errorf("ssh remove %s: %w", name, err)
+		}
+		if !strings.HasPrefix(image, "silo-") {
+			continue
+		}
+
 		cmd := fmt.Sprintf("docker rm -f %s", shellQuote(name))
 		if _, err := execRemote(c.sshConn, cmd); err != nil {
 			return removed, fmt.Errorf("ssh remove %s: %w", name, err)
