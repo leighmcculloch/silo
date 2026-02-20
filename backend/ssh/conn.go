@@ -206,6 +206,7 @@ func writeRemoteFile(client *ssh.Client, path string, content string) error {
 	var stderr bytes.Buffer
 	session.Stderr = &stderr
 
+	// TODO: replace shell quote with base64 or hex xxd encoding
 	cmd := fmt.Sprintf("cat > %s", shellQuote(path))
 	if err := session.Run(cmd); err != nil {
 		return fmt.Errorf("write %s: %w\nstderr: %s", path, err, strings.TrimSpace(stderr.String()))
