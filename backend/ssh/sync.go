@@ -38,7 +38,7 @@ func NewSyncer(cfg SSHBackendConfig, sshConn *cryptossh.Client) *Syncer {
 func (s *Syncer) Push(ctx context.Context, localPaths []string) (map[string]string, error) {
 	remotePaths := make(map[string]string)
 	for _, localPath := range localPaths {
-		remotePath := remotePathFor(syncRoot(s.cfg), localPath)
+		remotePath := localPath
 
 		// Ensure the remote directory exists.
 		mkdirCmd := fmt.Sprintf("mkdir -p %s", shellQuote(remotePath))
@@ -233,14 +233,6 @@ func (s *Syncer) sshCommand() string {
 	return strings.Join(parts, " ")
 }
 
-// --- Helpers (unchanged) ---
-
-// remotePathFor maps a local absolute path to a remote path under the sync root.
-func remotePathFor(syncRoot, localPath string) string {
-	cleaned := strings.TrimPrefix(localPath, "/")
-	return syncRoot + "/" + cleaned
-}
-
 // sshTarget returns the user@host string for SSH/rsync commands.
 func sshTarget(cfg SSHBackendConfig) string {
 	user := cfg.User
@@ -257,12 +249,4 @@ func sshPortFlag(cfg SSHBackendConfig) string {
 		port = 22
 	}
 	return fmt.Sprintf("%d", port)
-}
-
-// syncRoot returns the configured remote sync root, defaulting to ~/silo-sync.
-func syncRoot(cfg SSHBackendConfig) string {
-	if cfg.RemoteSyncRoot != "" {
-		return cfg.RemoteSyncRoot
-	}
-	return "~/silo-sync"
 }

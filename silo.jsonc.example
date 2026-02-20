@@ -10,9 +10,7 @@
   //     "user": "ubuntu",
   //     "identity_file": "~/.ssh/id_ed25519",
   //     "remote_backend": "docker",
-  //     "sync_method": "mutagen",
-  //     "sync_ignore": [".git", "node_modules"],
-  //     "remote_sync_root": "~/silo-sync"
+  //     "sync_ignore": [".git", "node_modules"]
   //   }
   // },
   // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)

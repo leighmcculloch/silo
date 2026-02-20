@@ -153,9 +153,7 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	w.nullableString("      ", "user", cfg.Backends.SSH.User, def(src.SSHUser, "default"), true)
 	w.nullableString("      ", "identity_file", cfg.Backends.SSH.IdentityFile, def(src.SSHIdentityFile, "default"), true)
 	w.stringField("      ", "remote_backend", def(cfg.Backends.SSH.RemoteBackend, "docker"), def(src.SSHRemoteBackend, "default"), true)
-	w.stringField("      ", "sync_method", def(cfg.Backends.SSH.SyncMethod, "mutagen"), def(src.SSHSyncMethod, "default"), true)
-	w.array("      ", "sync_ignore", cfg.Backends.SSH.SyncIgnore, src.SSHSyncIgnore, true)
-	w.stringField("      ", "remote_sync_root", def(cfg.Backends.SSH.RemoteSyncRoot, "~/silo-sync"), def(src.SSHRemoteSyncRoot, "default"), false)
+	w.array("      ", "sync_ignore", cfg.Backends.SSH.SyncIgnore, src.SSHSyncIgnore, false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
@@ -216,9 +214,7 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w.nullableString("      ", "user", "", "", true)
 	w.nullableString("      ", "identity_file", "", "", true)
 	w.stringField("      ", "remote_backend", "docker", "", true)
-	w.stringField("      ", "sync_method", "mutagen", "", true)
-	w.array("      ", "sync_ignore", nil, nil, true)
-	w.stringField("      ", "remote_sync_root", "~/silo-sync", "", false)
+	w.array("      ", "sync_ignore", nil, nil, false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 

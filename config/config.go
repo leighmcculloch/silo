@@ -16,14 +16,12 @@ type BackendsConfig struct {
 
 // SSHBackendConfig configures the SSH remote backend
 type SSHBackendConfig struct {
-	Host           string   `json:"host,omitempty"`
-	Port           int      `json:"port,omitempty"`
-	User           string   `json:"user,omitempty"`
-	IdentityFile   string   `json:"identity_file,omitempty"`
-	RemoteBackend  string   `json:"remote_backend,omitempty"`
-	SyncMethod     string   `json:"sync_method,omitempty"`
-	SyncIgnore     []string `json:"sync_ignore,omitempty"`
-	RemoteSyncRoot string   `json:"remote_sync_root,omitempty"`
+	Host          string   `json:"host,omitempty"`
+	Port          int      `json:"port,omitempty"`
+	User          string   `json:"user,omitempty"`
+	IdentityFile  string   `json:"identity_file,omitempty"`
+	RemoteBackend string   `json:"remote_backend,omitempty"`
+	SyncIgnore    []string `json:"sync_ignore,omitempty"`
 }
 
 // Config represents the silo configuration
@@ -113,9 +111,7 @@ type SourceInfo struct {
 	SSHUser            string                       // source path for backends.ssh.user
 	SSHIdentityFile    string                       // source path for backends.ssh.identity_file
 	SSHRemoteBackend   string                       // source path for backends.ssh.remote_backend
-	SSHSyncMethod      string                       // source path for backends.ssh.sync_method
 	SSHSyncIgnore      map[string]string            // value -> source path
-	SSHRemoteSyncRoot  string                       // source path for backends.ssh.remote_sync_root
 	Tool               string                       // source path for tool setting
 	MountsRO           map[string]string            // value -> source path
 	MountsRW           map[string]string            // value -> source path
@@ -212,13 +208,7 @@ func Merge(base, overlay Config) Config {
 	if overlay.Backends.SSH.RemoteBackend != "" {
 		result.Backends.SSH.RemoteBackend = overlay.Backends.SSH.RemoteBackend
 	}
-	if overlay.Backends.SSH.SyncMethod != "" {
-		result.Backends.SSH.SyncMethod = overlay.Backends.SSH.SyncMethod
-	}
 	result.Backends.SSH.SyncIgnore = append(result.Backends.SSH.SyncIgnore, overlay.Backends.SSH.SyncIgnore...)
-	if overlay.Backends.SSH.RemoteSyncRoot != "" {
-		result.Backends.SSH.RemoteSyncRoot = overlay.Backends.SSH.RemoteSyncRoot
-	}
 
 	// Append arrays
 	result.MountsRO = append(result.MountsRO, overlay.MountsRO...)
@@ -394,14 +384,8 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	if cfg.Backends.SSH.RemoteBackend != "" {
 		info.SSHRemoteBackend = source
 	}
-	if cfg.Backends.SSH.SyncMethod != "" {
-		info.SSHSyncMethod = source
-	}
 	for _, v := range cfg.Backends.SSH.SyncIgnore {
 		info.SSHSyncIgnore[v] = source
-	}
-	if cfg.Backends.SSH.RemoteSyncRoot != "" {
-		info.SSHRemoteSyncRoot = source
 	}
 	if cfg.Tool != "" {
 		info.Tool = source

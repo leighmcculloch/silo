@@ -154,8 +154,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	args = append(args, "--name", opts.Name)
 
 	if opts.WorkDir != "" {
-		remoteWorkDir := c.remotePathFor(opts.WorkDir)
-		args = append(args, "-w", remoteWorkDir)
+		args = append(args, "-w", opts.WorkDir)
 	}
 
 	// Map read-only mounts.
@@ -291,11 +290,6 @@ func (c *Client) Close() error {
 		return fmt.Errorf("ssh close: %s", strings.Join(errs, "; "))
 	}
 	return nil
-}
-
-// remotePathFor maps a local absolute path to a remote path under the sync root.
-func (c *Client) remotePathFor(localPath string) string {
-	return remotePathFor(syncRoot(c.cfg), localPath)
 }
 
 // execInteractive runs a command on the remote host with full PTY forwarding.

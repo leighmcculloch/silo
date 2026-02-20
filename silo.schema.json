@@ -46,23 +46,12 @@
               "default": "docker",
               "description": "Container runtime on the remote machine. Default: 'docker'."
             },
-            "sync_method": {
-              "type": "string",
-              "enum": ["mutagen", "rsync"],
-              "default": "mutagen",
-              "description": "File synchronization method. Default: 'mutagen'."
-            },
             "sync_ignore": {
               "type": "array",
               "items": {
                 "type": "string"
               },
               "description": "Paths to exclude from file sync (e.g., '.git', 'node_modules')."
-            },
-            "remote_sync_root": {
-              "type": "string",
-              "default": "~/silo-sync",
-              "description": "Directory on the remote where synced files are stored. Default: '~/silo-sync'."
             }
           },
           "required": ["host"],

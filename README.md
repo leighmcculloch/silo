@@ -74,7 +74,8 @@ go install github.com/leighmcculloch/silo@latest
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
 - **SSH access to a remote host with Docker**: Required for the `ssh` backend
-- **mutagen** (optional): Recommended for file sync with the `ssh` backend (falls back to rsync)
+- **rsync**: Required for file sync with the `ssh` backend
+- **inotify-tools** (optional): Enables automatic pull-back of remote RW file changes for the `ssh` backend
 
 ## Usage
 
@@ -131,7 +132,7 @@ You can also set the backend in your configuration file.
 |---------|--------|-----------------|-----|
 | Platform | Any | macOS only | Any (remote host) |
 | Isolation | Shared Linux VM | Per-container VM | Remote VM + Docker |
-| File mounts | Direct | Staged + symlinks | Synced via mutagen/rsync |
+| File mounts | Direct | Staged + symlinks | Synced via rsync |
 | Security | Dropped caps, no-new-privileges | VM isolation | SSH + remote Docker |
 | Resource control | Docker defaults | Explicit CPU/memory | Remote host resources |
 | API | Docker SDK | CLI subprocess | SSH + Docker CLI |
@@ -225,9 +226,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
       "user": "ubuntu",                 // SSH username (default: $USER)
       "identity_file": "~/.ssh/id_ed25519", // Path to SSH private key
       "remote_backend": "docker",       // Container runtime on remote (default: "docker")
-      "sync_method": "mutagen",         // File sync: "mutagen" or "rsync" (default: "mutagen")
-      "sync_ignore": ["node_modules", ".git", "target"], // Patterns to ignore during sync
-      "remote_sync_root": "~/silo-sync" // Remote directory for synced files (default: "~/silo-sync")
+      "sync_ignore": ["node_modules", ".git", "target"] // Patterns to ignore during sync
     }
   },
 
@@ -540,7 +539,7 @@ Or per-invocation:
 silo --backend ssh claude
 ```
 
-The SSH backend converts Dockerfile directives to shell commands and provisions the remote host via SSH. Provisioning is idempotent (hashes track what has been provisioned). Local files are synced to the remote host using mutagen (recommended) or rsync, and containers run on the remote host via Docker over SSH with PTY forwarding for interactive terminal sessions.
+The SSH backend converts Dockerfile directives to shell commands and provisions the remote host via SSH. Provisioning is idempotent (hashes track what has been provisioned). Local files are synced to the remote host using rsync (preserving original paths), and containers run on the remote host via Docker over SSH with PTY forwarding for interactive terminal sessions. If inotify-tools is installed on the remote, RW mount changes are automatically pulled back to the local machine.
 
 ### Multiple Tool Configuration
 
