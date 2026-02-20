@@ -23,6 +23,10 @@ type stage struct {
 	directives []Directive
 }
 
+// TODO: use the moby buildkit dockerfile parser
+// (https://github.com/moby/buildkit/blob/master/frontend/dockerfile/parser/parser.go)
+// to parse the Dockerfile instead?
+
 var fromRe = regexp.MustCompile(`(?i)^FROM\s+(\S+)(?:\s+AS\s+(\S+))?`)
 
 // parseStages parses a Dockerfile string into ordered stages.
