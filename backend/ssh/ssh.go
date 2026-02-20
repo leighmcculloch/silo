@@ -21,7 +21,7 @@ import (
 type Client struct {
 	cfg     SSHBackendConfig
 	sshConn *cryptossh.Client
-	syncer  Syncer
+	syncer  *Syncer
 }
 
 // NewClient connects to the remote host and returns a ready-to-use Client.
@@ -30,7 +30,7 @@ func NewClient(cfg SSHBackendConfig) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	syncer := NewSyncer(cfg)
+	syncer := NewSyncer(cfg, conn)
 	return &Client{
 		cfg:     cfg,
 		sshConn: conn,
@@ -130,10 +130,23 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	allLocalPaths = append(allLocalPaths, opts.MountsRO...)
 	allLocalPaths = append(allLocalPaths, opts.MountsRW...)
 
-	// Sync files to remote.
-	remotePaths, err := c.syncer.Sync(ctx, allLocalPaths)
+	// Push all files to remote.
+	remotePaths, err := c.syncer.Push(ctx, allLocalPaths)
 	if err != nil {
-		return fmt.Errorf("ssh run: sync: %w", err)
+		return fmt.Errorf("ssh run: push: %w", err)
+	}
+
+	// Start background pull-back for RW mounts.
+	if len(opts.MountsRW) > 0 {
+		rwMappings := make(map[string]string, len(opts.MountsRW))
+		for _, localPath := range opts.MountsRW {
+			if remotePath, ok := remotePaths[localPath]; ok {
+				rwMappings[localPath] = remotePath
+			}
+		}
+		if err := c.syncer.WatchAndPullBack(ctx, rwMappings); err != nil {
+			return fmt.Errorf("ssh run: watch: %w", err)
+		}
 	}
 
 	// Build docker run command.
