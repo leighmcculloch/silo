@@ -16,7 +16,7 @@ var Tool = tools.Tool{
 	Description:     "Claude Code - Anthropic's CLI for Claude",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{"claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"}
+		return []string{home + "/.local/bin/claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"}
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{

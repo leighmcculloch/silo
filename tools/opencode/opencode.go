@@ -18,7 +18,7 @@ var Tool = tools.Tool{
 	Description:     "OpenCode - AI coding assistant",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{"opencode"}
+		return []string{home + "/.opencode/bin/opencode"}
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{

@@ -22,7 +22,7 @@ var Tool = tools.Tool{
 	Description:     "GitHub Copilot CLI",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{"copilot", "--allow-all", "--disable-builtin-mcps"}
+		return []string{home + "/.local/bin/copilot", "--allow-all", "--disable-builtin-mcps"}
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{
