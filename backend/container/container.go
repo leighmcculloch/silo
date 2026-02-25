@@ -370,11 +370,13 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	ch <- syscall.SIGWINCH // Initial resize
 	defer signal.Stop(ch)
 
-	// Put our terminal in raw mode
+	// Put our terminal in raw mode (must clear OPOST to prevent double
+	// CR/LF translation since the inner PTY already produces \r\n).
 	if oldState != nil {
 		newState := *oldState
-		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG | unix.IEXTEN
-		newState.Iflag &^= unix.IXON | unix.ICRNL
+		newState.Iflag &^= unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON
+		newState.Oflag &^= unix.OPOST
+		newState.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
 		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
 	}
 
@@ -661,11 +663,13 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 	ch <- syscall.SIGWINCH // Initial resize
 	defer signal.Stop(ch)
 
-	// Put our terminal in raw mode
+	// Put our terminal in raw mode (must clear OPOST to prevent double
+	// CR/LF translation since the inner PTY already produces \r\n).
 	if oldState != nil {
 		newState := *oldState
-		newState.Lflag &^= unix.ICANON | unix.ECHO | unix.ISIG | unix.IEXTEN
-		newState.Iflag &^= unix.IXON | unix.ICRNL
+		newState.Iflag &^= unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON
+		newState.Oflag &^= unix.OPOST
+		newState.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
 		unix.IoctlSetTermios(fd, unix.TIOCSETA, &newState)
 	}
 
