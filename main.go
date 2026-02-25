@@ -231,6 +231,7 @@ Use --local or --global to skip the prompt.`,
 		},
 	}
 	rmCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
+	rmCmd.Flags().BoolP("force", "f", false, "Force removal of running containers")
 	rootCmd.AddCommand(rmCmd)
 
 	execCmd := &cobra.Command{
@@ -537,6 +538,7 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	ctx := context.Background()
 
 	backendFlag, _ := cmd.Flags().GetString("backend")
+	force, _ := cmd.Flags().GetBool("force")
 
 	var backends []string
 	if backendFlag != "" {
@@ -566,7 +568,35 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 			return fmt.Errorf("unknown backend: %s", backendType)
 		}
 
-		removed, err := backendClient.Remove(ctx, args)
+		// Unless -f is passed, refuse to remove running containers.
+		toRemove := args
+		if !force {
+			containers, listErr := backendClient.List(ctx)
+			if listErr == nil {
+				running := make(map[string]bool)
+				for _, ctr := range containers {
+					if ctr.IsRunning {
+						running[ctr.Name] = true
+					}
+				}
+				var filtered []string
+				for _, name := range args {
+					if running[name] {
+						cli.LogWarningTo(stderr, "container %s is running, use -f to force removal", name)
+					} else {
+						filtered = append(filtered, name)
+					}
+				}
+				toRemove = filtered
+			}
+		}
+
+		if len(toRemove) == 0 {
+			backendClient.Close()
+			continue
+		}
+
+		removed, err := backendClient.Remove(ctx, toRemove)
 		backendClient.Close()
 		if err != nil {
 			cli.LogWarningTo(stderr, "failed to remove containers (%s): %v", backendType, err)
