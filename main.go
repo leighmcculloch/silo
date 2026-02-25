@@ -142,6 +142,7 @@ Configuration is loaded from (in order, merged):
 		toolCmd.Flags().String("backend", "", "Backend to use: docker, container")
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
+		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
 		rootCmd.AddCommand(toolCmd)
 	}
 
@@ -357,6 +358,9 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
+	// Get entrypoint flag
+	entrypoint, _ := cmd.Flags().GetString("entrypoint")
+
 	// Run the tool
 	return run.Tool(run.Options{
 		ToolDef:    toolDef,
@@ -365,6 +369,7 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		Dockerfile: Dockerfile(supportedTools),
 		ForceBuild: forceBuild,
 		Verbose:    verbose,
+		Entrypoint: entrypoint,
 		Stdout:     stdout,
 		Stderr:     stderr,
 	})

@@ -33,6 +33,7 @@ type Options struct {
 	Dockerfile string // raw Dockerfile template (before hook injection)
 	ForceBuild bool
 	Verbose    bool
+	Entrypoint string // run a custom command instead of the tool
 	Stdout     io.Writer
 	Stderr     io.Writer
 }
@@ -261,6 +262,12 @@ func Tool(opts Options) error {
 	}
 
 	// Run the container/VM
+	command := opts.ToolDef.Command(home)
+	args := opts.ToolArgs
+	if opts.Entrypoint != "" {
+		command = []string{opts.Entrypoint}
+		args = nil
+	}
 	err = backendClient.Run(ctx, backend.RunOptions{
 		Image:       imageTag,
 		Name:        containerName,
@@ -268,8 +275,8 @@ func Tool(opts Options) error {
 		MountsRO:    mountsRO,
 		MountsRW:    mountsRW,
 		Env:         envVars,
-		Command:     opts.ToolDef.Command(home),
-		Args:        opts.ToolArgs,
+		Command:     command,
+		Args:        args,
 		PreRunHooks: preRunHooks,
 	})
 
