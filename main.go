@@ -20,6 +20,7 @@ import (
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
 	"github.com/leighmcculloch/silo/run"
+	"github.com/leighmcculloch/silo/tilde"
 	"github.com/leighmcculloch/silo/tools"
 	"github.com/leighmcculloch/silo/tools/claudecode"
 	"github.com/leighmcculloch/silo/tools/copilotcli"
@@ -197,7 +198,7 @@ Use --local or --global to skip the prompt.`,
 			return runInit(cmd, args, stderr, globalFlag, localFlag)
 		},
 	}
-	configInitCmd.Flags().BoolP("global", "g", false, "Create global config (~/.config/silo/silo.jsonc)")
+	configInitCmd.Flags().BoolP("global", "g", false, fmt.Sprintf("Create global config (%s)", tilde.Path(filepath.Join(config.XDGConfigHome(), "silo", "silo.jsonc"))))
 	configInitCmd.Flags().BoolP("local", "l", false, "Create local config (silo.jsonc)")
 	configInitCmd.MarkFlagsMutuallyExclusive("global", "local")
 
@@ -500,7 +501,7 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 					Description("Choose which configuration file to create").
 					Options(
 						huh.NewOption("Local (silo.jsonc in current directory)", "local"),
-						huh.NewOption("Global (~/.config/silo/silo.jsonc)", "global"),
+						huh.NewOption(fmt.Sprintf("Global (%s)", tilde.Path(filepath.Join(config.XDGConfigHome(), "silo", "silo.jsonc"))), "global"),
 					).
 					Value(&configType),
 			),
