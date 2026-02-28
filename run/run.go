@@ -483,7 +483,7 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 	}
 
 	if opts.imageExists {
-		logSuccessBullet("Environment cached")
+		logSuccessBullet("Environment cached (%s)", opts.imageTag)
 		return nil
 	}
 
@@ -506,7 +506,7 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 	if err != nil {
 		return fmt.Errorf("failed to build environment: %w", err)
 	}
-	logSuccessBullet("Environment ready")
+	logSuccessBullet("Environment ready (%s)", opts.imageTag)
 	return nil
 }
 
