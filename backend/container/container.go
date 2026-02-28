@@ -342,14 +342,18 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		if oldState != nil {
 			unix.IoctlSetTermios(fd, unix.TIOCSETA, oldState)
 		}
-		// Reset terminal modes (mouse tracking, alternate screen, etc.)
-		// These are escape sequences not covered by termios
+		// Reset terminal modes (mouse tracking, etc.)
+		// These are escape sequences not covered by termios.
+		// Note: we intentionally do NOT send \x1b[?1049l (exit alternate
+		// screen buffer) here because it would erase all container output
+		// (including error messages) if the container never entered the
+		// alternate screen. Apps that use the alternate screen (like
+		// Claude Code) send their own exit sequence on clean shutdown.
 		os.Stdout.WriteString("\x1b[?1000l") // Disable mouse click tracking
 		os.Stdout.WriteString("\x1b[?1002l") // Disable mouse button tracking
 		os.Stdout.WriteString("\x1b[?1003l") // Disable all mouse tracking
 		os.Stdout.WriteString("\x1b[?1006l") // Disable SGR mouse mode
 		os.Stdout.WriteString("\x1b[?25h")   // Show cursor
-		os.Stdout.WriteString("\x1b[?1049l") // Exit alternate screen buffer
 	}()
 
 	// Start command with PTY so container gets a real terminal

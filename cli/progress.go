@@ -17,14 +17,15 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // Progress represents a slim progress bar that displays sections
 type Progress struct {
-	mu       sync.Mutex
-	w        io.Writer
-	sections []string
-	current  int
-	detail   string
-	width    int
-	isTTY    bool
-	rendered bool
+	mu        sync.Mutex
+	w         io.Writer
+	sections  []string
+	current   int
+	detail    string
+	width     int
+	isTTY     bool
+	rendered  bool
+	completed bool
 }
 
 // NewProgress creates a new progress bar with the given sections
@@ -64,6 +65,10 @@ func (p *Progress) SetSection(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.completed {
+		return
+	}
+
 	for i, s := range p.sections {
 		if s == name {
 			p.current = i
@@ -81,6 +86,10 @@ func (p *Progress) SetSection(name string) {
 func (p *Progress) SetDetail(detail string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	if p.completed {
+		return
+	}
 
 	// Strip ANSI escape codes
 	detail = ansiRegex.ReplaceAllString(detail, "")
@@ -122,6 +131,10 @@ func (p *Progress) Complete() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	if p.completed {
+		return
+	}
+	p.completed = true
 	p.current = len(p.sections)
 
 	if p.isTTY && p.rendered {
