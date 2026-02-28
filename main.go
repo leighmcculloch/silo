@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
@@ -209,6 +210,16 @@ Use --local or --global to skip the prompt.`,
 	configCmd.AddCommand(configInitCmd)
 
 	rootCmd.AddCommand(configCmd)
+
+	logsCmd := &cobra.Command{
+		Use:     "logs",
+		Short:   "Browse build logs from previous runs",
+		GroupID: "config",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runLogs(stdout, stderr)
+		},
+	}
+	rootCmd.AddCommand(logsCmd)
 
 	lsCmd := &cobra.Command{
 		Use:     "ls",
@@ -533,6 +544,66 @@ func runInit(_ *cobra.Command, _ []string, stderr io.Writer, globalFlag, localFl
 
 	cli.LogSuccessTo(stderr, "Created %s", configPath)
 	return nil
+}
+
+func runLogs(stdout, stderr io.Writer) error {
+	logDir := filepath.Join(config.XDGStateHomeDir(), "silo", "logs")
+
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return fmt.Errorf("no logs found (looked in %s)", tilde.Path(logDir))
+	}
+
+	// Filter to .log files and collect in reverse order (most recent first)
+	var logs []os.DirEntry
+	for i := len(entries) - 1; i >= 0; i-- {
+		if filepath.Ext(entries[i].Name()) == ".log" {
+			logs = append(logs, entries[i])
+		}
+	}
+
+	if len(logs) == 0 {
+		return fmt.Errorf("no logs found in %s", tilde.Path(logDir))
+	}
+
+	// Build options for the selector
+	var options []huh.Option[string]
+	for _, entry := range logs {
+		name := entry.Name()
+		path := filepath.Join(logDir, name)
+		info, _ := entry.Info()
+		label := name
+		if info != nil {
+			label = fmt.Sprintf("%s (%s)", name, humanize.Bytes(uint64(info.Size())))
+		}
+		options = append(options, huh.NewOption(label, path))
+	}
+
+	var selected string
+	for {
+		km := huh.NewDefaultKeyMap()
+		km.Quit = key.NewBinding(key.WithKeys("q", "ctrl+c"))
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("Select Log").
+					Description(tilde.Path(logDir)).
+					Options(options...).
+					Value(&selected),
+			),
+		).WithKeyMap(km)
+
+		if err := form.Run(); err != nil {
+			return nil
+		}
+
+		// Open in less
+		cmd := exec.Command("less", selected)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		_ = cmd.Run()
+	}
 }
 
 func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {

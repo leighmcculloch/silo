@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
@@ -43,6 +44,17 @@ func Tool(opts Options) error {
 	tool := opts.ToolDef.Name
 	cfg := opts.Config
 	stderr := opts.Stderr
+
+	// Create log file
+	logDir := filepath.Join(config.XDGStateHomeDir(), "silo", "logs")
+	_ = os.MkdirAll(logDir, 0o755)
+	logName := fmt.Sprintf("%s-%s.log", time.Now().Format("20060102-150405"), tool)
+	logPath := filepath.Join(logDir, logName)
+	var logFile *os.File
+	if f, err := os.Create(logPath); err == nil {
+		logFile = f
+		defer logFile.Close()
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -82,6 +94,17 @@ func Tool(opts Options) error {
 	logSection := func(format string, args ...any) {
 		if opts.Verbose {
 			cli.LogTo(stderr, format, args...)
+		}
+		if logFile != nil {
+			fmt.Fprintf(logFile, "==> "+format+"\n", args...)
+		}
+	}
+
+	// Log file path
+	if logFile != nil {
+		logSection("Log: %s", tilde.Path(logPath))
+		if progress != nil {
+			progress.SetDetail("Log: " + tilde.Path(logPath))
 		}
 	}
 
@@ -220,6 +243,7 @@ func Tool(opts Options) error {
 		stderr:             stderr,
 		verbose:            opts.Verbose,
 		progress:           progress,
+		logFile:            logFile,
 	}); err != nil {
 		if progress != nil {
 			progress.Complete()
@@ -246,6 +270,7 @@ func Tool(opts Options) error {
 		gitEmail:         gitEmail,
 		verbose:          opts.Verbose,
 		progress:         progress,
+		logFile:          logFile,
 	})
 
 	// Prepare pre-run hooks
@@ -433,6 +458,7 @@ type buildEnvOptions struct {
 	stderr             io.Writer
 	verbose            bool
 	progress           *cli.Progress
+	logFile            io.Writer
 }
 
 // buildEnvironment builds or uses cached container image.
@@ -442,15 +468,24 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		if opts.verbose {
 			cli.LogTo(opts.stderr, format, args...)
 		}
+		if opts.logFile != nil {
+			fmt.Fprintf(opts.logFile, "==> "+format+"\n", args...)
+		}
 	}
 	logBullet := func(format string, args ...any) {
 		if opts.verbose {
 			cli.LogBulletTo(opts.stderr, format, args...)
 		}
+		if opts.logFile != nil {
+			fmt.Fprintf(opts.logFile, "  - "+format+"\n", args...)
+		}
 	}
 	logSuccessBullet := func(format string, args ...any) {
 		if opts.verbose {
 			cli.LogSuccessBulletTo(opts.stderr, format, args...)
+		}
+		if opts.logFile != nil {
+			fmt.Fprintf(opts.logFile, "  * "+format+"\n", args...)
 		}
 	}
 
@@ -496,6 +531,9 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		MountsRW:   opts.mountsRW,
 		NoCache:    opts.forceBuild,
 		OnProgress: func(msg string) {
+			if opts.logFile != nil {
+				fmt.Fprint(opts.logFile, msg)
+			}
 			if opts.verbose {
 				fmt.Fprint(opts.stderr, msg)
 			} else if opts.progress != nil {
@@ -597,6 +635,7 @@ type logRunConfigOptions struct {
 	gitEmail         string
 	verbose          bool
 	progress         *cli.Progress
+	logFile          io.Writer
 }
 
 // logRunConfig logs the run configuration to stderr.
@@ -606,10 +645,16 @@ func logRunConfig(opts logRunConfigOptions) {
 		if opts.verbose {
 			cli.LogTo(opts.stderr, format, args...)
 		}
+		if opts.logFile != nil {
+			fmt.Fprintf(opts.logFile, "==> "+format+"\n", args...)
+		}
 	}
 	logBullet := func(format string, args ...any) {
 		if opts.verbose {
 			cli.LogBulletTo(opts.stderr, format, args...)
+		}
+		if opts.logFile != nil {
+			fmt.Fprintf(opts.logFile, "  - "+format+"\n", args...)
 		}
 	}
 
