@@ -370,23 +370,27 @@
         }
 
         /* ===========================================
-           CANVAS LOGO
+           ASCII LOGO (text-based)
            =========================================== */
-        .ascii-logo-canvas {
-            image-rendering: pixelated;
-            width: min(80vw, 500px);
-            height: auto;
-            filter:
-                drop-shadow(0 0 15px var(--pink-glow))
-                drop-shadow(0 0 40px var(--pink-glow));
+        .ascii-logo {
+            font-family: var(--font-mono);
+            font-size: clamp(0.55rem, 1.8vw, 1.15rem);
+            line-height: 1;
+            color: var(--pink);
+            white-space: pre;
+            letter-spacing: 0;
+            text-align: left;
+            text-shadow:
+                0 0 10px var(--pink-glow),
+                0 0 30px var(--pink-glow);
         }
 
         @media (max-width: 600px) {
-            .ascii-logo-canvas { width: min(90vw, 350px); }
+            .ascii-logo { font-size: clamp(0.4rem, 3vw, 0.7rem); }
         }
 
         @media (max-height: 500px) {
-            .ascii-logo-canvas { width: min(70vw, 300px); }
+            .ascii-logo { font-size: clamp(0.35rem, 2.5vw, 0.6rem); }
         }
 
         /* ===========================================
@@ -564,8 +568,13 @@
     <div class="corner-decoration top-right"></div>
     <div class="corner-decoration bottom-left"></div>
     <div class="slide-content stagger">
-        <p class="mono reveal neon-cyan" style="letter-spacing:0.2em;">$ silo claude</p>
-        <canvas class="ascii-logo-canvas reveal" id="siloLogo" aria-label="silo"></canvas>
+        <p class="mono reveal neon-cyan" style="letter-spacing:0.2em; display:inline-flex; justify-content:center;">$ silo&nbsp;<span id="toolCycle" style="display:inline-block; width:8ch; text-align:left;">claude</span></p>
+<pre class="ascii-logo reveal" aria-label="silo">███████╗██╗██╗      ██████╗
+██╔════╝██║██║     ██╔═══██╗
+███████╗██║██║     ██║   ██║
+╚════██║██║██║     ██║   ██║
+███████║██║███████╗╚██████╔╝
+╚══════╝╚═╝╚══════╝ ╚═════╝</pre>
         <hr class="neon-divider reveal" style="background: linear-gradient(90deg, var(--pink), var(--accent-magenta));">
         <p class="reveal" style="font-size: var(--body-size); max-width: 40ch;">
             Run AI coding agents in isolated containers and lightweight VMs
@@ -995,70 +1004,25 @@
 
 <script>
     /* ===========================================
-       RENDER SILO LOGO ON CANVAS
-       █ = solid filled cell
-       Box-drawing chars = thin lines matching terminal
+       TOOL NAME CYCLER
+       Fades through tool names on the title slide
        =========================================== */
-    (function renderSiloLogo() {
-        const ART = [
-            "███████╗██╗██╗      ██████╗ ",
-            "██╔════╝██║██║     ██╔═══██╗",
-            "███████╗██║██║     ██║   ██║",
-            "╚════██║██║██║     ██║   ██║",
-            "███████║██║███████╗╚██████╔╝",
-            "╚══════╝╚═╝╚══════╝ ╚═════╝",
-        ];
-        const ROWS = ART.length;
-        const COLS = Math.max(...ART.map(r => [...r].length));
-        const PX = 8;
-        const T = Math.round(PX * 0.3);
-        const canvas = document.getElementById('siloLogo');
-        canvas.width = COLS * PX;
-        canvas.height = ROWS * PX;
-        const ctx = canvas.getContext('2d');
-        const pink = '#ff5faf';
-        ctx.fillStyle = pink;
+    (function initToolCycle() {
+        const el = document.getElementById('toolCycle');
+        const tools = ['claude', 'opencode', 'copilot'];
+        let index = 0;
 
-        for (let r = 0; r < ROWS; r++) {
-            const chars = [...ART[r]];
-            for (let c = 0; c < chars.length; c++) {
-                const ch = chars[c];
-                const x = c * PX;
-                const y = r * PX;
-                const cx = x + PX / 2;
-                const cy = y + PX / 2;
+        el.style.transition = 'opacity 0.4s ease';
+        el.style.display = 'inline-block';
 
-                if (ch === '█') {
-                    ctx.fillRect(x, y, PX, PX);
-                } else if (ch === '═') {
-                    ctx.fillRect(x, cy - T, PX, T);
-                    ctx.fillRect(x, cy + 1, PX, T);
-                } else if (ch === '║') {
-                    ctx.fillRect(cx - T, y, T, PX);
-                    ctx.fillRect(cx + 1, y, T, PX);
-                } else if (ch === '╔') {
-                    ctx.fillRect(cx - T, cy - T, PX - (cx - T - x), T);
-                    ctx.fillRect(cx + 1, cy + 1, PX - (cx + 1 - x), T);
-                    ctx.fillRect(cx - T, cy - T, T, PX - (cy - T - y));
-                    ctx.fillRect(cx + 1, cy + 1, T, PX - (cy + 1 - y));
-                } else if (ch === '╗') {
-                    ctx.fillRect(x, cy - T, cx - x + T, T);
-                    ctx.fillRect(x, cy + 1, cx - x, T);
-                    ctx.fillRect(cx - T, cy - T, T, PX - (cy - T - y));
-                    ctx.fillRect(cx + 1, cy + 1, T, PX - (cy + 1 - y));
-                } else if (ch === '╚') {
-                    ctx.fillRect(cx - T, y, T, cy - y + T);
-                    ctx.fillRect(cx + 1, y, T, cy - y);
-                    ctx.fillRect(cx - T, cy - T, PX - (cx - T - x), T);
-                    ctx.fillRect(cx + 1, cy + 1, PX - (cx + 1 - x), T);
-                } else if (ch === '╝') {
-                    ctx.fillRect(cx - T, y, T, cy - y + T);
-                    ctx.fillRect(cx + 1, y, T, cy - y);
-                    ctx.fillRect(x, cy - T, cx - x + T, T);
-                    ctx.fillRect(x, cy + 1, cx - x, T);
-                }
-            }
-        }
+        setInterval(() => {
+            el.style.opacity = '0';
+            setTimeout(() => {
+                index = (index + 1) % tools.length;
+                el.textContent = tools[index];
+                el.style.opacity = '1';
+            }, 400);
+        }, 2500);
     })();
 
     /* ===========================================
