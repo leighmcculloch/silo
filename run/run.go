@@ -33,6 +33,7 @@ type Options struct {
 	Config     config.Config
 	Dockerfile string // raw Dockerfile template (before hook injection)
 	ForceBuild bool
+	NoCache    bool
 	Verbose    bool
 	Entrypoint string // run a custom command instead of the tool
 	Stdout     io.Writer
@@ -208,7 +209,7 @@ func Tool(opts Options) error {
 	}()
 	go func() {
 		defer opsWg.Done()
-		if !opts.ForceBuild {
+		if !opts.ForceBuild && !opts.NoCache {
 			imageExists, imageExistsErr = backendClient.ImageExists(ctx, imageTag)
 		}
 	}()
@@ -235,6 +236,7 @@ func Tool(opts Options) error {
 		mountsRO:           mountsRO,
 		mountsRW:           mountsRW,
 		forceBuild:         opts.ForceBuild,
+		noCache:            opts.NoCache,
 		imageExists:        imageExists,
 		globalPostBuild:    cfg.PostBuildHooks,
 		toolPostBuildHooks: toolPostBuildHooks,
@@ -450,6 +452,7 @@ type buildEnvOptions struct {
 	mountsRO           []string
 	mountsRW           []string
 	forceBuild         bool
+	noCache            bool
 	imageExists        bool // pre-checked image existence (from parallel phase)
 	globalPostBuild    []string
 	toolPostBuildHooks []string
@@ -513,8 +516,10 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		opts.progress.SetSection("Building environment")
 	}
 	logSection("Building environment for %s...", opts.tool)
-	if opts.forceBuild {
+	if opts.noCache {
 		logBullet("Force rebuild requested, ignoring cache")
+	} else if opts.forceBuild {
+		logBullet("Force rebuild requested")
 	}
 
 	if opts.imageExists {
@@ -529,7 +534,7 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 		BuildArgs:  opts.buildArgs,
 		MountsRO:   opts.mountsRO,
 		MountsRW:   opts.mountsRW,
-		NoCache:    opts.forceBuild,
+		NoCache:    opts.noCache,
 		OnProgress: func(msg string) {
 			if opts.logFile != nil {
 				fmt.Fprint(opts.logFile, msg)

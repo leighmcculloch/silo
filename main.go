@@ -119,7 +119,8 @@ Configuration is loaded from (in order, merged):
 	}
 
 	rootCmd.Flags().String("backend", "", "Backend to use: docker, container")
-	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
+	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
+	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 
 	// Define command groups (order here determines display order in --help)
@@ -142,7 +143,8 @@ Configuration is loaded from (in order, merged):
 			},
 		}
 		toolCmd.Flags().String("backend", "", "Backend to use: docker, container")
-		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image, ignoring cache")
+		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
+		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
 		rootCmd.AddCommand(toolCmd)
@@ -335,6 +337,12 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get force-build flag
 	forceBuild, _ := cmd.Flags().GetBool("force-build")
 
+	// Get no-cache flag (implies force-build)
+	noCache, _ := cmd.Flags().GetBool("no-cache")
+	if noCache {
+		forceBuild = true
+	}
+
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
@@ -344,6 +352,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		Config:     cfg,
 		Dockerfile: Dockerfile(supportedTools),
 		ForceBuild: forceBuild,
+		NoCache:    noCache,
 		Verbose:    verbose,
 		Stdout:     stdout,
 		Stderr:     stderr,
@@ -368,6 +377,12 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Get force-build flag
 	forceBuild, _ := cmd.Flags().GetBool("force-build")
 
+	// Get no-cache flag (implies force-build)
+	noCache, _ := cmd.Flags().GetBool("no-cache")
+	if noCache {
+		forceBuild = true
+	}
+
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
@@ -381,6 +396,7 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		Config:     cfg,
 		Dockerfile: Dockerfile(supportedTools),
 		ForceBuild: forceBuild,
+		NoCache:    noCache,
 		Verbose:    verbose,
 		Entrypoint: entrypoint,
 		Stdout:     stdout,
