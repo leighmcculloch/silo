@@ -276,7 +276,7 @@ func Tool(opts Options) error {
 	})
 
 	// Prepare pre-run hooks
-	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW, opts.Verbose)
+	preRunHooks := preparePreRunHooks(cfg.PreRunHooks, toolPreRunHooks, repoPreRunHooks, mountsRO, mountsRW, backendClient.FileMountsAreSymlinks(), opts.Verbose)
 
 	if progress != nil {
 		progress.SetSection("Running")
@@ -760,7 +760,9 @@ func logRunConfig(opts logRunConfigOptions) {
 }
 
 // preparePreRunHooks combines and prepares pre-run hooks including mount wait.
-func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mountsRW []string, verbose bool) []string {
+// fileMountsAreSymlinks indicates whether the backend uses symlinks for file
+// mounts (true for Apple container) or direct bind mounts (false for Docker).
+func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mountsRW []string, fileMountsAreSymlinks, verbose bool) []string {
 	preRunHooks := append(globalHooks, toolHooks...)
 	preRunHooks = append(preRunHooks, repoHooks...)
 
@@ -779,7 +781,7 @@ func preparePreRunHooks(globalHooks, toolHooks, repoHooks []string, mountsRO, mo
 	sort.Strings(allMountPaths)
 
 	// Prepend mount wait hook to ensure mounts are ready before other hooks run
-	if mountWaitHook := mountwait.GenerateScript(allMountPaths, verbose); mountWaitHook != "" {
+	if mountWaitHook := mountwait.GenerateScript(allMountPaths, fileMountsAreSymlinks, verbose); mountWaitHook != "" {
 		preRunHooks = append([]string{mountWaitHook}, preRunHooks...)
 	}
 

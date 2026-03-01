@@ -31,6 +31,11 @@ type Backend interface {
 	// Remove removes specific containers by name
 	Remove(ctx context.Context, names []string) ([]string, error)
 
+	// FileMountsAreSymlinks reports whether file mounts inside the container
+	// are implemented as symlinks to staging directories (true for the Apple
+	// container backend) or as direct bind mounts (false for Docker).
+	FileMountsAreSymlinks() bool
+
 	// Close releases any resources held by the backend
 	Close() error
 }

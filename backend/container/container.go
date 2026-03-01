@@ -48,6 +48,12 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// FileMountsAreSymlinks reports that the Apple container backend uses symlinks
+// for file mounts because the container CLI only supports directory mounts.
+func (c *Client) FileMountsAreSymlinks() bool {
+	return true
+}
+
 // ImageExists returns true if an image with the given name exists locally.
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "container", "image", "inspect", name)

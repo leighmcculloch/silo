@@ -43,6 +43,11 @@ func (c *Client) Close() error {
 	return c.cli.Close()
 }
 
+// FileMountsAreSymlinks reports that Docker uses direct bind mounts for files.
+func (c *Client) FileMountsAreSymlinks() bool {
+	return false
+}
+
 // ImageExists returns true if an image with the given name exists locally.
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
 	_, _, err := c.cli.ImageInspectWithRaw(ctx, name)
