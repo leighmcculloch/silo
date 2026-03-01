@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"io"
+	"math"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
@@ -17,15 +19,17 @@ var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // Progress represents a slim progress bar that displays sections
 type Progress struct {
-	mu        sync.Mutex
-	w         io.Writer
-	sections  []string
-	current   int
-	detail    string
-	width     int
-	isTTY     bool
-	rendered  bool
-	completed bool
+	mu           sync.Mutex
+	w            io.Writer
+	sections     []string
+	current      int
+	detail       string
+	width        int
+	isTTY        bool
+	rendered     bool
+	completed    bool
+	subProgress  float64
+	estimateStop chan struct{}
 }
 
 // NewProgress creates a new progress bar with the given sections
@@ -60,6 +64,15 @@ func (p *Progress) Start() {
 	p.render()
 }
 
+// stopEstimate stops any running estimate goroutine. Must be called with mu held.
+func (p *Progress) stopEstimate() {
+	if p.estimateStop != nil {
+		close(p.estimateStop)
+		p.estimateStop = nil
+	}
+	p.subProgress = 0
+}
+
 // SetSection updates the current section by name
 func (p *Progress) SetSection(name string) {
 	p.mu.Lock()
@@ -68,6 +81,8 @@ func (p *Progress) SetSection(name string) {
 	if p.completed {
 		return
 	}
+
+	p.stopEstimate()
 
 	for i, s := range p.sections {
 		if s == name {
@@ -79,6 +94,63 @@ func (p *Progress) SetSection(name string) {
 
 	if p.isTTY {
 		p.render()
+	}
+}
+
+// SetSectionWithEstimate updates the current section and starts a background
+// goroutine that smoothly advances sub-progress over the estimated duration.
+// The progress uses an exponential curve so it decelerates and never reaches
+// the next section boundary.
+func (p *Progress) SetSectionWithEstimate(name string, estimate time.Duration) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.completed {
+		return
+	}
+
+	p.stopEstimate()
+
+	for i, s := range p.sections {
+		if s == name {
+			p.current = i
+			break
+		}
+	}
+	p.detail = ""
+	p.subProgress = 0
+
+	if p.isTTY {
+		p.render()
+
+		stop := make(chan struct{})
+		p.estimateStop = stop
+
+		go func() {
+			start := time.Now()
+			ticker := time.NewTicker(100 * time.Millisecond)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ticker.C:
+					p.mu.Lock()
+					elapsed := time.Since(start)
+					// Exponential approach: 1 - e^(-3t/estimate)
+					// Factor of 3 means ~95% at t=estimate, then decelerates
+					t := elapsed.Seconds() / estimate.Seconds()
+					p.subProgress = 1 - math.Exp(-3*t)
+					// Cap at 0.95 so we never visually complete the section
+					if p.subProgress > 0.95 {
+						p.subProgress = 0.95
+					}
+					p.render()
+					p.mu.Unlock()
+				}
+			}
+		}()
 	}
 }
 
@@ -134,6 +206,7 @@ func (p *Progress) Complete() {
 	if p.completed {
 		return
 	}
+	p.stopEstimate()
 	p.completed = true
 	p.current = len(p.sections)
 
@@ -155,7 +228,7 @@ func (p *Progress) render() {
 	p.rendered = true
 
 	// Calculate progress
-	progress := float64(p.current) / float64(len(p.sections))
+	progress := (float64(p.current) + p.subProgress) / float64(len(p.sections))
 
 	// Build the progress bar
 	// Format: [████████░░░░░░░░] Section name: detail

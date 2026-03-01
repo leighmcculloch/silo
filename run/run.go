@@ -513,7 +513,7 @@ func buildEnvironment(ctx context.Context, backendClient backend.Backend, opts b
 	}
 
 	if opts.progress != nil {
-		opts.progress.SetSection("Building environment")
+		opts.progress.SetSectionWithEstimate("Building environment", 1*time.Minute)
 	}
 	logSection("Building environment for %s...", opts.tool)
 	if opts.noCache {
