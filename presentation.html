@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>silo — Run AI Coding Agents in Isolated Containers</title>
+
+    <!-- Fonts: JetBrains Mono for code/tech feel, Plus Jakarta Sans for body -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* ===========================================
+           CSS CUSTOM PROPERTIES — NEON CYBER THEME
+           Futuristic dark theme with electric cyan/magenta accents
+           =========================================== */
+        :root {
+            /* Colors */
+            --bg-primary: #07080f;
+            --bg-secondary: #0d1019;
+            --bg-card: rgba(15, 18, 32, 0.85);
+            --text-primary: #e8ecf4;
+            --text-secondary: #7a82a0;
+            --accent-cyan: #00f0ff;
+            --accent-magenta: #ff2daa;
+            --accent-purple: #8b5cf6;
+            --accent-cyan-glow: rgba(0, 240, 255, 0.25);
+            --accent-magenta-glow: rgba(255, 45, 170, 0.2);
+            --pink: #ff5faf;
+            --pink-glow: rgba(255, 95, 175, 0.2);
+            --grid-color: rgba(0, 240, 255, 0.04);
+            --border-glow: rgba(0, 240, 255, 0.15);
+
+            /* Typography — clamp() for responsive scaling */
+            --font-display: 'Plus Jakarta Sans', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            --title-size: clamp(3rem, 8vw, 6.5rem);
+            --h2-size: clamp(2rem, 5.5vw, 4rem);
+            --h3-size: clamp(1.3rem, 3vw, 2rem);
+            --body-size: clamp(1.1rem, 2.2vw, 1.6rem);
+            --small-size: clamp(0.95rem, 1.6vw, 1.25rem);
+            --mono-size: clamp(1.1rem, 2vw, 1.5rem);
+
+            /* Spacing — clamp() for responsive scaling */
+            --slide-padding: clamp(1.5rem, 4vw, 4rem);
+            --content-gap: clamp(0.75rem, 2vw, 2rem);
+            --element-gap: clamp(0.3rem, 1vw, 0.75rem);
+
+            /* Animation */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --duration: 0.7s;
+        }
+
+        /* ===========================================
+           BASE STYLES
+           =========================================== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-snap-type: y mandatory;
+            height: 100%;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: var(--font-display);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            height: 100%;
+        }
+
+        /* Grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ===========================================
+           SLIDE CONTAINER
+           =========================================== */
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            padding: var(--slide-padding);
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-height: 100%;
+            overflow: hidden;
+            gap: var(--content-gap);
+        }
+
+        /* ===========================================
+           TYPOGRAPHY
+           =========================================== */
+        h1 {
+            font-size: var(--title-size);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-size: var(--h2-size);
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            font-size: var(--h3-size);
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        p, li {
+            font-size: var(--body-size);
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .mono { font-family: var(--font-mono); font-size: var(--mono-size); }
+
+        .neon-cyan {
+            color: var(--accent-cyan);
+            text-shadow: 0 0 20px var(--accent-cyan-glow), 0 0 40px rgba(0, 240, 255, 0.1);
+        }
+
+        .neon-magenta {
+            color: var(--accent-magenta);
+            text-shadow: 0 0 20px var(--accent-magenta-glow), 0 0 40px rgba(255, 45, 170, 0.1);
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ===========================================
+           SLIDE LABEL — Top-left section indicator
+           =========================================== */
+        .slide-label {
+            position: absolute;
+            top: var(--slide-padding);
+            left: var(--slide-padding);
+            font-family: var(--font-mono);
+            font-size: var(--body-size);
+            color: var(--accent-cyan);
+            opacity: 0.6;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+        }
+
+        /* ===========================================
+           CARDS — Glassmorphism with neon borders
+           =========================================== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 12px;
+            padding: clamp(0.75rem, 2vw, 1.5rem);
+            backdrop-filter: blur(10px);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            border-color: rgba(0, 240, 255, 0.35);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.08);
+        }
+
+        .card h3 { margin-bottom: var(--element-gap); }
+        .card p { font-size: var(--body-size); }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+        }
+
+        /* ===========================================
+           NEON LIST
+           =========================================== */
+        .neon-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--element-gap);
+        }
+
+        .neon-list li {
+            padding-left: 1.5em;
+            position: relative;
+        }
+
+        .neon-list li::before {
+            content: '\25B8';
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 8px var(--accent-cyan-glow);
+        }
+
+        .neon-list li strong { color: var(--text-primary); }
+
+        /* ===========================================
+           CODE BLOCK
+           =========================================== */
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-glow);
+            border-radius: 10px;
+            padding: clamp(0.75rem, 2vw, 1.25rem);
+            font-family: var(--font-mono);
+            font-size: var(--mono-size);
+            line-height: 1.6;
+            color: var(--text-secondary);
+            overflow: hidden;
+        }
+
+        .code-block .comment { color: #4a5568; }
+        .code-block .cmd { color: var(--accent-cyan); }
+        .code-block .flag { color: var(--accent-magenta); }
+        .code-block .string { color: #a7f3d0; }
+
+        /* ===========================================
+           COMPARISON TABLE
+           =========================================== */
+        .compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: var(--body-size);
+        }
+
+        .compare-table th,
+        .compare-table td {
+            padding: clamp(0.3rem, 0.8vw, 0.6rem) clamp(0.5rem, 1.5vw, 1rem);
+            text-align: left;
+            border-bottom: 1px solid rgba(0, 240, 255, 0.1);
+        }
+
+        .compare-table th {
+            font-family: var(--font-mono);
+            font-size: var(--body-size);
+            color: var(--accent-cyan);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .compare-table td { color: var(--text-secondary); }
+        .compare-table td:first-child { color: var(--text-primary); font-weight: 500; }
+
+        /* ===========================================
+           FLOW DIAGRAM
+           =========================================== */
+        .flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+            flex-wrap: wrap;
+        }
+
+        .flow-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 10px;
+            padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.75rem, 2vw, 1.5rem);
+            font-family: var(--font-mono);
+            font-size: var(--body-size);
+            text-align: center;
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
+        }
+
+        .flow-box.highlight {
+            border-color: rgba(0, 240, 255, 0.4);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+        }
+
+        .flow-arrow {
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+            font-size: var(--body-size);
+        }
+
+        /* ===========================================
+           DIVIDER
+           =========================================== */
+        .neon-divider {
+            width: clamp(40px, 8vw, 80px);
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+            border-radius: 99px;
+            border: none;
+        }
+
+        /* ===========================================
+           TWO-COLUMN LAYOUT
+           =========================================== */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(1rem, 3vw, 3rem);
+            align-items: start;
+        }
+
+        @media (max-width: 700px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+
+        /* ===========================================
+           DECORATIVE ELEMENTS
+           =========================================== */
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        .glow-orb.cyan { background: var(--accent-cyan); }
+        .glow-orb.magenta { background: var(--accent-magenta); }
+
+        .corner-decoration {
+            position: absolute;
+            width: clamp(30px, 5vw, 60px);
+            height: clamp(30px, 5vw, 60px);
+            border: 1px solid var(--border-glow);
+            pointer-events: none;
+        }
+
+        .corner-decoration.top-right {
+            top: var(--slide-padding);
+            right: var(--slide-padding);
+            border-left: none;
+            border-bottom: none;
+        }
+
+        .corner-decoration.bottom-left {
+            bottom: var(--slide-padding);
+            left: var(--slide-padding);
+            border-right: none;
+            border-top: none;
+        }
+
+        /* ===========================================
+           CANVAS LOGO
+           =========================================== */
+        .ascii-logo-canvas {
+            image-rendering: pixelated;
+            width: min(80vw, 500px);
+            height: auto;
+            filter:
+                drop-shadow(0 0 15px var(--pink-glow))
+                drop-shadow(0 0 40px var(--pink-glow));
+        }
+
+        @media (max-width: 600px) {
+            .ascii-logo-canvas { width: min(90vw, 350px); }
+        }
+
+        @media (max-height: 500px) {
+            .ascii-logo-canvas { width: min(70vw, 300px); }
+        }
+
+        /* ===========================================
+           ANIMATIONS
+           =========================================== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(25px);
+            transition: opacity var(--duration) var(--ease-out-expo),
+                        transform var(--duration) var(--ease-out-expo);
+        }
+
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .stagger > :nth-child(1) { transition-delay: 0.05s; }
+        .stagger > :nth-child(2) { transition-delay: 0.12s; }
+        .stagger > :nth-child(3) { transition-delay: 0.19s; }
+        .stagger > :nth-child(4) { transition-delay: 0.26s; }
+        .stagger > :nth-child(5) { transition-delay: 0.33s; }
+        .stagger > :nth-child(6) { transition-delay: 0.40s; }
+
+        /* ===========================================
+           PROGRESS BAR
+           =========================================== */
+        .progress-bar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+            z-index: 1000;
+            transition: width 0.3s var(--ease-out-expo);
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        /* ===========================================
+           NAV DOTS
+           =========================================== */
+        .nav-dots {
+            position: fixed;
+            right: clamp(12px, 2vw, 24px);
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .nav-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.3s, box-shadow 0.3s;
+            padding: 0;
+        }
+
+        .nav-dot.active {
+            background: var(--accent-cyan);
+            transform: scale(1.4);
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        .nav-dot:hover { background: rgba(0, 240, 255, 0.5); }
+
+        /* ===========================================
+           KEYBOARD HINT
+           =========================================== */
+        .keyboard-hint {
+            position: fixed;
+            bottom: clamp(8px, 1.5vh, 16px);
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: var(--font-mono);
+            font-size: clamp(0.55rem, 0.8vw, 0.7rem);
+            color: rgba(255, 255, 255, 0.2);
+            z-index: 100;
+            letter-spacing: 0.1em;
+        }
+
+        /* ===========================================
+           TITLE SLIDE
+           =========================================== */
+        .title-slide {
+            text-align: center;
+            align-items: center;
+        }
+
+        .title-slide .slide-content {
+            align-items: center;
+        }
+
+        /* ===========================================
+           SECTION BREAK SLIDE
+           =========================================== */
+        .section-slide {
+            text-align: center;
+            align-items: center;
+        }
+
+        .section-slide .slide-content {
+            align-items: center;
+        }
+
+        /* ===========================================
+           RESPONSIVE BREAKPOINTS
+           =========================================== */
+        @media (max-height: 700px) {
+            :root {
+                --slide-padding: clamp(0.75rem, 3vw, 2rem);
+                --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+                --title-size: clamp(1.75rem, 5vw, 3.5rem);
+                --h2-size: clamp(1.4rem, 3.5vw, 2.2rem);
+                --body-size: clamp(0.85rem, 1.4vw, 1.1rem);
+                --small-size: clamp(0.75rem, 1.1vw, 0.9rem);
+            }
+        }
+
+        @media (max-height: 600px) {
+            :root {
+                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+                --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+                --title-size: clamp(1.5rem, 4.5vw, 2.5rem);
+                --body-size: clamp(0.75rem, 1.2vw, 1rem);
+            }
+            .nav-dots, .keyboard-hint, .corner-decoration { display: none; }
+        }
+
+        @media (max-height: 500px) {
+            :root {
+                --slide-padding: clamp(0.4rem, 2vw, 1rem);
+                --title-size: clamp(1.25rem, 3.5vw, 2rem);
+                --h2-size: clamp(1rem, 2.5vw, 1.5rem);
+                --body-size: clamp(0.7rem, 1vw, 0.9rem);
+            }
+        }
+
+        @media (max-width: 600px) {
+            :root {
+                --title-size: clamp(1.75rem, 8vw, 3.5rem);
+            }
+            .card-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.2s !important;
+            }
+            html { scroll-behavior: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Progress bar -->
+<div class="progress-bar" id="progress"></div>
+
+<!-- Navigation dots -->
+<nav class="nav-dots" id="navDots"></nav>
+
+<!-- Keyboard hint -->
+<div class="keyboard-hint">&larr; &rarr; or Space &middot; P presenter</div>
+
+<!-- ===========================================
+     SLIDE 1: TITLE
+     =========================================== -->
+<section class="slide title-slide" data-slide="1">
+    <div class="glow-orb cyan" style="width:300px;height:300px;top:-80px;right:10%;"></div>
+    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-60px;left:15%;"></div>
+    <div class="corner-decoration top-right"></div>
+    <div class="corner-decoration bottom-left"></div>
+    <div class="slide-content stagger">
+        <p class="mono reveal neon-cyan" style="letter-spacing:0.2em;">$ silo claude</p>
+        <canvas class="ascii-logo-canvas reveal" id="siloLogo" aria-label="silo"></canvas>
+        <hr class="neon-divider reveal" style="background: linear-gradient(90deg, var(--pink), var(--accent-magenta));">
+        <p class="reveal" style="font-size: var(--body-size); max-width: 40ch;">
+            Run AI coding agents in isolated containers and lightweight VMs
+        </p>
+        <p class="reveal mono" style="font-size: var(--body-size); color: var(--text-secondary);">
+            github.com/leighmcculloch/silo
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 2: THE PROBLEM
+     =========================================== -->
+<section class="slide" data-slide="2">
+    <span class="slide-label reveal">// the problem</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">AI agents need <span class="neon-cyan">broad access</span></h2>
+        <hr class="neon-divider reveal">
+        <ul class="neon-list reveal">
+            <li>They <strong>read files</strong>, <strong>run commands</strong>, <strong>modify code</strong></li>
+            <li>Permission prompts put <strong>us back in the loop</strong> &mdash; approving, reviewing, approving</li>
+            <li>To really leverage them, we need them <strong>unblocked</strong></li>
+            <li>They work best when we turn off permission prompts &mdash; <strong>"yolo mode"</strong></li>
+        </ul>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 3: THE TENSION
+     =========================================== -->
+<section class="slide section-slide" data-slide="3">
+    <div class="glow-orb cyan" style="width:200px;height:200px;top:20%;left:5%;"></div>
+    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:20%;right:10%;"></div>
+    <div class="slide-content stagger">
+        <span class="slide-label reveal">// the tension</span>
+        <h2 class="reveal">The fundamental tradeoff</h2>
+        <hr class="neon-divider reveal">
+        <div class="flow reveal">
+            <div class="flow-box">
+                <div style="color: var(--accent-cyan); font-weight: 600;">Full access</div>
+                <div style="color: var(--text-secondary); margin-top: 0.25em;">Maximum capability</div>
+            </div>
+            <div class="flow-arrow">&harr;</div>
+            <div class="flow-box">
+                <div style="color: var(--accent-magenta); font-weight: 600;">Restricted</div>
+                <div style="color: var(--text-secondary); margin-top: 0.25em;">Reduced utility</div>
+            </div>
+        </div>
+        <p class="reveal" style="max-width: 45ch;">
+            Give them access and accept the risk, or restrict them and lose the thing that makes them useful.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 4: THE ALTERNATIVES
+     =========================================== -->
+<section class="slide" data-slide="4">
+    <span class="slide-label reveal">// alternatives</span>
+    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Run them <span class="neon-magenta">somewhere else</span>?</h2>
+        <hr class="neon-divider reveal">
+        <ul class="neon-list reveal">
+            <li><strong>Remote machines</strong>, <strong>Claude web</strong>, <strong>GitHub Copilot coding agent</strong> &mdash; run the agent on someone else's infrastructure</li>
+            <li>If it's working, great &mdash; but it's a tradeoff</li>
+            <li>Those tasks run on machines <strong>we don't control</strong>, without tools <strong>we have locally</strong></li>
+            <li>They're also <strong>slow</strong> &mdash; no local iteration speed</li>
+        </ul>
+        <hr class="neon-divider reveal" style="margin: 0;">
+        <p class="reveal" style="max-width: 50ch;">
+            There's a balance: <strong>hands-off iteration</strong> with <strong>local proximity</strong>. Fast feedback loops, our tools, our environment &mdash; but isolated.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 5: THE SOLUTION
+     =========================================== -->
+<section class="slide section-slide" data-slide="5">
+    <div class="slide-content stagger">
+        <span class="slide-label reveal">// the solution</span>
+        <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="flow reveal">
+            <div class="flow-box">Our machine</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-box highlight"><span class="neon-cyan">silo</span> container</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-box">AI agent<br><span style="font-size: 0.85em; color: var(--text-secondary);">(full access inside)</span></div>
+        </div>
+        <p class="reveal" style="max-width: 50ch;">
+            The agent runs in yolo mode with full capability &mdash; but only inside an isolated container with access to our working directory.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 6: SUPPORTED TOOLS
+     =========================================== -->
+<section class="slide" data-slide="6">
+    <span class="slide-label reveal">// tools</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Supported <span class="neon-cyan">tools</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="card-grid reveal" style="max-width: 700px;">
+            <div class="card">
+                <h3 class="neon-cyan">Claude Code</h3>
+                <p>Anthropic's CLI for Claude</p>
+                <p class="mono" style="margin-top: 0.5em; color: var(--accent-cyan);">silo claude</p>
+            </div>
+            <div class="card">
+                <h3 class="neon-magenta">OpenCode</h3>
+                <p>AI coding CLI</p>
+                <p class="mono" style="margin-top: 0.5em; color: var(--accent-magenta);">silo opencode</p>
+            </div>
+            <div class="card">
+                <h3 style="color: var(--accent-purple);">GitHub Copilot CLI</h3>
+                <p>GitHub's Copilot in the terminal</p>
+                <p class="mono" style="margin-top: 0.5em; color: var(--accent-purple);">silo copilot</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 7: TWO BACKENDS
+     =========================================== -->
+<section class="slide" data-slide="7">
+    <span class="slide-label reveal">// backends</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Two isolation <span class="neon-cyan">backends</span></h2>
+        <hr class="neon-divider reveal">
+        <table class="compare-table reveal">
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Docker</th>
+                    <th>Apple Container</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Platform</td><td>Any</td><td>macOS only</td></tr>
+                <tr><td>Isolation</td><td>Shared Linux VM</td><td>Per-container VM</td></tr>
+                <tr><td>File mounts</td><td>Direct</td><td>Staged + symlinks</td></tr>
+                <tr><td>Security</td><td>Dropped caps</td><td>VM isolation</td></tr>
+            </tbody>
+        </table>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Auto-detected: uses Apple Container if installed, falls back to Docker.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 8: WHY APPLE CONTAINERS
+     =========================================== -->
+<section class="slide" data-slide="8">
+    <span class="slide-label reveal">// apple containers</span>
+    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:10%;right:5%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Why <span class="text-gradient">Apple Containers</span>?</h2>
+        <hr class="neon-divider reveal">
+        <div class="two-col reveal">
+            <div class="card" style="border-color: rgba(255, 45, 170, 0.3);">
+                <h3 class="neon-magenta">Docker on macOS</h3>
+                <ul class="neon-list" style="margin-top: var(--element-gap);">
+                    <li>All containers share <strong>one Linux VM</strong></li>
+                    <li>VM has broad host filesystem access</li>
+                    <li>Containers share that access</li>
+                </ul>
+            </div>
+            <div class="card" style="border-color: rgba(0, 240, 255, 0.3);">
+                <h3 class="neon-cyan">Apple Containers</h3>
+                <ul class="neon-list" style="margin-top: var(--element-gap);">
+                    <li>Each container = <strong>its own VM</strong></li>
+                    <li>Only mounted directories visible</li>
+                    <li>Own resource constraints</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 9: ZERO FRICTION
+     =========================================== -->
+<section class="slide section-slide" data-slide="9">
+    <div class="slide-content stagger">
+        <span class="slide-label reveal">// zero friction</span>
+        <h2 class="reveal"><span class="text-gradient">Zero friction</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="code-block reveal" style="max-width: 500px; text-align: left;">
+            <span class="comment"># Install</span><br>
+            <span class="cmd">brew install</span> <span class="flag">--HEAD</span> silo<br><br>
+            <span class="comment"># Run</span><br>
+            <span class="cmd">silo claude</span><br><br>
+            <span class="comment"># That's it.</span>
+        </div>
+        <p class="reveal" style="max-width: 40ch;">
+            Auto-builds the environment on first run. Auto-rebuilds when tools update.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 10: WHAT'S INSIDE
+     =========================================== -->
+<section class="slide" data-slide="10">
+    <span class="slide-label reveal">// environment</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Pre-built <span class="neon-cyan">dev environment</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="card-grid reveal">
+            <div class="card">
+                <h3 class="neon-cyan">Base</h3>
+                <p>Ubuntu 24.04, build-essential, pkg-config</p>
+            </div>
+            <div class="card">
+                <h3 class="neon-magenta">Languages</h3>
+                <p>Node.js, Go, Rust (latest stable)</p>
+            </div>
+            <div class="card">
+                <h3 style="color: var(--accent-purple);">Tools</h3>
+                <p>git, GitHub CLI, Docker CE, jq, zsh</p>
+            </div>
+            <div class="card">
+                <h3 class="neon-cyan">LSP</h3>
+                <p>gopls, rust-analyzer</p>
+            </div>
+            <div class="card">
+                <h3 class="neon-magenta">MCP Servers</h3>
+                <p>github-mcp-server pre-installed</p>
+            </div>
+            <div class="card">
+                <h3 style="color: var(--accent-purple);">Git Identity</h3>
+                <p>Auto-configured from our host</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 11: SHARED CONFIG MOUNTS
+     =========================================== -->
+<section class="slide" data-slide="11">
+    <span class="slide-label reveal">// mounts</span>
+    <div class="glow-orb magenta" style="width:180px;height:180px;top:15%;left:5%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Seamless <span class="text-gradient">local &harr; silo</span></h2>
+        <hr class="neon-divider reveal">
+        <ul class="neon-list reveal">
+            <li>Tool config dirs (<strong>~/.claude</strong>, <strong>~/.config/opencode</strong>, <strong>~/.config/.copilot</strong>) are mounted from our host</li>
+            <li><strong>Read-write</strong> for the active tool &mdash; sessions persist across container restarts</li>
+            <li><strong>Read-only</strong> for other tools &mdash; sharing CLAUDE.md files across tools</li>
+        </ul>
+        <hr class="neon-divider reveal" style="margin: 0;">
+        <div class="reveal">
+            <h3 style="margin-bottom: var(--element-gap);">The workflow</h3>
+            <p>
+                Run silo with a <strong>read-only GitHub token</strong> for everyday work. When we need write access, pop open a local agent &mdash; it picks up the same session. Switch freely between local and silo'd instances.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 12: SMART CACHING
+     =========================================== -->
+<section class="slide" data-slide="12">
+    <span class="slide-label reveal">// caching</span>
+    <div class="glow-orb cyan" style="width:200px;height:200px;top:15%;right:10%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Content-addressed <span class="neon-cyan">caching</span></h2>
+        <hr class="neon-divider reveal">
+        <ul class="neon-list reveal" style="max-width: 55ch;">
+            <li>Images tagged by <strong>hash of Dockerfile + tool + build args</strong></li>
+            <li>Only rebuilt when something actually changes</li>
+            <li>Different tools get separate images</li>
+        </ul>
+        <hr class="neon-divider reveal" style="margin: 0;">
+        <div class="reveal">
+            <h3 style="margin-bottom: var(--element-gap);">Auto-rebuild on tool updates</h3>
+            <p style="max-width: 50ch;">
+                Background async version check adds zero latency. When a new release is detected, the image hash changes and triggers a rebuild on the next run.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 13: CONFIGURATION
+     =========================================== -->
+<section class="slide" data-slide="13">
+    <span class="slide-label reveal">// config</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Hierarchical <span class="neon-magenta">config</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="flow reveal" style="margin-bottom: 0;">
+            <div class="flow-box">Built-in defaults</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-box">~/.config/silo/silo.jsonc</div>
+            <div class="flow-arrow">&rarr;</div>
+            <div class="flow-box highlight">./silo.jsonc</div>
+        </div>
+        <div class="code-block reveal" style="max-width: 550px;">
+            <span class="comment">// silo config show</span><br>
+            {<br>
+            &nbsp;&nbsp;<span class="string">"backend"</span>: <span class="string">"docker"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
+            &nbsp;&nbsp;<span class="string">"env"</span>: [<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"GITHUB_TOKEN"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"PROJECT_KEY"</span> <span class="comment">// ./silo.jsonc</span><br>
+            &nbsp;&nbsp;]<br>
+            }
+        </div>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Source annotations show where each setting came from.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 14: REPO-AWARE CONFIG
+     =========================================== -->
+<section class="slide" data-slide="14">
+    <span class="slide-label reveal">// repos</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Repository-aware <span class="neon-cyan">config</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="code-block reveal" style="max-width: 550px;">
+            <span class="comment">// Apply settings by git remote URL</span><br>
+            <span class="string">"repos"</span>: {<br>
+            &nbsp;&nbsp;<span class="string">"github.com/myorg"</span>: {<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"env"</span>: [<span class="string">"ORG_API_KEY"</span>],<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"post_build_hooks"</span>: [<span class="string">"npm i -g @myorg/cli"</span>]<br>
+            &nbsp;&nbsp;},<br>
+            &nbsp;&nbsp;<span class="string">"github.com/myorg/special"</span>: {<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"env"</span>: [<span class="string">"SPECIAL_TOKEN"</span>]<br>
+            &nbsp;&nbsp;}<br>
+            }
+        </div>
+        <p class="reveal" style="max-width: 50ch;">
+            Substring matching on remote URLs. Multiple matches merge by specificity (shortest pattern first).
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 15: HOOKS
+     =========================================== -->
+<section class="slide" data-slide="15">
+    <span class="slide-label reveal">// hooks</span>
+    <div class="glow-orb magenta" style="width:180px;height:180px;bottom:15%;left:5%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal"><span class="text-gradient">Hooks</span> system</h2>
+        <hr class="neon-divider reveal">
+        <div class="two-col reveal">
+            <div class="card" style="border-color: rgba(0, 240, 255, 0.3);">
+                <h3 class="neon-cyan">post_build_hooks</h3>
+                <p style="margin-bottom: var(--element-gap);">Run once after image build.</p>
+                <div class="code-block">
+                    <span class="comment"># Install MCP servers</span><br>
+                    <span class="cmd">deno install</span> <span class="flag">--global</span><br>
+                    &nbsp;&nbsp;npm:server-perplexity
+                </div>
+            </div>
+            <div class="card" style="border-color: rgba(255, 45, 170, 0.3);">
+                <h3 class="neon-magenta">pre_run_hooks</h3>
+                <p style="margin-bottom: var(--element-gap);">Run every invocation.</p>
+                <div class="code-block">
+                    <span class="comment"># Load secrets</span><br>
+                    <span class="cmd">source</span> ~/.env_api_keys
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 16: CONTAINER MANAGEMENT
+     =========================================== -->
+<section class="slide" data-slide="16">
+    <span class="slide-label reveal">// management</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Container <span class="neon-cyan">management</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="code-block reveal" style="max-width: 550px;">
+            <span class="comment"># List all silo containers</span><br>
+            <span class="cmd">silo ls</span><br><br>
+            <span class="comment"># Execute a command in a running container</span><br>
+            <span class="cmd">silo exec</span> myapp-1 <span class="flag">--</span> ls -la<br><br>
+            <span class="comment"># Open a shell</span><br>
+            <span class="cmd">silo shell</span> myapp-1<br><br>
+            <span class="comment"># Remove containers</span><br>
+            <span class="cmd">silo rm</span> myapp-1 myapp-2
+        </div>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Containers are named &lt;project&gt;-&lt;N&gt; based on our current directory.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 17: CLOSING
+     =========================================== -->
+<section class="slide title-slide" data-slide="17">
+    <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
+    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
+    <div class="corner-decoration top-right"></div>
+    <div class="corner-decoration bottom-left"></div>
+    <div class="slide-content stagger">
+        <h1 class="reveal text-gradient">get started</h1>
+        <hr class="neon-divider reveal">
+        <div class="code-block reveal" style="max-width: 450px; text-align: left;">
+            <span class="cmd">brew tap</span> leighmcculloch/silo<br>
+            <span class="cmd">brew install</span> <span class="flag">--HEAD</span> silo<br>
+            <span class="cmd">silo claude</span>
+        </div>
+        <p class="reveal mono neon-cyan" style="letter-spacing: 0.15em;">
+            github.com/leighmcculloch/silo
+        </p>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Apache 2.0 &middot; macOS &middot; Docker &amp; Apple Containers
+        </p>
+    </div>
+</section>
+
+<script>
+    /* ===========================================
+       RENDER SILO LOGO ON CANVAS
+       █ = solid filled cell
+       Box-drawing chars = thin lines matching terminal
+       =========================================== */
+    (function renderSiloLogo() {
+        const ART = [
+            "███████╗██╗██╗      ██████╗ ",
+            "██╔════╝██║██║     ██╔═══██╗",
+            "███████╗██║██║     ██║   ██║",
+            "╚════██║██║██║     ██║   ██║",
+            "███████║██║███████╗╚██████╔╝",
+            "╚══════╝╚═╝╚══════╝ ╚═════╝",
+        ];
+        const ROWS = ART.length;
+        const COLS = Math.max(...ART.map(r => [...r].length));
+        const PX = 8;
+        const T = Math.round(PX * 0.3);
+        const canvas = document.getElementById('siloLogo');
+        canvas.width = COLS * PX;
+        canvas.height = ROWS * PX;
+        const ctx = canvas.getContext('2d');
+        const pink = '#ff5faf';
+        ctx.fillStyle = pink;
+
+        for (let r = 0; r < ROWS; r++) {
+            const chars = [...ART[r]];
+            for (let c = 0; c < chars.length; c++) {
+                const ch = chars[c];
+                const x = c * PX;
+                const y = r * PX;
+                const cx = x + PX / 2;
+                const cy = y + PX / 2;
+
+                if (ch === '█') {
+                    ctx.fillRect(x, y, PX, PX);
+                } else if (ch === '═') {
+                    ctx.fillRect(x, cy - T, PX, T);
+                    ctx.fillRect(x, cy + 1, PX, T);
+                } else if (ch === '║') {
+                    ctx.fillRect(cx - T, y, T, PX);
+                    ctx.fillRect(cx + 1, y, T, PX);
+                } else if (ch === '╔') {
+                    ctx.fillRect(cx - T, cy - T, PX - (cx - T - x), T);
+                    ctx.fillRect(cx + 1, cy + 1, PX - (cx + 1 - x), T);
+                    ctx.fillRect(cx - T, cy - T, T, PX - (cy - T - y));
+                    ctx.fillRect(cx + 1, cy + 1, T, PX - (cy + 1 - y));
+                } else if (ch === '╗') {
+                    ctx.fillRect(x, cy - T, cx - x + T, T);
+                    ctx.fillRect(x, cy + 1, cx - x, T);
+                    ctx.fillRect(cx - T, cy - T, T, PX - (cy - T - y));
+                    ctx.fillRect(cx + 1, cy + 1, T, PX - (cy + 1 - y));
+                } else if (ch === '╚') {
+                    ctx.fillRect(cx - T, y, T, cy - y + T);
+                    ctx.fillRect(cx + 1, y, T, cy - y);
+                    ctx.fillRect(cx - T, cy - T, PX - (cx - T - x), T);
+                    ctx.fillRect(cx + 1, cy + 1, PX - (cx + 1 - x), T);
+                } else if (ch === '╝') {
+                    ctx.fillRect(cx - T, y, T, cy - y + T);
+                    ctx.fillRect(cx + 1, y, T, cy - y);
+                    ctx.fillRect(x, cy - T, cx - x + T, T);
+                    ctx.fillRect(x, cy + 1, cx - x, T);
+                }
+            }
+        }
+    })();
+
+    /* ===========================================
+       SPEAKER NOTES
+       One entry per slide (0-indexed)
+       =========================================== */
+    const SPEAKER_NOTES = [
+        // Slide 1: Title
+        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a tension we all face when using AI coding agents. How do we give them the access they need while keeping our machines safe?",
+
+        // Slide 2: The Problem
+        "Let's start with the reality. AI coding agents need broad access — they read files, run commands, modify code. But when we leave permission prompts on, we're back in the loop. Approve, review, approve. We become the bottleneck. To really leverage these tools, we need them unblocked — running in yolo mode. But that means trusting them with our whole machine.",
+
+        // Slide 3: The Tension
+        "So we're stuck with this tradeoff. We can give the agent full access and accept the security risk — it could run anything on our machine. Or we restrict it and we're back to babysitting. Neither option is great.",
+
+        // Slide 4: The Alternatives
+        "One approach is to run these agents somewhere else entirely. Claude's web interface, GitHub's coding agent, remote dev machines. And if that's working — great. But it's a tradeoff too. Those tasks run on machines we don't control, without the tools and configs we have locally. They're also slow. There's a balance to strike: hands-off iteration speed, but with local proximity. Fast feedback loops, our tools, our environment.",
+
+        // Slide 5: The Solution
+        "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
+
+        // Slide 6: Supported Tools
+        "silo supports three AI coding tools today. Claude Code from Anthropic, OpenCode, and GitHub Copilot CLI. We just prefix our usual command with 'silo'. The tool is auto-detected or we pick one interactively.",
+
+        // Slide 7: Two Backends
+        "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. silo auto-detects which one is available — it prefers Apple Containers when installed.",
+
+        // Slide 8: Why Apple Containers
+        "Here's why Apple Containers matter on macOS specifically. Docker on Mac runs all containers inside a single shared Linux VM that typically has access to our home directory. Apple Containers are different — each container is its own minimal VM with its own resources and only the directories we've explicitly mounted.",
+
+        // Slide 9: Zero Friction
+        "The goal was zero friction. brew install, silo claude, done. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it.",
+
+        // Slide 10: What's Inside
+        "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded into the container.",
+
+        // Slide 11: Seamless local ↔ silo
+        "silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. The active tool's dir is read-write so sessions persist across container restarts. Other tool dirs are read-only for sharing CLAUDE.md files. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session.",
+
+        // Slide 12: Smart Caching
+        "Images use content-addressed tagging — a hash of the Dockerfile, tool, and build args. So rebuilds only happen when something actually changes. And there's an async background version check that detects tool updates with zero added latency.",
+
+        // Slide 13: Configuration
+        "Configuration is hierarchical JSONC. Built-in defaults, global config, then local config files from root to cwd. Arrays are appended, not replaced. And config show tells us exactly where each setting came from with source annotations.",
+
+        // Slide 14: Repo-Aware Config
+        "My favorite feature: repository-aware configuration. We can key config by git remote URL substrings. So all repos in our org get certain settings. A specific repo can override those. Matches merge by specificity.",
+
+        // Slide 15: Hooks
+        "Two types of hooks for customization. Post-build hooks run once when the image is built — great for installing additional tools or MCP servers. Pre-run hooks run every time before the AI tool starts — good for loading secrets or setting up state.",
+
+        // Slide 16: Container Management
+        "Standard container management commands. List containers with silo ls, exec into them, open a shell, or remove them. Containers are named after our project directory with auto-incrementing numbers.",
+
+        // Slide 17: Closing
+        "That's silo. Three lines to get started. It's open source under Apache 2.0, built in Go, targeting macOS. Give it a try and let me know what you think. Thank you."
+    ];
+
+    /* ===========================================
+       SLIDE PRESENTATION CONTROLLER
+       =========================================== */
+    class SlidePresentation {
+        constructor() {
+            this.slides = document.querySelectorAll('.slide');
+            this.currentIndex = 0;
+            this.totalSlides = this.slides.length;
+
+            this.initObserver();
+            this.initNavDots();
+            this.initKeyboard();
+            this.initTouch();
+            this.initProgress();
+            this.restoreFromHash();
+            this.initPresenterSync();
+        }
+
+        initObserver() {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        const index = Array.from(this.slides).indexOf(entry.target);
+                        this.currentIndex = index;
+                        this.updateNavDots(index);
+                        this.updateProgress(index);
+                        this.updateHash(index);
+                        this.broadcastSlide(index);
+                    }
+                });
+            }, { threshold: 0.5 });
+
+            this.slides.forEach(slide => observer.observe(slide));
+        }
+
+        initNavDots() {
+            const nav = document.getElementById('navDots');
+            this.slides.forEach((_, i) => {
+                const dot = document.createElement('button');
+                dot.className = 'nav-dot';
+                dot.setAttribute('aria-label', `Go to slide ${i + 1}`);
+                dot.addEventListener('click', () => this.goToSlide(i));
+                nav.appendChild(dot);
+            });
+            this.updateNavDots(0);
+        }
+
+        updateNavDots(index) {
+            document.querySelectorAll('.nav-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+            });
+        }
+
+        initProgress() { this.updateProgress(0); }
+
+        updateProgress(index) {
+            const progress = ((index + 1) / this.totalSlides) * 100;
+            document.getElementById('progress').style.width = progress + '%';
+        }
+
+        updateHash(index) {
+            history.replaceState(null, '', `#${index + 1}`);
+        }
+
+        restoreFromHash() {
+            const match = window.location.hash.match(/^#(\d+)$/);
+            if (match) {
+                const index = parseInt(match[1], 10) - 1;
+                if (index >= 0 && index < this.totalSlides) {
+                    this.slides[index].scrollIntoView({ behavior: 'instant' });
+                    this.currentIndex = index;
+                }
+            }
+        }
+
+        initKeyboard() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ') {
+                    e.preventDefault();
+                    this.goToSlide(Math.min(this.currentIndex + 1, this.totalSlides - 1));
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    this.goToSlide(Math.max(this.currentIndex - 1, 0));
+                } else if (e.key === 'p' || e.key === 'P') {
+                    e.preventDefault();
+                    this.openPresenterWindow();
+                }
+            });
+        }
+
+        initTouch() {
+            let startY = 0;
+            document.addEventListener('touchstart', (e) => {
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+            document.addEventListener('touchend', (e) => {
+                const diff = startY - e.changedTouches[0].clientY;
+                if (Math.abs(diff) > 50) {
+                    if (diff > 0) this.goToSlide(Math.min(this.currentIndex + 1, this.totalSlides - 1));
+                    else this.goToSlide(Math.max(this.currentIndex - 1, 0));
+                }
+            }, { passive: true });
+        }
+
+        goToSlide(index) {
+            if (index >= 0 && index < this.totalSlides) {
+                this.slides[index].scrollIntoView({ behavior: 'smooth' });
+                this.currentIndex = index;
+            }
+        }
+
+        initPresenterSync() {
+            this.channel = new BroadcastChannel('silo-presenter-sync');
+            this.channel.onmessage = (e) => {
+                if (e.data.type === 'nav') this.goToSlide(e.data.slide);
+            };
+        }
+
+        broadcastSlide(index) {
+            if (this.channel) {
+                this.channel.postMessage({ type: 'slide', slide: index, total: this.totalSlides });
+            }
+        }
+
+        openPresenterWindow() {
+            const slideTitles = Array.from(this.slides).map((s, i) => {
+                const h = s.querySelector('h1, h2');
+                return h ? h.textContent.trim() : `Slide ${i + 1}`;
+            });
+
+            const presenterHTML = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Presenter — silo</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#0a0d14;color:#e8ecf4;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:12px 24px;border-bottom:1px solid rgba(0,240,255,0.15)}
+.slide-counter{font-size:1.1rem;font-weight:700;color:#00f0ff}
+.timer{font-family:'JetBrains Mono',monospace;font-size:1.2rem;color:#ff2daa}
+.progress{height:3px;background:rgba(255,255,255,0.06);width:100%}
+.progress-fill{height:100%;background:linear-gradient(90deg,#00f0ff,#ff2daa);transition:width 0.3s}
+.main{flex:1;display:flex;flex-direction:column;padding:24px;gap:20px;overflow:auto}
+.current-title{font-size:1.5rem;font-weight:700;color:#e8ecf4}
+.notes{flex:1;font-size:1.15rem;line-height:1.7;color:#9ca3af;padding:16px;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(0,240,255,0.1);overflow:auto}
+.up-next{font-size:0.85rem;color:#7a82a0;padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
+.up-next span{color:#ff2daa;font-weight:600}
+.nav-buttons{display:flex;gap:12px;padding:16px 24px;border-top:1px solid rgba(0,240,255,0.15)}
+.nav-btn{flex:1;padding:10px;border:1px solid rgba(0,240,255,0.2);background:rgba(0,240,255,0.05);color:#00f0ff;border-radius:8px;font-size:0.95rem;cursor:pointer;font-family:inherit}
+.nav-btn:hover{background:rgba(0,240,255,0.1)}
+</style></head><body>
+<div class="top-bar"><div class="slide-counter" id="counter">1 / ${this.totalSlides}</div><div class="timer" id="timer">00:00</div></div>
+<div class="progress"><div class="progress-fill" id="pFill"></div></div>
+<div class="main">
+<div class="current-title" id="cTitle"></div>
+<div class="notes" id="notes"></div>
+<div class="up-next" id="upNext"></div>
+</div>
+<div class="nav-buttons"><button class="nav-btn" id="prevBtn">&larr; Previous</button><button class="nav-btn" id="nextBtn">Next &rarr;</button></div>
+<script>
+const notes=${JSON.stringify(SPEAKER_NOTES)};
+const titles=${JSON.stringify(slideTitles)};
+const total=${this.totalSlides};
+let current=${this.currentIndex};
+const ch=new BroadcastChannel('silo-presenter-sync');
+const startTime=Date.now();
+
+function update(i){
+  current=i;
+  document.getElementById('counter').textContent=(i+1)+' / '+total;
+  document.getElementById('pFill').style.width=((i+1)/total*100)+'%';
+  document.getElementById('cTitle').textContent=titles[i]||'';
+  document.getElementById('notes').textContent=notes[i]||'No notes for this slide.';
+  const next=i<total-1?titles[i+1]:'End of presentation';
+  document.getElementById('upNext').innerHTML='Up next: <span>'+next+'</span>';
+}
+
+ch.onmessage=(e)=>{if(e.data.type==='slide')update(e.data.slide);};
+function nav(i){if(i>=0&&i<total){ch.postMessage({type:'nav',slide:i});update(i);}}
+document.getElementById('prevBtn').onclick=()=>nav(current-1);
+document.getElementById('nextBtn').onclick=()=>nav(current+1);
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='ArrowRight'||e.key===' ')nav(current+1);
+  else if(e.key==='ArrowLeft')nav(current-1);
+});
+
+setInterval(()=>{
+  const s=Math.floor((Date.now()-startTime)/1000);
+  const m=String(Math.floor(s/60)).padStart(2,'0');
+  const sec=String(s%60).padStart(2,'0');
+  document.getElementById('timer').textContent=m+':'+sec;
+},1000);
+
+update(current);
+<\/script></body></html>`;
+
+            const w = window.open('', 'presenter', 'width=700,height=600');
+            if (w) {
+                w.document.open();
+                w.document.write(presenterHTML);
+                w.document.close();
+            }
+        }
+    }
+
+    /* Initialize */
+    new SlidePresentation();
+</script>
+</body>
+</html>
