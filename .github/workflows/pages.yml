@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get install -y pandoc
           mkdir -p _site
-          pandoc README.md -s --metadata title="silo" -o _site/index.html
+          pandoc README.md --template=site-template.html --metadata title="silo" -o _site/index.html
           cp presentation.html _site/presentation.html
 
       - uses: actions/configure-pages@v5
