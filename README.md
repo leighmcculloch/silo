@@ -14,7 +14,10 @@ Run AI coding assistants in containers/vms.
 Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers or Apple containers (lightweight VMs). The coding tools are configured to run in yolo mode.
 
 > [!WARNING]
-> Use at your own risk.
+> Built using AI. No isolation is perfect. Use at your own risk.
+
+> [!WARNING]
+> Even though containers and VMs in silo act as an isolate, silo mounts directories from the local file system which means that the host is not completely isolated from the agents.
 
 ## Quick Start
 
