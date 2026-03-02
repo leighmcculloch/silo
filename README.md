@@ -22,11 +22,12 @@ Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot
 # Install
 go install github.com/leighmcculloch/silo@latest
 
-# Run (interactive tool selection)
-silo
+# Or with Homebrew
+brew tap leighmcculloch/silo
+brew install --HEAD leighmcculloch/silo/silo
 
-# Or run a specific tool
-silo claude
+# Run
+silo
 ```
 
 That's it. Silo builds the environment automatically on first run.
