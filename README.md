@@ -19,12 +19,8 @@ Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot
 ## Quick Start
 
 ```bash
-# Install (or: go install github.com/leighmcculloch/silo@latest)
-brew tap leighmcculloch/silo
-brew install --HEAD silo
-
-# Upgrade
-brew upgrade --fetch-head silo
+# Install
+go install github.com/leighmcculloch/silo@latest
 
 # Run (interactive tool selection)
 silo
@@ -55,6 +51,12 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 
 ## Installation
 
+### Go
+
+```bash
+go install github.com/leighmcculloch/silo@latest
+```
+
 ### Homebrew
 
 ```
@@ -62,10 +64,10 @@ brew tap leighmcculloch/silo
 brew install --HEAD silo
 ```
 
-### Go
+Upgrade with:
 
-```bash
-go install github.com/leighmcculloch/silo@latest
+```
+brew upgrade --fetch-head silo
 ```
 
 ### Prerequisites
