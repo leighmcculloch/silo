@@ -28,16 +28,17 @@ import (
 
 // Options configures a tool run.
 type Options struct {
-	ToolDef    tools.Tool
-	ToolArgs   []string
-	Config     config.Config
-	Dockerfile string // raw Dockerfile template (before hook injection)
-	ForceBuild bool
-	NoCache    bool
-	Verbose    bool
-	Entrypoint string // run a custom command instead of the tool
-	Stdout     io.Writer
-	Stderr     io.Writer
+	ToolDef     tools.Tool
+	ToolArgs    []string
+	Config      config.Config
+	Dockerfile  string // raw Dockerfile template (before hook injection)
+	ForceBuild  bool
+	NoCache     bool
+	Verbose     bool
+	Entrypoint  string // run a custom command instead of the tool
+	ToolVersion string // pin a specific tool version (overrides cached version)
+	Stdout      io.Writer
+	Stderr      io.Writer
 }
 
 // Tool runs a tool inside a container.
@@ -113,7 +114,7 @@ func Tool(opts Options) error {
 	if progress != nil {
 		progress.SetSection("Backend")
 	}
-	backendClient, err := createBackend(cfg.Backend, stderr, opts.Verbose)
+	backendClient, err := CreateBackend(cfg.Backend, stderr, opts.Verbose)
 	if err != nil {
 		if progress != nil {
 			progress.Complete()
@@ -122,8 +123,21 @@ func Tool(opts Options) error {
 	}
 	defer backendClient.Close()
 
-	// Start async version fetch (updates cache for this or next run)
-	go opts.ToolDef.FetchVersion(ctx)
+	// Fetch the latest tool version. On fresh use (no cached version) we
+	// block so the first build already knows the correct version. On
+	// subsequent runs the fetch happens in the background and may trigger
+	// a background build for the new version (see below).
+	fetchDone := make(chan struct{})
+	if opts.ToolVersion == "" && opts.ToolDef.CachedVersion() == "" {
+		// Scenario 1 (fresh use): fetch synchronously so we know the version.
+		opts.ToolDef.FetchVersion(ctx)
+		close(fetchDone)
+	} else {
+		go func() {
+			defer close(fetchDone)
+			opts.ToolDef.FetchVersion(ctx)
+		}()
+	}
 
 	// Get current user info
 	home := os.Getenv("HOME")
@@ -176,14 +190,31 @@ func Tool(opts Options) error {
 		"UID":  fmt.Sprintf("%d", uid),
 	}
 
-	// Read cached tool version for cache-busting
-	toolVersion := opts.ToolDef.CachedVersion()
-	if toolVersion != "" {
+	// Compute structural tag before adding version args — this hash
+	// captures everything except the tool version so we can detect
+	// non-version changes that require a synchronous rebuild.
+	structuralTag := buildImageTag(tool, dockerfile, buildArgs)
+
+	// Determine tool version. Passed as TOOL_VERSION build arg which both
+	// invalidates Docker's layer cache and pins the install to that version.
+	// The version is appended to the image tag (not hashed into it) so the
+	// structural hash stays stable across version bumps.
+	var toolVersion string
+	if opts.ToolVersion != "" {
+		toolVersion = opts.ToolVersion
+		logSection("Tool version (pinned): %s", toolVersion)
+	} else if v := opts.ToolDef.CachedVersion(); v != "" {
+		toolVersion = v
 		logSection("Tool version (cached): %s", toolVersion)
-		buildArgs["CACHE_BUST"] = toolVersion
+	}
+	if toolVersion != "" {
+		buildArgs["TOOL_VERSION"] = toolVersion
 	}
 
-	imageTag := buildImageTag(tool, dockerfile, buildArgs)
+	imageTag := structuralTag
+	if toolVersion != "" {
+		imageTag = structuralTag + "-" + toolVersion
+	}
 
 	// Run independent operations concurrently
 	var mountsRO, mountsRW []string
@@ -224,34 +255,134 @@ func Tool(opts Options) error {
 		return imageExistsErr
 	}
 
-	// Build or use cached image
+	// Determine which image to run and whether a build is needed.
+	//
+	// Scenario 1 — fresh use: no cached version, version was fetched
+	//   synchronously above. Build the image for that version, start.
+	// Scenario 2 — regular use: image for cached version exists, start
+	//   it. A background goroutine (below) fetches the latest version
+	//   and builds a new image if the version changed.
+	// Scenario 3 — pinned version (--tool-version): start the image if
+	//   it exists, otherwise build it synchronously.
+	runImageTag := imageTag
 	if progress != nil {
 		progress.SetSection("Post-build hooks")
 	}
-	if err := buildEnvironment(ctx, backendClient, buildEnvOptions{
-		tool:               tool,
-		dockerfile:         dockerfile,
-		imageTag:           imageTag,
-		buildArgs:          buildArgs,
-		mountsRO:           mountsRO,
-		mountsRW:           mountsRW,
-		forceBuild:         opts.ForceBuild,
-		noCache:            opts.NoCache,
-		imageExists:        imageExists,
-		globalPostBuild:    cfg.PostBuildHooks,
-		toolPostBuildHooks: toolPostBuildHooks,
-		repoPostBuildHooks: repoPostBuildHooks,
-		matchedRepoNames:   matchedRepoNames,
-		stderr:             stderr,
-		verbose:            opts.Verbose,
-		progress:           progress,
-		logFile:            logFile,
-	}); err != nil {
-		if progress != nil {
-			progress.Complete()
-		}
-		return err
+
+	syncBuild := func() error {
+		return buildEnvironment(ctx, backendClient, buildEnvOptions{
+			tool:               tool,
+			dockerfile:         dockerfile,
+			imageTag:           imageTag,
+			buildArgs:          buildArgs,
+			mountsRO:           mountsRO,
+			mountsRW:           mountsRW,
+			forceBuild:         opts.ForceBuild,
+			noCache:            opts.NoCache,
+			globalPostBuild:    cfg.PostBuildHooks,
+			toolPostBuildHooks: toolPostBuildHooks,
+			repoPostBuildHooks: repoPostBuildHooks,
+			matchedRepoNames:   matchedRepoNames,
+			stderr:             stderr,
+			verbose:            opts.Verbose,
+			progress:           progress,
+			logFile:            logFile,
+		})
 	}
+
+	if imageExists {
+		// Image is cached — use it directly (scenario 2 & 3 cache hit).
+		if err := buildEnvironment(ctx, backendClient, buildEnvOptions{
+			tool:               tool,
+			dockerfile:         dockerfile,
+			imageTag:           imageTag,
+			buildArgs:          buildArgs,
+			mountsRO:           mountsRO,
+			mountsRW:           mountsRW,
+			imageExists:        true,
+			globalPostBuild:    cfg.PostBuildHooks,
+			toolPostBuildHooks: toolPostBuildHooks,
+			repoPostBuildHooks: repoPostBuildHooks,
+			matchedRepoNames:   matchedRepoNames,
+			stderr:             stderr,
+			verbose:            opts.Verbose,
+			progress:           progress,
+			logFile:            logFile,
+		}); err != nil {
+			if progress != nil {
+				progress.Complete()
+			}
+			return err
+		}
+	} else if opts.ForceBuild || opts.NoCache || opts.ToolVersion != "" {
+		// Scenario 3 cache miss, or explicit rebuild — build synchronously.
+		if err := syncBuild(); err != nil {
+			if progress != nil {
+				progress.Complete()
+			}
+			return err
+		}
+	} else {
+		// Image doesn't exist — the background build from a previous run
+		// may not have finished yet. Use the previous image as a fallback
+		// if only the version changed; otherwise build synchronously.
+		fallbackTag := loadLastImage(tool)
+		var fallbackExists bool
+		if fallbackTag != "" && fallbackTag != imageTag {
+			fallbackExists, _ = backendClient.ImageExists(ctx, fallbackTag)
+		}
+
+		onlyVersionChanged := fallbackExists && structuralTag == loadStructuralTag(tool)
+		if onlyVersionChanged {
+			logSection("Using cached environment (update building in background)...")
+			runImageTag = fallbackTag
+		} else {
+			if err := syncBuild(); err != nil {
+				if progress != nil {
+					progress.Complete()
+				}
+				return err
+			}
+		}
+	}
+
+	// Save state after image is resolved but before the tool runs, so
+	// it persists even if the user ctrl+c's the tool.
+	SaveLastImage(tool, runImageTag)
+	saveStructuralTag(tool, structuralTag)
+
+	// Kick off a background build for the new version once FetchVersion
+	// completes. This runs while the tool is active so the updated image
+	// is ready for the next invocation (scenario 2).
+	if opts.ToolVersion == "" {
+		go func() {
+			<-fetchDone
+			newVersion := opts.ToolDef.CachedVersion()
+			if newVersion == "" || newVersion == toolVersion {
+				return
+			}
+			newImageTag := structuralTag + "-" + newVersion
+			if IsBuilding(newImageTag) {
+				return
+			}
+			newBuildArgs := make(map[string]string, len(buildArgs))
+			for k, v := range buildArgs {
+				newBuildArgs[k] = v
+			}
+			newBuildArgs["TOOL_VERSION"] = newVersion
+			logSection("New version available (%s), building in background...", newVersion)
+			_ = LaunchBackgroundBuild(BackgroundBuildOptions{
+				ImageTag:   newImageTag,
+				Dockerfile: dockerfile,
+				BuildArgs:  newBuildArgs,
+				Backend:    cfg.Backend,
+				Tool:       tool,
+			})
+		}()
+	}
+
+	// Clean up old build directories in the background.
+	go cleanupOldBuilds(imageTag, loadLastImage(tool))
 
 	// Log configuration
 	if progress != nil {
@@ -296,7 +427,7 @@ func Tool(opts Options) error {
 		args = nil
 	}
 	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:       imageTag,
+		Image:       runImageTag,
 		Name:        containerName,
 		WorkDir:     cwd,
 		MountsRO:    mountsRO,
@@ -370,8 +501,8 @@ func repoURLMatches(url, pattern string) bool {
 	return strings.Contains(url, pattern)
 }
 
-// createBackend creates the appropriate backend based on configuration.
-func createBackend(backendType string, stderr io.Writer, verbose bool) (backend.Backend, error) {
+// CreateBackend creates the appropriate backend based on configuration.
+func CreateBackend(backendType string, stderr io.Writer, verbose bool) (backend.Backend, error) {
 	if backendType == "" {
 		// Default to container if available, otherwise docker
 		if _, err := exec.LookPath("container"); err == nil {
@@ -866,6 +997,73 @@ func sanitizeContainerName(name string) string {
 		return "silo"
 	}
 	return strings.ToLower(s)
+}
+
+// SaveLastImage atomically records the image tag used for a successful run.
+func SaveLastImage(tool, imageTag string) {
+	dir := filepath.Join(config.XDGStateHomeDir(), "silo", "last-image")
+	_ = os.MkdirAll(dir, 0o755)
+	p := filepath.Join(dir, tool)
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, []byte(imageTag), 0o644); err != nil {
+		return
+	}
+	_ = os.Rename(tmp, p)
+}
+
+// loadLastImage returns the last successfully used image tag for a tool,
+// or "" if none is recorded.
+func loadLastImage(tool string) string {
+	data, err := os.ReadFile(filepath.Join(config.XDGStateHomeDir(), "silo", "last-image", tool))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// cleanupOldBuilds removes build directories for image tags that are neither
+// the current tag nor the fallback tag, keeping disk usage bounded.
+func cleanupOldBuilds(currentTag, fallbackTag string) {
+	buildsDir := filepath.Join(config.XDGStateHomeDir(), "silo", "builds")
+	entries, err := os.ReadDir(buildsDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if name == currentTag || name == fallbackTag {
+			continue
+		}
+		// Don't remove directories that are actively locked.
+		if IsBuilding(name) {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(buildsDir, name))
+	}
+}
+
+// saveStructuralTag records the structural (non-version) hash for a tool.
+func saveStructuralTag(tool, tag string) {
+	dir := filepath.Join(config.XDGStateHomeDir(), "silo", "last-structural")
+	_ = os.MkdirAll(dir, 0o755)
+	p := filepath.Join(dir, tool)
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, []byte(tag), 0o644); err != nil {
+		return
+	}
+	_ = os.Rename(tmp, p)
+}
+
+// loadStructuralTag returns the saved structural tag for a tool, or "" if none.
+func loadStructuralTag(tool string) string {
+	data, err := os.ReadFile(filepath.Join(config.XDGStateHomeDir(), "silo", "last-structural", tool))
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 // expandPath expands ~ to the user's home directory.

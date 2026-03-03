@@ -4,7 +4,7 @@
 FROM base AS copilot
 
 ARG HOME
-ARG CACHE_BUST
+ARG TOOL_VERSION
 
 RUN set -e && \
     curl -fsSL --connect-timeout 15 -o /tmp/install.sh https://gh.io/copilot-install && \

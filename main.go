@@ -122,6 +122,7 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
+	rootCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 
 	// Define command groups (order here determines display order in --help)
 	rootCmd.AddGroup(
@@ -147,6 +148,7 @@ Configuration is loaded from (in order, merged):
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
+		toolCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 		rootCmd.AddCommand(toolCmd)
 	}
 
@@ -282,6 +284,18 @@ Use --local or --global to skip the prompt.`,
 	shellCmd.Flags().String("backend", "", "Backend to use: docker, container (default: both)")
 	rootCmd.AddCommand(shellCmd)
 
+	// Hidden __build subcommand — used by background build launcher.
+	buildCmd := &cobra.Command{
+		Use:    "__build",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir, _ := cmd.Flags().GetString("dir")
+			return runBackgroundBuild(dir, stderr)
+		},
+	}
+	buildCmd.Flags().String("dir", "", "Build state directory")
+	rootCmd.AddCommand(buildCmd)
+
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
 
@@ -346,16 +360,20 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
+	// Get tool-version flag
+	toolVersion, _ := cmd.Flags().GetString("tool-version")
+
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:    *toolDef,
-		Config:     cfg,
-		Dockerfile: Dockerfile(supportedTools),
-		ForceBuild: forceBuild,
-		NoCache:    noCache,
-		Verbose:    verbose,
-		Stdout:     stdout,
-		Stderr:     stderr,
+		ToolDef:     *toolDef,
+		Config:      cfg,
+		Dockerfile:  Dockerfile(supportedTools),
+		ForceBuild:  forceBuild,
+		NoCache:     noCache,
+		Verbose:     verbose,
+		ToolVersion: toolVersion,
+		Stdout:      stdout,
+		Stderr:      stderr,
 	})
 }
 
@@ -389,18 +407,22 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Get entrypoint flag
 	entrypoint, _ := cmd.Flags().GetString("entrypoint")
 
+	// Get tool-version flag
+	toolVersion, _ := cmd.Flags().GetString("tool-version")
+
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:    toolDef,
-		ToolArgs:   toolArgs,
-		Config:     cfg,
-		Dockerfile: Dockerfile(supportedTools),
-		ForceBuild: forceBuild,
-		NoCache:    noCache,
-		Verbose:    verbose,
-		Entrypoint: entrypoint,
-		Stdout:     stdout,
-		Stderr:     stderr,
+		ToolDef:     toolDef,
+		ToolArgs:    toolArgs,
+		Config:      cfg,
+		Dockerfile:  Dockerfile(supportedTools),
+		ForceBuild:  forceBuild,
+		NoCache:     noCache,
+		Verbose:     verbose,
+		Entrypoint:  entrypoint,
+		ToolVersion: toolVersion,
+		Stdout:      stdout,
+		Stderr:      stderr,
 	})
 }
 
@@ -910,4 +932,63 @@ func formatMemoryUsage(bytes uint64, isRunning bool) string {
 		return "N/A"
 	}
 	return humanize.IBytes(bytes)
+}
+
+// runBackgroundBuild is the entry point for the hidden `silo __build` command.
+// It reads all build parameters from the manifest in the build state directory,
+// acquires a build lock, builds the image, and updates state.
+func runBackgroundBuild(dir string, stderr io.Writer) error {
+	if dir == "" {
+		return fmt.Errorf("__build: --dir is required")
+	}
+
+	// Read build manifest.
+	imageTag, tool, backendType, dockerfile, buildArgs, err := run.ReadBuildManifest(dir)
+	if err != nil {
+		return fmt.Errorf("__build: %w", err)
+	}
+
+	// Acquire build lock — exit cleanly if another build is already running.
+	lock, err := run.TryLock(imageTag)
+	if err != nil {
+		return fmt.Errorf("__build: lock: %w", err)
+	}
+	if lock == nil {
+		// Another process is already building this image.
+		return nil
+	}
+	defer lock.Unlock()
+
+	// Create backend.
+	backendClient, err := run.CreateBackend(backendType, stderr, false)
+	if err != nil {
+		lock.WriteStatus("failed")
+		return fmt.Errorf("__build: backend: %w", err)
+	}
+	defer backendClient.Close()
+
+	// Build image.
+	fmt.Fprintf(stderr, "==> Background build: %s (%s)\n", tool, imageTag)
+	ctx := context.Background()
+	_, err = backendClient.Build(ctx, backend.BuildOptions{
+		Dockerfile: dockerfile,
+		Target:     tool,
+		Tag:        imageTag,
+		BuildArgs:  buildArgs,
+		OnProgress: func(msg string) {
+			fmt.Fprint(stderr, msg)
+		},
+	})
+	if err != nil {
+		lock.WriteStatus("failed")
+		return fmt.Errorf("__build: build: %w", err)
+	}
+
+	lock.WriteStatus("done")
+	fmt.Fprintf(stderr, "==> Background build complete: %s\n", imageTag)
+
+	// Update last-image so next run picks up the new image.
+	run.SaveLastImage(tool, imageTag)
+
+	return nil
 }
