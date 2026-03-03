@@ -730,37 +730,28 @@
 <!-- ===========================================
      SLIDE 8: CONTAINERS
      =========================================== -->
-<section class="slide section-slide" data-slide="8">
-    <div class="glow-orb cyan" style="width:180px;height:180px;top:20%;left:8%;"></div>
-    <div class="glow-orb magenta" style="width:160px;height:160px;bottom:15%;right:10%;"></div>
+<section class="slide" data-slide="8">
+    <span class="slide-label reveal">// containers</span>
+    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
-        <span class="slide-label reveal">// containers</span>
         <h2 class="reveal"><span class="text-gradient">Containers</span></h2>
         <hr class="neon-divider reveal">
-        <div class="flow reveal">
-            <div class="flow-box">
-                <div style="color: var(--text-secondary);">Permissions</div>
-                <div style="font-size: 0.8em; color: var(--text-secondary); opacity: 0.6;">risky</div>
+        <ul class="neon-list reveal">
+            <li>Real isolation &mdash; the agent gets <strong>full access</strong> inside a throwaway environment</li>
+            <li>No permission lists, no fragile sandbox rules</li>
+        </ul>
+        <div class="card-grid reveal" style="max-width: 700px;">
+            <div class="card">
+                <h3 style="color: var(--text-secondary);">Shell script + Docker</h3>
             </div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box">
-                <div style="color: var(--text-secondary);">Sandbox</div>
-                <div style="font-size: 0.8em; color: var(--text-secondary); opacity: 0.6;">fragile</div>
+            <div class="card">
+                <h3 style="color: var(--text-secondary);">VS Code Dev Containers</h3>
             </div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box">
-                <div style="color: var(--text-secondary);">Remote</div>
-                <div style="font-size: 0.8em; color: var(--text-secondary); opacity: 0.6;">limited</div>
-            </div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box highlight">
-                <div style="color: var(--accent-cyan);">Containers</div>
-                <div style="font-size: 0.8em; color: var(--accent-cyan); opacity: 0.8;">full control</div>
+            <div class="card" style="border-color: var(--accent-cyan); box-shadow: 0 0 30px var(--accent-cyan-glow), 0 0 60px rgba(0, 240, 255, 0.1); position: relative; overflow: visible;">
+                <h3 class="neon-cyan">silo</h3>
+                <div style="position: absolute; inset: -1px; border-radius: 12px; border: 1px solid var(--accent-cyan); opacity: 0.5; filter: blur(4px); pointer-events: none;"></div>
             </div>
         </div>
-        <p class="reveal" style="max-width: 50ch;">
-            Real isolation. The agent gets <strong>full access</strong> inside a throwaway environment. No permission lists, no fragile sandbox rules.
-        </p>
     </div>
 </section>
 
@@ -773,7 +764,7 @@
         <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
         <hr class="neon-divider reveal">
         <div class="flow reveal">
-            <div class="flow-box">Our machine</div>
+            <div class="flow-box">My machine</div>
             <div class="flow-arrow">&rarr;</div>
             <div class="flow-box highlight"><span class="neon-cyan">silo</span> container</div>
             <div class="flow-arrow">&rarr;</div>
@@ -851,10 +842,13 @@
 <!-- ===========================================
      SLIDE 12: GIVE IT A GO
      =========================================== -->
-<section class="slide section-slide" data-slide="12">
+<section class="slide title-slide" data-slide="12">
+    <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
+    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
+    <div class="corner-decoration top-right"></div>
+    <div class="corner-decoration bottom-left"></div>
     <div class="slide-content stagger">
-        <span class="slide-label reveal">// give it a go</span>
-        <h2 class="reveal"><span class="text-gradient">Give it a go</span></h2>
+        <h1 class="reveal text-gradient">Give it a go</h1>
         <hr class="neon-divider reveal">
         <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
             <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
@@ -863,8 +857,11 @@
             <span class="comment"># then</span><br>
             <span class="cmd">silo</span>
         </div>
-        <p class="reveal" style="max-width: 40ch;">
-            Auto-builds the environment on first run.<br>Auto-rebuilds when tools update.
+        <p class="reveal mono neon-cyan" style="letter-spacing: 0.15em;">
+            github.com/leighmcculloch/silo
+        </p>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Apache 2.0 · macOS · Docker & Apple Containers
         </p>
     </div>
 </section>
@@ -1099,7 +1096,7 @@
      SLIDE 21: THE BIGGER PICTURE
      =========================================== -->
 <section class="slide" data-slide="21">
-    <span class="slide-label reveal">// the bigger picture</span>
+    <span class="slide-label reveal">// everyone</span>
     <div class="glow-orb cyan" style="width:160px;height:160px;top:12%;right:8%;"></div>
     <div class="glow-orb magenta" style="width:140px;height:140px;bottom:15%;left:6%;"></div>
     <div class="slide-content stagger">
@@ -1137,7 +1134,7 @@
     <div class="corner-decoration top-right"></div>
     <div class="corner-decoration bottom-left"></div>
     <div class="slide-content stagger">
-        <h1 class="reveal text-gradient">get started</h1>
+        <h1 class="reveal text-gradient">Give it a go</h1>
         <hr class="neon-divider reveal">
         <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
             <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
@@ -1205,7 +1202,7 @@
         "Another option is running agents somewhere else entirely. Claude's web interface, GitHub's Copilot coding agent. They're great for long-running investigative tasks like bug finding. Good for completely hands off, arms length spikes — you're not in there in the code with your IDE, so it suits exploratory work. Also great for kicking off the start of some work, then continuing later locally. The tradeoff is you're on machines you don't control, without the tools and configs you have locally, and it's often limited.",
 
         // Slide 8: Containers
-        "And that brings us to containers. This is the real solution. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
+        "And that brings us to containers. This is the solution I use most of the time today. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
 
         // Slide 9: The Solution
         "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
