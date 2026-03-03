@@ -576,7 +576,7 @@
 ███████║██║███████╗╚██████╔╝
 ╚══════╝╚═╝╚══════╝ ╚═════╝</pre>
         <hr class="neon-divider reveal" style="background: linear-gradient(90deg, var(--pink), var(--accent-magenta));">
-        <p class="reveal" style="font-size: var(--body-size); max-width: 40ch;">
+        <p class="reveal" style="font-size: var(--body-size);">
             Run AI coding agents in isolated containers and lightweight VMs
         </p>
         <p class="reveal mono" style="font-size: var(--body-size); color: var(--text-secondary);">
@@ -702,7 +702,6 @@
             <li>Hard to get right &mdash; <strong>build caching broke</strong>, Go build cache errors, flaky tool behavior</li>
             <li>Often falls back to the <strong>permissions list</strong> anyway &mdash; only a small edge</li>
         </ul>
-        <hr class="neon-divider reveal" style="margin: 0;">
         <p class="reveal" style="max-width: 50ch;">
             If you're not using any isolation right now, <strong>turn on sandboxing</strong> in Claude Code. It's the best place to start &mdash; good safety with minimal effort.
         </p>
@@ -713,10 +712,10 @@
      SLIDE 7: RUN THEM SOMEWHERE ELSE
      =========================================== -->
 <section class="slide" data-slide="7">
-    <span class="slide-label reveal">// another option</span>
+    <span class="slide-label reveal">// remote</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal">Run them <span class="neon-magenta">somewhere else</span>?</h2>
+        <h2 class="reveal"><span class="neon-magenta">Remote</span></h2>
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
             <li><strong>Claude web</strong>, <strong>GitHub Copilot coding agent</strong> &mdash; run the agent on someone else's infrastructure</li>
@@ -1185,10 +1184,10 @@
        =========================================== */
     const SPEAKER_NOTES = [
         // Slide 1: Title
-        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a problem I had, and I think we all have, when using AI coding agents.",
+        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a problem I had, and I think we all have, when using agents for coding. To setup the framing of the talk, I'm showing my workflow, things that work for me, and how I got here. This might work for you too, but there's a good chance it won't. My main hope is that you leave with some new knowledge about the options you can to isolate your agent workloads, or new inspiration for how you can use agents to build infrasrtucture for your own workflows. Everything I'm showing today, including this presentation, is build with agents.",
 
         // Slide 2: What We're Talking About
-        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets full access — yolo mode — but only inside the container, so our machine stays safe. I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
+        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets read-write access to the project directory, the agent tool configs, and is given full access — yolo mode — but only inside the container. Is this perfect isolation? No, but for me it is enough, at least for now. I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
 
         // Slide 3: The Problem
         "Let's start with the reality. AI coding agents need broad access — they read files, run commands, modify code. But when we leave permission prompts on, we're back in the loop. Approve, review, approve. We become the bottleneck. To really leverage these tools, we need them unblocked — running in yolo mode. But that means trusting them with our whole machine.",
