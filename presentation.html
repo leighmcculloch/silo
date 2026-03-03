@@ -589,7 +589,6 @@
      SLIDE 2: WHAT WE'RE TALKING ABOUT
      =========================================== -->
 <section class="slide" data-slide="2">
-    <span class="slide-label reveal">// today</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">What is <span class="neon-cyan">silo</span>?</h2>
@@ -598,18 +597,18 @@
             A CLI tool that runs AI coding agents in <strong>isolated containers</strong> and <strong>lightweight VMs</strong> &mdash; so they get full access without touching our machine.
         </p>
         <hr class="neon-divider reveal" style="margin: 0;">
-        <div class="reveal" style="display: flex; gap: clamp(0.5rem, 2vw, 1.5rem); flex-wrap: wrap;">
-            <div style="flex: 1; min-width: 140px;">
+        <div class="reveal" style="display: flex; gap: clamp(0.5rem, 2vw, 1.5rem); max-width: 700px;">
+            <div style="flex: 1;">
                 <h3 class="neon-magenta" style="margin-bottom: var(--element-gap);">The journey</h3>
                 <p style="font-size: var(--small-size);">How I got here &mdash; the problem, what I tried, and what worked</p>
             </div>
-            <div style="flex: 1; min-width: 140px;">
-                <h3 class="neon-cyan" style="margin-bottom: var(--element-gap);">Deep dive</h3>
-                <p style="font-size: var(--small-size);">How silo works, config, backends, and the bigger picture</p>
-            </div>
-            <div style="flex: 1; min-width: 140px;">
-                <h3 style="color: var(--accent-purple); margin-bottom: var(--element-gap);">Demo</h3>
+            <div style="flex: 1;">
+                <h3 style="color: var(--accent-purple); margin-bottom: var(--element-gap);">Demo break</h3>
                 <p style="font-size: var(--small-size);">See it in action</p>
+            </div>
+            <div style="flex: 1;">
+                <h3 class="neon-cyan" style="margin-bottom: var(--element-gap);">Features</h3>
+                <p style="font-size: var(--small-size);">How silo works, config, backends, and the bigger picture</p>
             </div>
         </div>
     </div>
@@ -619,7 +618,7 @@
      SLIDE 3: THE PROBLEM
      =========================================== -->
 <section class="slide" data-slide="3">
-    <span class="slide-label reveal">// the problem</span>
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="slide-content stagger">
         <h2 class="reveal">AI agents need <span class="neon-cyan">broad access</span></h2>
         <hr class="neon-divider reveal">
@@ -639,7 +638,7 @@
     <div class="glow-orb cyan" style="width:200px;height:200px;top:20%;left:5%;"></div>
     <div class="glow-orb magenta" style="width:200px;height:200px;bottom:20%;right:10%;"></div>
     <div class="slide-content stagger">
-        <span class="slide-label reveal">// the tension</span>
+        <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
         <h2 class="reveal">The fundamental tradeoff</h2>
         <hr class="neon-divider reveal">
         <div class="flow reveal">
@@ -663,7 +662,7 @@
      SLIDE 5: PERMISSIONS
      =========================================== -->
 <section class="slide" data-slide="5">
-    <span class="slide-label reveal">// permissions</span>
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb magenta" style="width:160px;height:160px;bottom:12%;left:6%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="neon-cyan">Permissions</span></h2>
@@ -691,7 +690,7 @@
      SLIDE 6: SANDBOXING
      =========================================== -->
 <section class="slide" data-slide="6">
-    <span class="slide-label reveal">// sandboxing</span>
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:140px;height:140px;top:15%;right:6%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="neon-magenta">Sandboxing</span></h2>
@@ -712,7 +711,7 @@
      SLIDE 7: RUN THEM SOMEWHERE ELSE
      =========================================== -->
 <section class="slide" data-slide="7">
-    <span class="slide-label reveal">// remote</span>
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="neon-magenta">Remote</span></h2>
@@ -728,24 +727,30 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 8: CONTAINERS
+     SLIDE 8: CONTAINERS / VMS
      =========================================== -->
 <section class="slide" data-slide="8">
-    <span class="slide-label reveal">// containers</span>
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal"><span class="text-gradient">Containers</span></h2>
+        <h2 class="reveal"><span class="text-gradient">Containers &amp; VMs</span></h2>
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
             <li>Real isolation &mdash; the agent gets <strong>full access</strong> inside a throwaway environment</li>
             <li>No permission lists, no fragile sandbox rules</li>
         </ul>
-        <div class="card-grid reveal" style="max-width: 700px;">
+        <div class="card-grid reveal" style="grid-template-columns: repeat(5, 1fr);">
             <div class="card">
                 <h3 style="color: var(--text-secondary);">Shell script + Docker</h3>
             </div>
             <div class="card">
                 <h3 style="color: var(--text-secondary);">VS Code Dev Containers</h3>
+            </div>
+            <div class="card">
+                <h3 style="color: var(--text-secondary);">Lima</h3>
+            </div>
+            <div class="card">
+                <h3 style="color: var(--text-secondary);">UTM</h3>
             </div>
             <div class="card" style="border-color: var(--accent-cyan); box-shadow: 0 0 30px var(--accent-cyan-glow), 0 0 60px rgba(0, 240, 255, 0.1); position: relative; overflow: visible;">
                 <h3 class="neon-cyan">silo</h3>
@@ -760,7 +765,7 @@
      =========================================== -->
 <section class="slide section-slide" data-slide="9">
     <div class="slide-content stagger">
-        <span class="slide-label reveal">// the solution</span>
+        <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
         <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
         <hr class="neon-divider reveal">
         <div class="flow reveal">
@@ -777,10 +782,37 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 10: SUPPORTED TOOLS
+     SLIDE 10: GIVE IT A GO
      =========================================== -->
-<section class="slide" data-slide="10">
-    <span class="slide-label reveal">// tools</span>
+<section class="slide title-slide" data-slide="10">
+    <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
+    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
+    <div class="corner-decoration top-right"></div>
+    <div class="corner-decoration bottom-left"></div>
+    <div class="slide-content stagger">
+        <h1 class="reveal text-gradient">Give it a go</h1>
+        <hr class="neon-divider reveal">
+        <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
+            <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
+            <span class="comment"># or</span><br>
+            <span class="cmd">go install</span> github.com/leighmcculloch/silo<span class="flag">@latest</span><br><br>
+            <span class="comment"># then</span><br>
+            <span class="cmd">silo</span>
+        </div>
+        <p class="reveal mono neon-cyan" style="letter-spacing: 0.15em;">
+            github.com/leighmcculloch/silo
+        </p>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Apache 2.0 · macOS · Docker & Apple Containers
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 11: SUPPORTED TOOLS
+     =========================================== -->
+<section class="slide" data-slide="11">
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Supported <span class="neon-cyan">tools</span></h2>
         <hr class="neon-divider reveal">
@@ -805,10 +837,10 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 11: TWO BACKENDS
+     SLIDE 12: TWO BACKENDS
      =========================================== -->
-<section class="slide" data-slide="11">
-    <span class="slide-label reveal">// backends</span>
+<section class="slide" data-slide="12">
+    <span class="slide-label reveal">// features</span>
     <div class="glow-orb magenta" style="width:200px;height:200px;bottom:10%;right:5%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Two isolation <span class="neon-cyan">backends</span></h2>
@@ -840,37 +872,10 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 12: GIVE IT A GO
-     =========================================== -->
-<section class="slide title-slide" data-slide="12">
-    <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
-    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
-    <div class="corner-decoration top-right"></div>
-    <div class="corner-decoration bottom-left"></div>
-    <div class="slide-content stagger">
-        <h1 class="reveal text-gradient">Give it a go</h1>
-        <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
-            <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
-            <span class="comment"># or</span><br>
-            <span class="cmd">go install</span> github.com/leighmcculloch/silo<span class="flag">@latest</span><br><br>
-            <span class="comment"># then</span><br>
-            <span class="cmd">silo</span>
-        </div>
-        <p class="reveal mono neon-cyan" style="letter-spacing: 0.15em;">
-            github.com/leighmcculloch/silo
-        </p>
-        <p class="reveal" style="font-size: var(--body-size);">
-            Apache 2.0 · macOS · Docker & Apple Containers
-        </p>
-    </div>
-</section>
-
-<!-- ===========================================
      SLIDE 13: WHAT'S INSIDE
      =========================================== -->
 <section class="slide" data-slide="13">
-    <span class="slide-label reveal">// environment</span>
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Pre-built <span class="neon-cyan">dev environment</span></h2>
         <hr class="neon-divider reveal">
@@ -911,7 +916,7 @@
      SLIDE 14: SHARED CONFIG MOUNTS
      =========================================== -->
 <section class="slide" data-slide="14">
-    <span class="slide-label reveal">// mounts</span>
+    <span class="slide-label reveal">// features</span>
     <div class="glow-orb magenta" style="width:180px;height:180px;top:15%;left:5%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Seamless <span class="text-gradient">local &harr; silo</span></h2>
@@ -936,7 +941,7 @@
      SLIDE 15: AUTO-UPDATING AGENTS
      =========================================== -->
 <section class="slide" data-slide="15">
-    <span class="slide-label reveal">// updates</span>
+    <span class="slide-label reveal">// features</span>
     <div class="glow-orb cyan" style="width:200px;height:200px;top:15%;right:10%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Auto-updating <span class="neon-cyan">agents</span></h2>
@@ -960,7 +965,7 @@
      SLIDE 16: CONFIG COMMANDS
      =========================================== -->
 <section class="slide" data-slide="16">
-    <span class="slide-label reveal">// config</span>
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="neon-magenta">Configurable</span></h2>
         <hr class="neon-divider reveal">
@@ -985,7 +990,7 @@
      SLIDE 17: HIERARCHICAL CONFIG
      =========================================== -->
 <section class="slide" data-slide="17">
-    <span class="slide-label reveal">// config</span>
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Hierarchical <span class="neon-magenta">config</span></h2>
         <hr class="neon-divider reveal">
@@ -1015,7 +1020,7 @@
      SLIDE 18: REPO-AWARE CONFIG
      =========================================== -->
 <section class="slide" data-slide="18">
-    <span class="slide-label reveal">// repos</span>
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Repository-aware <span class="neon-cyan">config</span></h2>
         <hr class="neon-divider reveal">
@@ -1041,7 +1046,7 @@
      SLIDE 19: HOOKS
      =========================================== -->
 <section class="slide" data-slide="19">
-    <span class="slide-label reveal">// hooks</span>
+    <span class="slide-label reveal">// features</span>
     <div class="glow-orb magenta" style="width:180px;height:180px;bottom:15%;left:5%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="text-gradient">Hooks</span> system</h2>
@@ -1072,7 +1077,7 @@
      SLIDE 20: CONTAINER MANAGEMENT
      =========================================== -->
 <section class="slide" data-slide="20">
-    <span class="slide-label reveal">// management</span>
+    <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Container <span class="neon-cyan">management</span></h2>
         <hr class="neon-divider reveal">
@@ -1096,7 +1101,7 @@
      SLIDE 21: THE BIGGER PICTURE
      =========================================== -->
 <section class="slide" data-slide="21">
-    <span class="slide-label reveal">// everyone</span>
+    <span class="slide-label reveal">// features</span>
     <div class="glow-orb cyan" style="width:160px;height:160px;top:12%;right:8%;"></div>
     <div class="glow-orb magenta" style="width:140px;height:140px;bottom:15%;left:6%;"></div>
     <div class="slide-content stagger">
@@ -1207,14 +1212,14 @@
         // Slide 9: The Solution
         "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
 
-        // Slide 10: Supported Tools
+        // Slide 10: Give It a Go
+        "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it. Let me show you a quick demo.",
+
+        // Slide 11: Supported Tools
         "silo supports three AI coding tools today. Claude Code from Anthropic, OpenCode, and GitHub Copilot CLI. We just prefix our usual command with 'silo'. The tool is auto-detected or we pick one interactively.",
 
-        // Slide 11: Two Backends
+        // Slide 12: Two Backends
         "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. An important distinction: the Apple Container VM can run an entire Docker engine inside it — so when your agent uses Docker, it's truly isolated. With Docker-in-Docker, it's a shared engine and easy to break out of. silo auto-detects which one is available — it prefers Apple Containers when installed.",
-
-        // Slide 12: Give It a Go
-        "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it. Let me show you a quick demo.",
 
         // Slide 13: What's Inside
         "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded. And importantly, the filesystem structure is identical — if your home is /Users/cooluser on your Mac, that's exactly what it is inside the container. So everything just works, even if you have hardcoded paths in your configs or scripts.",
