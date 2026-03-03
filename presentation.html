@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>silo — Run AI Coding Agents in Isolated Containers</title>
+    <title>silo — AI Coding Agents in Isolated Containers</title>
 
     <!-- Fonts: JetBrains Mono for code/tech feel, Plus Jakarta Sans for body -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -374,7 +374,7 @@
            =========================================== */
         .ascii-logo {
             font-family: var(--font-mono);
-            font-size: clamp(0.55rem, 1.8vw, 1.15rem);
+            font-size: clamp(0.7rem, 2.5vw, 1.6rem);
             line-height: 1;
             color: var(--pink);
             white-space: pre;
@@ -577,7 +577,7 @@
 ╚══════╝╚═╝╚══════╝ ╚═════╝</pre>
         <hr class="neon-divider reveal" style="background: linear-gradient(90deg, var(--pink), var(--accent-magenta));">
         <p class="reveal" style="font-size: var(--body-size);">
-            Run AI coding agents in isolated containers and lightweight VMs
+            AI coding agents in isolated containers and lightweight VMs
         </p>
         <p class="reveal mono" style="font-size: var(--body-size); color: var(--text-secondary);">
             github.com/leighmcculloch/silo
@@ -668,20 +668,32 @@
         <h2 class="reveal"><span class="neon-cyan">Permissions</span></h2>
         <hr class="neon-divider reveal">
         <div class="reveal" style="background: var(--bg-card); border: 1px solid var(--border-glow); border-radius: 8px; padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.75rem, 2vw, 1.25rem); max-height: 50vh; overflow: hidden;">
-            <pre style="font-family: var(--font-mono); font-size: clamp(0.55rem, 0.95vw, 0.8rem); line-height: 1.4; color: var(--text-secondary); white-space: pre; overflow: hidden;"><code><span style="color: var(--accent-cyan);">"permissions"</span>: { <span style="color: var(--accent-cyan);">"allow"</span>: [
+            <pre style="font-family: var(--font-mono); font-size: clamp(0.45rem, 0.75vw, 0.65rem); line-height: 1.35; color: var(--text-secondary); white-space: pre; overflow: hidden;"><code><span style="color: var(--accent-cyan);">"permissions"</span>: { <span style="color: var(--accent-cyan);">"allow"</span>: [
   <span style="color: var(--pink);">"Bash(git fetch:*)"</span>, <span style="color: var(--pink);">"Bash(git diff:*)"</span>, <span style="color: var(--pink);">"Bash(git log:*)"</span>,
   <span style="color: var(--pink);">"Bash(git show:*)"</span>, <span style="color: var(--pink);">"Bash(git branch:*)"</span>, <span style="color: var(--pink);">"Bash(git add:*)"</span>,
-  <span style="color: var(--pink);">"Bash(git commit:*)"</span>, <span style="color: var(--pink);">"Bash(gh pr view:*)"</span>, <span style="color: var(--pink);">"Bash(gh pr list:*)"</span>,
-  <span style="color: var(--pink);">"Bash(gh issue view:*)"</span>, <span style="color: var(--pink);">"Bash(gh run view:*)"</span>,
-  <span style="color: var(--pink);">"Bash(cargo build:*)"</span>, <span style="color: var(--pink);">"Bash(cargo test:*)"</span>,
-  <span style="color: var(--pink);">"Bash(go build:*)"</span>, <span style="color: var(--pink);">"Bash(go test:*)"</span>,
+  <span style="color: var(--pink);">"Bash(git commit:*)"</span>, <span style="color: var(--pink);">"Bash(git stash:*)"</span>, <span style="color: var(--pink);">"Bash(git checkout:*)"</span>,
+  <span style="color: var(--pink);">"Bash(git rebase:*)"</span>, <span style="color: var(--pink);">"Bash(git merge:*)"</span>, <span style="color: var(--pink);">"Bash(git push:*)"</span>,
+  <span style="color: var(--pink);">"Bash(git pull:*)"</span>, <span style="color: var(--pink);">"Bash(git clone:*)"</span>, <span style="color: var(--pink);">"Bash(git remote:*)"</span>,
+  <span style="color: var(--pink);">"Bash(gh pr view:*)"</span>, <span style="color: var(--pink);">"Bash(gh pr list:*)"</span>, <span style="color: var(--pink);">"Bash(gh pr create:*)"</span>,
+  <span style="color: var(--pink);">"Bash(gh pr checkout:*)"</span>, <span style="color: var(--pink);">"Bash(gh pr merge:*)"</span>, <span style="color: var(--pink);">"Bash(gh api:*)"</span>,
+  <span style="color: var(--pink);">"Bash(gh issue view:*)"</span>, <span style="color: var(--pink);">"Bash(gh issue list:*)"</span>, <span style="color: var(--pink);">"Bash(gh issue create:*)"</span>,
+  <span style="color: var(--pink);">"Bash(gh run view:*)"</span>, <span style="color: var(--pink);">"Bash(gh run list:*)"</span>, <span style="color: var(--pink);">"Bash(gh run watch:*)"</span>,
+  <span style="color: var(--pink);">"Bash(cargo build:*)"</span>, <span style="color: var(--pink);">"Bash(cargo test:*)"</span>, <span style="color: var(--pink);">"Bash(cargo run:*)"</span>,
+  <span style="color: var(--pink);">"Bash(cargo clippy:*)"</span>, <span style="color: var(--pink);">"Bash(cargo fmt:*)"</span>, <span style="color: var(--pink);">"Bash(cargo check:*)"</span>,
+  <span style="color: var(--pink);">"Bash(go build:*)"</span>, <span style="color: var(--pink);">"Bash(go test:*)"</span>, <span style="color: var(--pink);">"Bash(go run:*)"</span>,
+  <span style="color: var(--pink);">"Bash(go vet:*)"</span>, <span style="color: var(--pink);">"Bash(go mod:*)"</span>, <span style="color: var(--pink);">"Bash(go install:*)"</span>,
+  <span style="color: var(--pink);">"Bash(npm install:*)"</span>, <span style="color: var(--pink);">"Bash(npm test:*)"</span>, <span style="color: var(--pink);">"Bash(npm run:*)"</span>,
+  <span style="color: var(--pink);">"Bash(npx:*)"</span>, <span style="color: var(--pink);">"Bash(deno run:*)"</span>, <span style="color: var(--pink);">"Bash(deno test:*)"</span>,
+  <span style="color: var(--pink);">"Bash(make:*)"</span>, <span style="color: var(--pink);">"Bash(cmake:*)"</span>, <span style="color: var(--pink);">"Bash(docker build:*)"</span>,
+  <span style="color: var(--pink);">"Bash(docker run:*)"</span>, <span style="color: var(--pink);">"Bash(docker compose:*)"</span>, <span style="color: var(--pink);">"Bash(kubectl:*)"</span>,
   <span style="color: var(--pink);">"Read(~/.cargo/**)"</span>, <span style="color: var(--pink);">"Read(~/.local/go/pkg/mod/**)"</span>,
-  <span style="color: var(--pink);">"Write(~/Library/Caches/go-build/**)"</span>,
-  <span style="color: var(--text-secondary); opacity: 0.5;">  ... 100+ more rules</span>
+  <span style="color: var(--pink);">"Read(~/.rustup/**)"</span>, <span style="color: var(--pink);">"Read(~/.npm/**)"</span>, <span style="color: var(--pink);">"Read(~/.config/**)"</span>,
+  <span style="color: var(--pink);">"Write(~/Library/Caches/go-build/**)"</span>, <span style="color: var(--pink);">"Write(~/.cargo/registry/**)"</span>,
+  <span style="color: var(--pink);">"Write(~/Library/Caches/Homebrew/**)"</span>, <span style="color: var(--pink);">"Write(~/.npm/_cacache/**)"</span>
 ]}</code></pre>
         </div>
         <p class="reveal" style="max-width: 50ch; margin-top: var(--element-gap);">
-            Felt thorough. But one permitted <code style="font-family: var(--font-mono); color: var(--accent-magenta);">gh api</code> call and an agent <strong>commented on a random GitHub discussion</strong> completely unrelated to our work.
+            Felt thorough. But one permitted <code style="font-family: var(--font-mono); color: var(--accent-magenta);">gh api</code> call and an agent <strong>commented on a random GitHub discussion</strong> completely unrelated to my work.
         </p>
     </div>
 </section>
@@ -695,15 +707,22 @@
     <div class="slide-content stagger">
         <h2 class="reveal"><span class="neon-magenta">Sandboxing</span></h2>
         <hr class="neon-divider reveal">
-        <ul class="neon-list reveal">
-            <li><strong>OpenAI Codex CLI</strong> shipped sandbox mode first, then <strong>Claude Code</strong> added it</li>
-            <li>Experimented with macOS <code style="font-family: var(--font-mono); color: var(--accent-cyan);">sandbox-exec</code> and custom rules</li>
-            <li>Hard to get right &mdash; <strong>build caching broke</strong>, Go build cache errors, flaky tool behavior</li>
-            <li>Often falls back to the <strong>permissions list</strong> anyway &mdash; only a small edge</li>
-        </ul>
-        <p class="reveal" style="max-width: 50ch;">
-            If you're not using any isolation right now, <strong>turn on sandboxing</strong> in Claude Code. It's the best place to start &mdash; good safety with minimal effort.
-        </p>
+        <div class="two-col reveal">
+            <div>
+                <ul class="neon-list">
+                    <li><strong>OpenAI Codex CLI</strong> shipped sandbox mode first, then <strong>Claude Code</strong> added it</li>
+                    <li>Experimented with macOS <code style="font-family: var(--font-mono); color: var(--accent-cyan);">sandbox-exec</code> and custom rules</li>
+                    <li>Hard to get right &mdash; <strong>build caching broke</strong>, Go build cache errors, flaky tool behavior</li>
+                    <li>Often falls back to the <strong>permissions list</strong> anyway &mdash; only a small edge</li>
+                </ul>
+                <p style="margin-top: var(--element-gap);">
+                    If you're not using any isolation right now, <strong>turn on sandboxing</strong> in Claude Code. It's the best place to start &mdash; good safety with minimal effort.
+                </p>
+            </div>
+            <div class="code-block" style="text-align: left; align-self: start;">
+                > <span class="cmd">/sandbox</span>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -768,12 +787,30 @@
         <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
         <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
         <hr class="neon-divider reveal">
-        <div class="flow reveal">
-            <div class="flow-box">My machine</div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box highlight"><span class="neon-cyan">silo</span> container</div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box">AI agent<br><span style="font-size: 0.85em; color: var(--text-secondary);">(full access inside)</span></div>
+        <div class="reveal" style="display: flex; justify-content: center;">
+            <div style="border: 1px solid var(--text-secondary); border-radius: 16px; padding: clamp(0.75rem, 2vw, 1.5rem); display: flex; flex-direction: column; align-items: center; gap: clamp(0.4rem, 1vw, 0.75rem);">
+                <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--text-secondary);">My machine</span>
+                <div style="display: flex; gap: clamp(0.5rem, 1.5vw, 1rem);">
+                    <div style="border: 1px solid var(--accent-cyan); border-radius: 12px; padding: clamp(0.5rem, 1.5vw, 1rem); display: flex; flex-direction: column; align-items: center; gap: clamp(0.3rem, 0.8vw, 0.5rem); box-shadow: 0 0 20px var(--accent-cyan-glow);">
+                        <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-cyan);">silo</span>
+                        <div style="border: 1px solid var(--accent-magenta); border-radius: 8px; padding: clamp(0.4rem, 1vw, 0.75rem) clamp(1rem, 3vw, 2rem); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px var(--accent-magenta-glow);">
+                            <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-magenta);">AI</span>
+                        </div>
+                    </div>
+                    <div style="border: 1px solid var(--accent-cyan); border-radius: 12px; padding: clamp(0.5rem, 1.5vw, 1rem); display: flex; flex-direction: column; align-items: center; gap: clamp(0.3rem, 0.8vw, 0.5rem); box-shadow: 0 0 20px var(--accent-cyan-glow);">
+                        <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-cyan);">silo</span>
+                        <div style="border: 1px solid var(--accent-magenta); border-radius: 8px; padding: clamp(0.4rem, 1vw, 0.75rem) clamp(1rem, 3vw, 2rem); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px var(--accent-magenta-glow);">
+                            <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-magenta);">AI</span>
+                        </div>
+                    </div>
+                    <div style="border: 1px solid var(--accent-cyan); border-radius: 12px; padding: clamp(0.5rem, 1.5vw, 1rem); display: flex; flex-direction: column; align-items: center; gap: clamp(0.3rem, 0.8vw, 0.5rem); box-shadow: 0 0 20px var(--accent-cyan-glow);">
+                        <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-cyan);">silo</span>
+                        <div style="border: 1px solid var(--accent-magenta); border-radius: 8px; padding: clamp(0.4rem, 1vw, 0.75rem) clamp(1rem, 3vw, 2rem); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px var(--accent-magenta-glow);">
+                            <span style="font-family: var(--font-mono); font-size: var(--small-size); color: var(--accent-magenta);">AI</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
         <p class="reveal" style="max-width: 50ch;">
             The agent runs in yolo mode with full capability &mdash; but only inside an isolated container with access to our working directory.
