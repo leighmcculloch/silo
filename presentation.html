@@ -586,9 +586,39 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 2: THE PROBLEM
+     SLIDE 2: WHAT WE'RE TALKING ABOUT
      =========================================== -->
 <section class="slide" data-slide="2">
+    <span class="slide-label reveal">// today</span>
+    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">What is <span class="neon-cyan">silo</span>?</h2>
+        <hr class="neon-divider reveal">
+        <p class="reveal" style="max-width: 50ch;">
+            A CLI tool that runs AI coding agents in <strong>isolated containers</strong> and <strong>lightweight VMs</strong> &mdash; so they get full access without touching our machine.
+        </p>
+        <hr class="neon-divider reveal" style="margin: 0;">
+        <div class="reveal" style="display: flex; gap: clamp(0.5rem, 2vw, 1.5rem); flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 140px;">
+                <h3 class="neon-magenta" style="margin-bottom: var(--element-gap);">The journey</h3>
+                <p style="font-size: var(--small-size);">How I got here &mdash; the problem, what I tried, and what worked</p>
+            </div>
+            <div style="flex: 1; min-width: 140px;">
+                <h3 class="neon-cyan" style="margin-bottom: var(--element-gap);">Deep dive</h3>
+                <p style="font-size: var(--small-size);">How silo works, config, backends, and the bigger picture</p>
+            </div>
+            <div style="flex: 1; min-width: 140px;">
+                <h3 style="color: var(--accent-purple); margin-bottom: var(--element-gap);">Demo</h3>
+                <p style="font-size: var(--small-size);">See it in action</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 3: THE PROBLEM
+     =========================================== -->
+<section class="slide" data-slide="3">
     <span class="slide-label reveal">// the problem</span>
     <div class="slide-content stagger">
         <h2 class="reveal">AI agents need <span class="neon-cyan">broad access</span></h2>
@@ -603,9 +633,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 3: THE TENSION
+     SLIDE 4: THE TENSION
      =========================================== -->
-<section class="slide section-slide" data-slide="3">
+<section class="slide section-slide" data-slide="4">
     <div class="glow-orb cyan" style="width:200px;height:200px;top:20%;left:5%;"></div>
     <div class="glow-orb magenta" style="width:200px;height:200px;bottom:20%;right:10%;"></div>
     <div class="slide-content stagger">
@@ -630,13 +660,13 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 4: ATTEMPT 1 — PERMISSIONS
+     SLIDE 5: PERMISSIONS
      =========================================== -->
-<section class="slide" data-slide="4">
-    <span class="slide-label reveal">// attempt 1</span>
+<section class="slide" data-slide="5">
+    <span class="slide-label reveal">// permissions</span>
     <div class="glow-orb magenta" style="width:160px;height:160px;bottom:12%;left:6%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal">Attempt 1: <span class="neon-cyan">Permissions</span></h2>
+        <h2 class="reveal"><span class="neon-cyan">Permissions</span></h2>
         <hr class="neon-divider reveal">
         <div class="reveal" style="background: var(--bg-card); border: 1px solid var(--border-glow); border-radius: 8px; padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.75rem, 2vw, 1.25rem); max-height: 50vh; overflow: hidden;">
             <pre style="font-family: var(--font-mono); font-size: clamp(0.55rem, 0.95vw, 0.8rem); line-height: 1.4; color: var(--text-secondary); white-space: pre; overflow: hidden;"><code><span style="color: var(--accent-cyan);">"permissions"</span>: { <span style="color: var(--accent-cyan);">"allow"</span>: [
@@ -658,13 +688,13 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 5: ATTEMPT 2 — SANDBOXING
+     SLIDE 6: SANDBOXING
      =========================================== -->
-<section class="slide" data-slide="5">
-    <span class="slide-label reveal">// attempt 2</span>
+<section class="slide" data-slide="6">
+    <span class="slide-label reveal">// sandboxing</span>
     <div class="glow-orb cyan" style="width:140px;height:140px;top:15%;right:6%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal">Attempt 2: <span class="neon-magenta">Sandboxing</span></h2>
+        <h2 class="reveal"><span class="neon-magenta">Sandboxing</span></h2>
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
             <li><strong>OpenAI Codex CLI</strong> shipped sandbox mode first, then <strong>Claude Code</strong> added it</li>
@@ -680,32 +710,33 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 6: RUN THEM SOMEWHERE ELSE
+     SLIDE 7: RUN THEM SOMEWHERE ELSE
      =========================================== -->
-<section class="slide" data-slide="6">
+<section class="slide" data-slide="7">
     <span class="slide-label reveal">// another option</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Run them <span class="neon-magenta">somewhere else</span>?</h2>
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
-            <li><strong>Remote machines</strong>, <strong>Claude web</strong>, <strong>GitHub Copilot coding agent</strong> &mdash; run the agent on someone else's infrastructure</li>
-            <li>I haven't done much of this personally &mdash; but I know <strong>some of you have</strong></li>
-            <li>It's a <strong>good option</strong> for some people &mdash; if it's working, great</li>
-            <li>Tradeoff: machines <strong>we don't control</strong>, without tools <strong>we have locally</strong>, and often <strong>slower</strong></li>
+            <li><strong>Claude web</strong>, <strong>GitHub Copilot coding agent</strong> &mdash; run the agent on someone else's infrastructure</li>
+            <li>Great for <strong>long-running investigative tasks</strong> like bug finding</li>
+            <li>Good for completely <strong>hands off</strong>, arms length <strong>spikes</strong></li>
+            <li>Kick off work <strong>remotely</strong>, then continue later <strong>locally</strong></li>
+            <li>Tradeoff: machines <strong>we don't control</strong>, without tools <strong>we have locally</strong>, and often <strong>limited</strong></li>
         </ul>
     </div>
 </section>
 
 <!-- ===========================================
-     SLIDE 7: ATTEMPT 3 — CONTAINERS
+     SLIDE 8: CONTAINERS
      =========================================== -->
-<section class="slide section-slide" data-slide="7">
+<section class="slide section-slide" data-slide="8">
     <div class="glow-orb cyan" style="width:180px;height:180px;top:20%;left:8%;"></div>
     <div class="glow-orb magenta" style="width:160px;height:160px;bottom:15%;right:10%;"></div>
     <div class="slide-content stagger">
-        <span class="slide-label reveal">// attempt 3</span>
-        <h2 class="reveal">Attempt 3: <span class="text-gradient">Containers</span></h2>
+        <span class="slide-label reveal">// containers</span>
+        <h2 class="reveal"><span class="text-gradient">Containers</span></h2>
         <hr class="neon-divider reveal">
         <div class="flow reveal">
             <div class="flow-box">
@@ -718,9 +749,14 @@
                 <div style="font-size: 0.8em; color: var(--text-secondary); opacity: 0.6;">fragile</div>
             </div>
             <div class="flow-arrow">&rarr;</div>
+            <div class="flow-box">
+                <div style="color: var(--text-secondary);">Remote</div>
+                <div style="font-size: 0.8em; color: var(--text-secondary); opacity: 0.6;">limited</div>
+            </div>
+            <div class="flow-arrow">&rarr;</div>
             <div class="flow-box highlight">
                 <div style="color: var(--accent-cyan);">Containers</div>
-                <div style="font-size: 0.8em; color: var(--accent-cyan); opacity: 0.8;">full isolation</div>
+                <div style="font-size: 0.8em; color: var(--accent-cyan); opacity: 0.8;">full control</div>
             </div>
         </div>
         <p class="reveal" style="max-width: 50ch;">
@@ -730,9 +766,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 8: THE SOLUTION
+     SLIDE 9: THE SOLUTION
      =========================================== -->
-<section class="slide section-slide" data-slide="8">
+<section class="slide section-slide" data-slide="9">
     <div class="slide-content stagger">
         <span class="slide-label reveal">// the solution</span>
         <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
@@ -751,9 +787,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 9: SUPPORTED TOOLS
+     SLIDE 10: SUPPORTED TOOLS
      =========================================== -->
-<section class="slide" data-slide="9">
+<section class="slide" data-slide="10">
     <span class="slide-label reveal">// tools</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Supported <span class="neon-cyan">tools</span></h2>
@@ -779,61 +815,37 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 10: TWO BACKENDS
+     SLIDE 11: TWO BACKENDS
      =========================================== -->
-<section class="slide" data-slide="10">
+<section class="slide" data-slide="11">
     <span class="slide-label reveal">// backends</span>
+    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:10%;right:5%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Two isolation <span class="neon-cyan">backends</span></h2>
         <hr class="neon-divider reveal">
-        <table class="compare-table reveal">
-            <thead>
-                <tr>
-                    <th>Feature</th>
-                    <th>Docker</th>
-                    <th>Apple Container</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr><td>Platform</td><td>Any</td><td>macOS only</td></tr>
-                <tr><td>Isolation</td><td>Shared Linux VM</td><td>Per-container VM</td></tr>
-                <tr><td>File mounts</td><td>Direct</td><td>Staged + symlinks</td></tr>
-                <tr><td>Security</td><td>Dropped caps</td><td>VM isolation</td></tr>
-            </tbody>
-        </table>
-        <p class="reveal" style="font-size: var(--body-size);">
-            Auto-detected: uses Apple Container if installed, falls back to Docker.
-        </p>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 11: WHY APPLE CONTAINERS
-     =========================================== -->
-<section class="slide" data-slide="11">
-    <span class="slide-label reveal">// apple containers</span>
-    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:10%;right:5%;"></div>
-    <div class="slide-content stagger">
-        <h2 class="reveal">Why <span class="text-gradient">Apple Containers</span>?</h2>
-        <hr class="neon-divider reveal">
         <div class="two-col reveal">
             <div class="card" style="border-color: rgba(255, 45, 170, 0.3);">
-                <h3 class="neon-magenta">Docker on macOS</h3>
+                <h3 class="neon-magenta">Docker</h3>
                 <ul class="neon-list" style="margin-top: var(--element-gap);">
+                    <li>Works on <strong>any platform</strong></li>
                     <li>All containers share <strong>one Linux VM</strong></li>
-                    <li>VM has broad host filesystem access</li>
-                    <li>Containers share that access</li>
+                    <li><strong>Container isolation</strong> (shared kernel)</li>
+                    <li>Docker inside = <strong>shared engine</strong>, easy breakout</li>
                 </ul>
             </div>
             <div class="card" style="border-color: rgba(0, 240, 255, 0.3);">
-                <h3 class="neon-cyan">Apple Containers</h3>
+                <h3 class="neon-cyan">Apple Container</h3>
                 <ul class="neon-list" style="margin-top: var(--element-gap);">
+                    <li><strong>macOS only</strong></li>
                     <li>Each container = <strong>its own VM</strong></li>
-                    <li>Only mounted directories visible</li>
-                    <li>Own resource constraints</li>
+                    <li><strong>VM isolation</strong> (own kernel)</li>
+                    <li>Docker inside = <strong>own engine</strong>, fully isolated</li>
                 </ul>
             </div>
         </div>
+        <p class="reveal" style="font-size: var(--body-size);">
+            Auto-detected: uses Apple Container if installed, falls back to Docker.
+        </p>
     </div>
 </section>
 
@@ -891,6 +903,10 @@
                 <h3 style="color: var(--accent-purple);">Git Identity</h3>
                 <p>Auto-configured from our host</p>
             </div>
+            <div class="card">
+                <h3 class="neon-cyan">Identical Paths</h3>
+                <p>Same filesystem layout as host</p>
+            </div>
         </div>
     </div>
 </section>
@@ -906,47 +922,73 @@
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
             <li>Tool config dirs (<strong>~/.claude</strong>, <strong>~/.config/opencode</strong>, <strong>~/.config/.copilot</strong>) are mounted from our host</li>
-            <li><strong>Read-write</strong> for the active tool &mdash; sessions persist across container restarts</li>
-            <li><strong>Read-only</strong> for other tools &mdash; sharing CLAUDE.md files across tools</li>
         </ul>
         <hr class="neon-divider reveal" style="margin: 0;">
-        <div class="reveal">
-            <h3 style="margin-bottom: var(--element-gap);">The workflow</h3>
-            <p>
-                Run silo with a <strong>read-only GitHub token</strong> for everyday work. When we need write access, pop open a local agent &mdash; it picks up the same session. Switch freely between local and silo'd instances.
-            </p>
+        <div class="code-block reveal" style="max-width: 550px; text-align: left;">
+            <span class="comment"># Agent works on stuff unattended</span><br>
+            <span class="cmd">silo claude</span><br><br>
+            <span class="comment"># Continue same session local</span><br>
+            <span class="cmd">claude</span> <span class="flag">--continue</span>
         </div>
+        <p class="reveal" style="max-width: 50ch;">
+            Continue the same session locally &mdash; with full access to API keys, GitHub tokens, and everything else on our machine.
+        </p>
     </div>
 </section>
 
 <!-- ===========================================
-     SLIDE 15: SMART CACHING
+     SLIDE 15: AUTO-UPDATING AGENTS
      =========================================== -->
 <section class="slide" data-slide="15">
-    <span class="slide-label reveal">// caching</span>
+    <span class="slide-label reveal">// updates</span>
     <div class="glow-orb cyan" style="width:200px;height:200px;top:15%;right:10%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal">Content-addressed <span class="neon-cyan">caching</span></h2>
+        <h2 class="reveal">Auto-updating <span class="neon-cyan">agents</span></h2>
         <hr class="neon-divider reveal">
-        <ul class="neon-list reveal" style="max-width: 55ch;">
-            <li>Images tagged by <strong>hash of Dockerfile + tool + build args</strong></li>
-            <li>Only rebuilt when something actually changes</li>
-            <li>Different tools get separate images</li>
+        <ul class="neon-list reveal">
+            <li>Background async <strong>version check</strong> adds zero latency</li>
+            <li>New release detected &rarr; image <strong>rebuilds on next run</strong></li>
+            <li>Always running the <strong>latest version</strong> of each tool</li>
         </ul>
         <hr class="neon-divider reveal" style="margin: 0;">
         <div class="reveal">
-            <h3 style="margin-bottom: var(--element-gap);">Auto-rebuild on tool updates</h3>
-            <p style="max-width: 50ch;">
-                Background async version check adds zero latency. When a new release is detected, the image hash changes and triggers a rebuild on the next run.
+            <h3 style="margin-bottom: var(--element-gap);">Content-addressed image caching</h3>
+            <p>
+                Images tagged by hash of Dockerfile + tool + build args. Only rebuilt when something changes.
             </p>
         </div>
     </div>
 </section>
 
 <!-- ===========================================
-     SLIDE 16: CONFIGURATION
+     SLIDE 16: CONFIG COMMANDS
      =========================================== -->
 <section class="slide" data-slide="16">
+    <span class="slide-label reveal">// config</span>
+    <div class="slide-content stagger">
+        <h2 class="reveal"><span class="neon-magenta">Configurable</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="card-grid reveal" style="grid-template-columns: 1fr; max-width: 550px;">
+            <div>
+                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Create a starter config file</p>
+                <div class="code-block" style="text-align: left;"><span class="cmd">silo config init</span></div>
+            </div>
+            <div>
+                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Show built-in defaults</p>
+                <div class="code-block" style="text-align: left;"><span class="cmd">silo config default</span></div>
+            </div>
+            <div>
+                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Edit a config file in your editor</p>
+                <div class="code-block" style="text-align: left;"><span class="cmd">silo config edit</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 17: HIERARCHICAL CONFIG
+     =========================================== -->
+<section class="slide" data-slide="17">
     <span class="slide-label reveal">// config</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Hierarchical <span class="neon-magenta">config</span></h2>
@@ -958,31 +1000,30 @@
             <div class="flow-arrow">&rarr;</div>
             <div class="flow-box highlight">./silo.jsonc</div>
         </div>
-        <div class="code-block reveal" style="max-width: 550px;">
-            <span class="comment">// silo config show</span><br>
-            {<br>
-            &nbsp;&nbsp;<span class="string">"backend"</span>: <span class="string">"docker"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
-            &nbsp;&nbsp;<span class="string">"env"</span>: [<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"GITHUB_TOKEN"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"PROJECT_KEY"</span> <span class="comment">// ./silo.jsonc</span><br>
-            &nbsp;&nbsp;]<br>
-            }
+        <div class="reveal" style="display: flex; flex-direction: column; align-items: center; gap: var(--element-gap);">
+            <div class="code-block" style="text-align: left;"><span class="cmd">silo config show</span></div>
+            <div class="code-block" style="text-align: left;">
+                {<br>
+                &nbsp;&nbsp;<span class="string">"backend"</span>: <span class="string">"docker"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
+                &nbsp;&nbsp;<span class="string">"env"</span>: [<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"GITHUB_TOKEN"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"PROJECT_KEY"</span> <span class="comment">// ./silo.jsonc</span><br>
+                &nbsp;&nbsp;]<br>
+                }
+            </div>
         </div>
-        <p class="reveal" style="font-size: var(--body-size);">
-            Source annotations show where each setting came from.
-        </p>
     </div>
 </section>
 
 <!-- ===========================================
-     SLIDE 17: REPO-AWARE CONFIG
+     SLIDE 18: REPO-AWARE CONFIG
      =========================================== -->
-<section class="slide" data-slide="17">
+<section class="slide" data-slide="18">
     <span class="slide-label reveal">// repos</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Repository-aware <span class="neon-cyan">config</span></h2>
         <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 550px;">
+        <div class="code-block reveal" style="max-width: 800px;">
             <span class="comment">// Apply settings by git remote URL</span><br>
             <span class="string">"repos"</span>: {<br>
             &nbsp;&nbsp;<span class="string">"github.com/myorg"</span>: {<br>
@@ -1001,9 +1042,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 18: HOOKS
+     SLIDE 19: HOOKS
      =========================================== -->
-<section class="slide" data-slide="18">
+<section class="slide" data-slide="19">
     <span class="slide-label reveal">// hooks</span>
     <div class="glow-orb magenta" style="width:180px;height:180px;bottom:15%;left:5%;"></div>
     <div class="slide-content stagger">
@@ -1032,14 +1073,14 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 19: CONTAINER MANAGEMENT
+     SLIDE 20: CONTAINER MANAGEMENT
      =========================================== -->
-<section class="slide" data-slide="19">
+<section class="slide" data-slide="20">
     <span class="slide-label reveal">// management</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Container <span class="neon-cyan">management</span></h2>
         <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 550px;">
+        <div class="code-block reveal" style="max-width: 800px;">
             <span class="comment"># List all silo containers</span><br>
             <span class="cmd">silo ls</span><br><br>
             <span class="comment"># Execute a command in a running container</span><br>
@@ -1056,16 +1097,16 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 20: THE BIGGER PICTURE
+     SLIDE 21: THE BIGGER PICTURE
      =========================================== -->
-<section class="slide" data-slide="20">
+<section class="slide" data-slide="21">
     <span class="slide-label reveal">// the bigger picture</span>
     <div class="glow-orb cyan" style="width:160px;height:160px;top:12%;right:8%;"></div>
     <div class="glow-orb magenta" style="width:140px;height:140px;bottom:15%;left:6%;"></div>
     <div class="slide-content stagger">
         <h2 class="reveal">Everyone should be <span class="text-gradient">isolating</span></h2>
         <hr class="neon-divider reveal">
-        <div class="card-grid reveal" style="max-width: 700px;">
+        <div class="card-grid reveal" style="grid-template-columns: repeat(6, 1fr);">
             <div class="card">
                 <h3 class="neon-cyan">Permission lists</h3>
             </div>
@@ -1073,33 +1114,17 @@
                 <h3 class="neon-magenta">Sandbox modes</h3>
             </div>
             <div class="card">
-                <h3 style="color: var(--accent-purple);">Docker containers</h3>
+                <h3 style="color: var(--accent-purple);">Claude web</h3>
             </div>
             <div class="card">
-                <h3 class="neon-cyan">VMs</h3>
+                <h3 class="neon-cyan">Docker containers</h3>
             </div>
             <div class="card">
-                <h3 class="neon-magenta">Remote instances</h3>
+                <h3 class="neon-magenta">VMs</h3>
             </div>
             <div class="card">
                 <h3 style="color: var(--accent-purple);">Vibe code your own!</h3>
             </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 21: DEMO
-     =========================================== -->
-<section class="slide section-slide" data-slide="21">
-    <div class="glow-orb cyan" style="width:250px;height:250px;top:15%;left:10%;"></div>
-    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:20%;right:12%;"></div>
-    <div class="slide-content stagger">
-        <span class="slide-label reveal">// demo</span>
-        <h2 class="reveal" style="font-size: var(--title-size);">Let's see a <span class="text-gradient">demo</span></h2>
-        <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 400px; text-align: left;">
-            <span class="cmd">silo claude</span>
         </div>
     </div>
 </section>
@@ -1160,67 +1185,67 @@
        =========================================== */
     const SPEAKER_NOTES = [
         // Slide 1: Title
-        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a tension we all face when using AI coding agents. How do we give them the access they need while keeping our machines safe?",
+        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a problem I had, and I think we all have, when using AI coding agents.",
 
-        // Slide 2: The Problem
+        // Slide 2: What We're Talking About
+        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets full access — yolo mode — but only inside the container, so our machine stays safe. I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
+
+        // Slide 3: The Problem
         "Let's start with the reality. AI coding agents need broad access — they read files, run commands, modify code. But when we leave permission prompts on, we're back in the loop. Approve, review, approve. We become the bottleneck. To really leverage these tools, we need them unblocked — running in yolo mode. But that means trusting them with our whole machine.",
 
-        // Slide 3: The Tension
+        // Slide 4: The Tension
         "So we're stuck with this tradeoff. We can give the agent full access and accept the security risk — it could run anything on our machine. Or we restrict it and we're back to babysitting. Neither option is great.",
 
-        // Slide 4: Attempt 1 — Permissions
+        // Slide 5: Permissions
         "My first attempt at solving this was permissions. Lots and lots of permissions. I built this massive allow-list — over a hundred rules. Every git subcommand, every gh subcommand, every cargo and go and deno command, specific read and write paths. It felt thorough and it's pretty effective. But it's still super risky. One time I permitted 'gh api' and an agent commented on a completely random GitHub discussion that had nothing to do with our work. Super embarrassing.",
 
-        // Slide 5: Attempt 2 — Sandboxing
-        "My second attempt was sandboxing. OpenAI's Codex CLI shipped sandbox mode first, then Claude Code added it. I also experimented with macOS sandbox-exec and writing my own sandbox rules. It was hard to get right though — build caching didn't work, I kept hitting errors with the Go build cache, tools would behave unpredictably. And often the sandbox still falls back to the permissions list anyway. So it was only a small edge over permissions alone. That said — if you're not using any isolation right now, turn on sandboxing in Claude Code. It's the best place to start. You get a good amount of safety with minimal setup.",
+        // Slide 6: Sandboxing
+        "Next I tried sandboxing. OpenAI's Codex CLI shipped sandbox mode first, then Claude Code added it. I also experimented with macOS sandbox-exec and writing my own sandbox rules. It was hard to get right though — build caching didn't work, I kept hitting errors with the Go build cache, tools would behave unpredictably. And often the sandbox still falls back to the permissions list anyway. So it was only a small edge over permissions alone. That said — if you're not using any isolation right now, turn on sandboxing in Claude Code. It's the best place to start. You get a good amount of safety with minimal setup.",
 
-        // Slide 6: Run Them Somewhere Else
-        "Another option is running agents somewhere else entirely. Claude's web interface, GitHub's coding agent, remote dev machines. I'll be honest — I haven't done much of this myself. But I know some of you here have, and it's a good option for some people. If it's working for you, great. The tradeoff is you're on machines you don't control, without the tools and configs you have locally, and it's often slower.",
+        // Slide 7: Run Them Somewhere Else
+        "Another option is running agents somewhere else entirely. Claude's web interface, GitHub's Copilot coding agent. They're great for long-running investigative tasks like bug finding. Good for completely hands off, arms length spikes — you're not in there in the code with your IDE, so it suits exploratory work. Also great for kicking off the start of some work, then continuing later locally. The tradeoff is you're on machines you don't control, without the tools and configs you have locally, and it's often limited.",
 
-        // Slide 7: Attempt 3 — Containers
-        "And that brings us to attempt three: containers. This is the real solution. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
+        // Slide 8: Containers
+        "And that brings us to containers. This is the real solution. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
 
-        // Slide 8: The Solution
+        // Slide 9: The Solution
         "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
 
-        // Slide 9: Supported Tools
+        // Slide 10: Supported Tools
         "silo supports three AI coding tools today. Claude Code from Anthropic, OpenCode, and GitHub Copilot CLI. We just prefix our usual command with 'silo'. The tool is auto-detected or we pick one interactively.",
 
-        // Slide 10: Two Backends
-        "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. silo auto-detects which one is available — it prefers Apple Containers when installed.",
-
-        // Slide 11: Why Apple Containers
-        "Here's why Apple Containers matter on macOS specifically. Docker on Mac runs all containers inside a single shared Linux VM that typically has access to our home directory. Apple Containers are different — each container is its own minimal VM with its own resources and only the directories we've explicitly mounted.",
+        // Slide 11: Two Backends
+        "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. An important distinction: the Apple Container VM can run an entire Docker engine inside it — so when your agent uses Docker, it's truly isolated. With Docker-in-Docker, it's a shared engine and easy to break out of. silo auto-detects which one is available — it prefers Apple Containers when installed.",
 
         // Slide 12: Give It a Go
-        "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it.",
+        "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it. Let me show you a quick demo.",
 
         // Slide 13: What's Inside
-        "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded into the container.",
+        "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded. And importantly, the filesystem structure is identical — if your home is /Users/cooluser on your Mac, that's exactly what it is inside the container. So everything just works, even if you have hardcoded paths in your configs or scripts.",
 
         // Slide 14: Seamless local ↔ silo
-        "silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. The active tool's dir is read-write so sessions persist across container restarts. Other tool dirs are read-only for sharing CLAUDE.md files. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session.",
+        "My favourite feature is the seamless handoff between local and silo. silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session.",
 
-        // Slide 15: Smart Caching
-        "Images use content-addressed tagging — a hash of the Dockerfile, tool, and build args. So rebuilds only happen when something actually changes. And there's an async background version check that detects tool updates with zero added latency.",
+        // Slide 15: Auto-Updating Agents
+        "silo automatically keeps your agents up to date. There's a background version check that runs async with zero added latency. When a new release of Claude Code, OpenCode, or Copilot CLI is detected, the image rebuilds on the next run. You're always running the latest version. Under the hood, images use content-addressed tagging — a hash of the Dockerfile, tool, and build args — so rebuilds only happen when something actually changes.",
 
-        // Slide 16: Configuration
+        // Slide 16: Config Commands
+        "silo has a full set of config commands. Init creates a sample config file. Default shows the built-in defaults. Paths shows all config files being merged. Show displays the merged result with source annotations. And edit opens a config file in your editor.",
+
+        // Slide 17: Hierarchical Config
         "Configuration is hierarchical JSONC. Built-in defaults, global config, then local config files from root to cwd. Arrays are appended, not replaced. And config show tells us exactly where each setting came from with source annotations.",
 
-        // Slide 17: Repo-Aware Config
+        // Slide 18: Repo-Aware Config
         "My favorite feature: repository-aware configuration. We can key config by git remote URL substrings. So all repos in our org get certain settings. A specific repo can override those. Matches merge by specificity.",
 
-        // Slide 18: Hooks
+        // Slide 19: Hooks
         "Two types of hooks for customization. Post-build hooks run once when the image is built — great for installing additional tools or MCP servers. Pre-run hooks run every time before the AI tool starts — good for loading secrets or setting up state.",
 
-        // Slide 19: Container Management
+        // Slide 20: Container Management
         "Standard container management commands. List containers with silo ls, exec into them, open a shell, or remove them. Containers are named after our project directory with auto-incrementing numbers.",
 
-        // Slide 20: The Bigger Picture
+        // Slide 21: The Bigger Picture
         "So here's the takeaway: everyone should be doing something to isolate their AI agents. silo is just one example of a way to isolate using containers and VMs. You don't need silo to do this — it's just a tool to aid with it. You can use these CLI agent tools in Docker containers started by a shell script. And silo is also just what I'm doing today. In the era of AI, tooling doesn't survive long — I might not be using this in two months. The important thing is the practice, not the specific tool. You've got options: permission lists, sandbox modes, Docker containers, VMs, remote instances. There are lots of similar tools popping up that folks are vibe coding. And that's another option — vibe code your own!",
-
-        // Slide 21: Demo
-        "If you want to use silo yourself, let's take a look at a quick demo.",
 
         // Slide 22: Closing
         "That's silo. Three lines to get started. It's open source under Apache 2.0, built in Go, targeting macOS. Give it a try and let me know what you think. Thank you."
