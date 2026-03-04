@@ -18,16 +18,14 @@
   // Tool definitions and configuration (merged with built-in defaults).
   // Built-in tools (claude, opencode, copilot) have defaults for all fields.
   // You can override any field or define entirely new tools.
+  // Example: the built-in Claude Code tool is equivalent to:
   // "tools": {
   //   "claude": {
-  //     "env": ["CLAUDE_SPECIFIC_VAR"]
-  //   },
-  //   "my-custom-tool": {
-  //     "description": "My Custom AI Tool",
-  //     "dockerfile": "FROM base AS my-custom-tool\nARG HOME\nRUN curl -fsSL https://example.com/install.sh | bash\n# SILO_POST_BUILD_HOOKS_MY-CUSTOM-TOOL",
-  //     "command": ["$HOME/.local/bin/my-tool", "--flag"],
-  //     "latest_version_url": "https://example.com/version",
-  //     "mounts_rw": ["~/.my-tool"]
+  //     "description": "Claude Code - Anthropic's CLI for Claude",
+  //     "dockerfile": "FROM base AS claude\nARG HOME\nARG TOOL_VERSION\nRUN set -e && curl -fsSL ... | bash\n# SILO_POST_BUILD_HOOKS_CLAUDE",
+  //     "command": ["$HOME/.local/bin/claude", "--mcp-config=$HOME/.claude/mcp.json", "--dangerously-skip-permissions"],
+  //     "latest_version_url": "https://storage.googleapis.com/claude-code-dist-.../claude-code-releases/latest",
+  //     "mounts_rw": ["~/.claude.json", "~/.claude"]
   //   }
   // },
   // Repository-specific configuration (applied when git remote URL contains the key).

@@ -353,22 +353,24 @@ Adding a new tool to silo is as simple as defining it in your `silo.jsonc` confi
 
 ### Example: Adding a Custom Tool
 
+The built-in Claude Code tool is defined entirely through config. Here is its full definition as an example of what a tool config entry looks like:
+
 ```jsonc
 // ~/.config/silo/silo.jsonc
 {
   "tools": {
-    "aider": {
-      "description": "Aider - AI pair programming",
-      "dockerfile": "FROM base AS aider\nARG HOME\nRUN pip install aider-chat\n# SILO_POST_BUILD_HOOKS_AIDER",
-      "command": ["$HOME/.local/bin/aider"],
-      "mounts_rw": ["~/.aider"],
-      "env": ["OPENAI_API_KEY"]
+    "claude": {
+      "description": "Claude Code - Anthropic's CLI for Claude",
+      "dockerfile": "FROM base AS claude\nARG HOME\nARG TOOL_VERSION\nRUN set -e && \\\n    curl -fsSL --connect-timeout 15 -o /tmp/install.sh https://claude.ai/install.sh && \\\n    test -s /tmp/install.sh && \\\n    bash /tmp/install.sh ${TOOL_VERSION:+\"$TOOL_VERSION\"} && \\\n    rm /tmp/install.sh && \\\n    $HOME/.local/bin/claude --version\nENV PATH=\"${HOME}/.claude/bin:${PATH}\"\n# SILO_POST_BUILD_HOOKS_CLAUDE",
+      "command": ["$HOME/.local/bin/claude", "--mcp-config=$HOME/.claude/mcp.json", "--dangerously-skip-permissions"],
+      "latest_version_url": "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest",
+      "mounts_rw": ["~/.claude.json", "~/.claude"]
     }
   }
 }
 ```
 
-After adding the config, `silo aider` will be available as a subcommand and in the interactive tool selector.
+After adding a tool to the config, `silo <toolname>` will be available as a subcommand and in the interactive tool selector.
 
 ### Dockerfile Stage Requirements
 
