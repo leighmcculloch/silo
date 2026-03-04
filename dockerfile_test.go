@@ -3,10 +3,14 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/leighmcculloch/silo/config"
+	"github.com/leighmcculloch/silo/tools"
 )
 
 func TestDockerfile(t *testing.T) {
-	df := Dockerfile(supportedTools)
+	tt := tools.ToolsFromConfig(config.DefaultConfig(toolDefaults()))
+	df := Dockerfile(tt)
 
 	if df == "" {
 		t.Error("expected dockerfile to not be empty")
@@ -45,9 +49,10 @@ func TestDockerfile(t *testing.T) {
 }
 
 func TestAvailableTools(t *testing.T) {
-	tools := AvailableTools(supportedTools)
+	tt := tools.ToolsFromConfig(config.DefaultConfig(toolDefaults()))
+	toolNames := AvailableTools(tt)
 
-	if len(tools) == 0 {
+	if len(toolNames) == 0 {
 		t.Fatal("expected at least one tool")
 	}
 
@@ -57,7 +62,7 @@ func TestAvailableTools(t *testing.T) {
 		"copilot":  true,
 	}
 
-	for _, tool := range tools {
+	for _, tool := range toolNames {
 		if !expected[tool] {
 			t.Errorf("unexpected tool: %s", tool)
 		}
@@ -70,6 +75,7 @@ func TestAvailableTools(t *testing.T) {
 }
 
 func TestToolDescription(t *testing.T) {
+	tt := tools.ToolsFromConfig(config.DefaultConfig(toolDefaults()))
 	tests := []struct {
 		tool     string
 		contains string
@@ -80,11 +86,11 @@ func TestToolDescription(t *testing.T) {
 		{"unknown", "Unknown"},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.tool, func(t *testing.T) {
-			desc := ToolDescription(supportedTools, tt.tool)
-			if !strings.Contains(desc, tt.contains) {
-				t.Errorf("expected description for %s to contain %q, got %q", tt.tool, tt.contains, desc)
+	for _, tc := range tests {
+		t.Run(tc.tool, func(t *testing.T) {
+			desc := ToolDescription(tt, tc.tool)
+			if !strings.Contains(desc, tc.contains) {
+				t.Errorf("expected description for %s to contain %q, got %q", tc.tool, tc.contains, desc)
 			}
 		})
 	}

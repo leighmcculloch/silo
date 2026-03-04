@@ -53,6 +53,8 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | OpenCode | `silo opencode` | AI coding CLI |
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 
+Tools are defined in config — the built-in tools above are defaults. You can override any built-in tool's settings or [add your own custom tools](#custom-tools) via the `tools` section in your `silo.jsonc` config file.
+
 ## Installation
 
 ### Go
@@ -209,7 +211,9 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
     "source ~/.env_api_keys"
   ],
 
-  // Tool-specific configuration (merged with global settings)
+  // Tool definitions and configuration (merged with built-in defaults).
+  // Built-in tools have defaults for description, dockerfile, command, etc.
+  // You can override any field or define entirely new tools.
   "tools": {
     "claude": {
       "mounts_rw": ["~/.claude.json", "~/.claude"],
@@ -329,6 +333,65 @@ configurable today, other than through the hooks.
 |--------|-------------|
 | `github-mcp-server` | GitHub integration for AI tools |
 
+
+## Custom Tools
+
+Adding a new tool to silo is as simple as defining it in your `silo.jsonc` config file. No code changes required.
+
+### Tool Definition Fields
+
+| Field | Description |
+|-------|-------------|
+| `description` | Human-readable description shown in tool selection |
+| `dockerfile` | Dockerfile stage text (`FROM base AS <name>` ...) |
+| `command` | Container entrypoint + args (use `$HOME` for home directory) |
+| `latest_version_url` | URL returning latest version as plain text (for auto-updates) |
+| `latest_version_github_release` | GitHub `owner/repo` for version from latest release tag |
+| `mounts_ro`, `mounts_rw` | Mount paths specific to this tool |
+| `env` | Environment variables specific to this tool |
+| `pre_run_hooks`, `post_build_hooks` | Hooks specific to this tool |
+
+### Example: Adding a Custom Tool
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "tools": {
+    "aider": {
+      "description": "Aider - AI pair programming",
+      "dockerfile": "FROM base AS aider\nARG HOME\nRUN pip install aider-chat\n# SILO_POST_BUILD_HOOKS_AIDER",
+      "command": ["$HOME/.local/bin/aider"],
+      "mounts_rw": ["~/.aider"],
+      "env": ["OPENAI_API_KEY"]
+    }
+  }
+}
+```
+
+After adding the config, `silo aider` will be available as a subcommand and in the interactive tool selector.
+
+### Dockerfile Stage Requirements
+
+The `dockerfile` field must:
+1. Start with `FROM base AS <toolname>` (the tool name must match the config key)
+2. Include `ARG HOME` to access the user's home directory
+3. Include `# SILO_POST_BUILD_HOOKS_<TOOLNAME>` as a marker for post-build hook injection (the toolname should be uppercase)
+
+### Overriding Built-in Tools
+
+You can override any field of a built-in tool. For example, to change the command flags for Claude:
+
+```jsonc
+{
+  "tools": {
+    "claude": {
+      "command": ["$HOME/.local/bin/claude", "--dangerously-skip-permissions"]
+    }
+  }
+}
+```
+
+Definition fields (description, dockerfile, command, version URLs) are replaced when overridden. Configuration fields (mounts, env, hooks) are appended to defaults.
 
 ## Advanced Usage
 

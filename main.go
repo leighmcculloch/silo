@@ -23,38 +23,17 @@ import (
 	"github.com/leighmcculloch/silo/run"
 	"github.com/leighmcculloch/silo/tilde"
 	"github.com/leighmcculloch/silo/tools"
-	"github.com/leighmcculloch/silo/tools/claudecode"
-	"github.com/leighmcculloch/silo/tools/copilotcli"
-	"github.com/leighmcculloch/silo/tools/opencode"
 	"github.com/spf13/cobra"
 )
 
-var (
-	version = "dev"
+var version = "dev"
 
-	// supportedTools is the single source of truth for which tools silo
-	// supports. To add a tool: create tools/<name>/, define its Tool, and
-	// add it here. To remove a tool: delete from this slice.
-	supportedTools = []tools.Tool{
-		claudecode.Tool,
-		opencode.Tool,
-		copilotcli.Tool,
-	}
-)
-
-// toolDefaults returns the default ToolConfig map derived from supportedTools.
+// toolDefaults returns the built-in default tool definitions. These supply
+// the Dockerfile stages, commands, version URLs, and default mounts/env for
+// the shipped tools. Users can override any field or add entirely new tools
+// via their silo.jsonc config files.
 func toolDefaults() map[string]config.ToolConfig {
-	return tools.DefaultToolConfigs(supportedTools)
-}
-
-// findTool returns the Tool definition for the given name, or nil if not found.
-func findTool(name string) *tools.Tool {
-	for i := range supportedTools {
-		if supportedTools[i].Name == name {
-			return &supportedTools[i]
-		}
-	}
-	return nil
+	return tools.DefaultToolDefs()
 }
 
 func main() {
@@ -131,8 +110,11 @@ Configuration is loaded from (in order, merged):
 		&cobra.Group{ID: "config", Title: "Configuration:"},
 	)
 
-	// Register each tool as a subcommand
-	for _, t := range supportedTools {
+	// Register each tool as a subcommand. Tools are discovered from config
+	// (built-in defaults merged with any user config). Adding a new tool is
+	// as easy as defining it in a silo.jsonc config file.
+	cfg := config.LoadAll(toolDefaults())
+	for _, t := range tools.ToolsFromConfig(cfg) {
 		toolDef := t // capture loop variable
 		toolCmd := &cobra.Command{
 			Use:     toolDef.Name + " [-- args...]",
@@ -140,7 +122,7 @@ Configuration is loaded from (in order, merged):
 			GroupID: "tools",
 			Args:    cobra.ArbitraryArgs,
 			RunE: func(cmd *cobra.Command, args []string) error {
-				return runTool(cmd, toolDef, args, stdout, stderr)
+				return runTool(cmd, toolDef.Name, args, stdout, stderr)
 			},
 		}
 		toolCmd.Flags().String("backend", "", "Backend to use: docker, container")
@@ -161,7 +143,7 @@ Configuration is loaded from (in order, merged):
 	configShowCmd := &cobra.Command{
 		Use:   "show",
 		Short: "Show the current merged configuration",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			return configshow.Show(stdout, toolDefaults())
 		},
 	}
@@ -305,6 +287,7 @@ Use --local or --global to skip the prompt.`,
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
+	supportedTools := tools.ToolsFromConfig(cfg)
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
@@ -325,7 +308,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	}
 	// Interactive selection as last resort
 	if tool == "" {
-		tool, err = selectTool()
+		tool, err = selectTool(supportedTools)
 		if err != nil {
 			return err
 		}
@@ -337,11 +320,12 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		return fmt.Errorf("invalid tool: %s (valid tools: %s)", tool, strings.Join(validTools, ", "))
 	}
 
-	// Find tool definition
-	toolDef := findTool(tool)
-	if toolDef == nil {
+	// Build tool definition from config
+	tc, ok := cfg.Tools[tool]
+	if !ok {
 		return fmt.Errorf("tool definition not found: %s", tool)
 	}
+	toolDef := tools.NewTool(tool, tc)
 
 	// Override backend from flag
 	if b, _ := cmd.Flags().GetString("backend"); b != "" {
@@ -365,7 +349,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:     *toolDef,
+		ToolDef:     toolDef,
 		Config:      cfg,
 		Dockerfile:  Dockerfile(supportedTools),
 		ForceBuild:  forceBuild,
@@ -377,9 +361,17 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	})
 }
 
-func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stderr io.Writer) error {
+func runTool(cmd *cobra.Command, toolName string, args []string, stdout, stderr io.Writer) error {
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
+	supportedTools := tools.ToolsFromConfig(cfg)
+
+	// Build tool definition from config
+	tc, ok := cfg.Tools[toolName]
+	if !ok {
+		return fmt.Errorf("tool definition not found: %s", toolName)
+	}
+	toolDef := tools.NewTool(toolName, tc)
 
 	// Get tool-specific args (everything after --)
 	var toolArgs []string
@@ -426,7 +418,7 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	})
 }
 
-func selectTool() (string, error) {
+func selectTool(supportedTools []tools.Tool) (string, error) {
 	names := AvailableTools(supportedTools)
 
 	var options []huh.Option[string]

@@ -17,7 +17,6 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["claude", "opencode", "copilot"],
       "description": "Default tool to run. If not set, an interactive prompt is shown.",
       "examples": ["claude", "opencode", "copilot"]
     },
@@ -63,13 +62,20 @@
     },
     "tools": {
       "type": "object",
-      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'opencode', 'copilot').",
+      "description": "Tool definitions and configuration. Each key is a tool name. Built-in tools (claude, opencode, copilot) have defaults; you can override any field or define entirely new tools.",
       "additionalProperties": {
         "$ref": "#/$defs/toolConfig"
       },
       "examples": [{
         "claude": {
           "env": ["CLAUDE_SPECIFIC_VAR"]
+        },
+        "my-custom-tool": {
+          "description": "My Custom AI Tool",
+          "dockerfile": "FROM base AS my-custom-tool\nARG HOME\nRUN curl -fsSL https://example.com/install.sh | bash\n# SILO_POST_BUILD_HOOKS_MY-CUSTOM-TOOL",
+          "command": ["$HOME/.local/bin/my-tool", "--flag"],
+          "latest_version_url": "https://example.com/version",
+          "mounts_rw": ["~/.my-tool"]
         }
       }]
     },
@@ -96,8 +102,33 @@
   "$defs": {
     "toolConfig": {
       "type": "object",
-      "description": "Configuration specific to a single tool. These settings are merged with global config when running that tool.",
+      "description": "Full definition and configuration for a tool. Definition fields (description, dockerfile, command, etc.) define what the tool is. Configuration fields (mounts, env, hooks) define how it runs. Built-in tools already have defaults for all definition fields.",
       "properties": {
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the tool (e.g. 'Claude Code - Anthropic's CLI for Claude')."
+        },
+        "dockerfile": {
+          "type": "string",
+          "description": "Dockerfile stage text. Must start with 'FROM base AS <toolname>'. Include '# SILO_POST_BUILD_HOOKS_<TOOLNAME>' as a marker for hook injection."
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Container entrypoint and arguments. Use $HOME for the user's home directory (expanded at runtime)."
+        },
+        "latest_version_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL that returns the latest version as plain text. Used for auto-update detection and cache-busting."
+        },
+        "latest_version_github_release": {
+          "type": "string",
+          "description": "GitHub 'owner/repo' whose latest release tag_name is used as the version. Alternative to latest_version_url.",
+          "pattern": "^[^/]+/[^/]+$"
+        },
         "mounts_ro": {
           "type": "array",
           "items": {

@@ -42,8 +42,26 @@ type Config struct {
 	Repos map[string]RepoConfig `json:"repos,omitempty"`
 }
 
-// ToolConfig represents configuration for a specific AI tool
+// ToolConfig represents the full definition and configuration for a specific AI tool.
+// Definition fields (description, dockerfile, command, latest_version_url, latest_version_github_release)
+// define what the tool is. Configuration fields (mounts, env, hooks) define how it runs.
+// Adding a new tool is as simple as defining it in the tools map of a silo.jsonc config file.
 type ToolConfig struct {
+	// Description is a human-readable description of the tool (e.g. "Claude Code - Anthropic's CLI for Claude")
+	Description string `json:"description,omitempty"`
+
+	// Dockerfile is the Dockerfile stage text (FROM base AS <toolname> ...)
+	Dockerfile string `json:"dockerfile,omitempty"`
+
+	// Command is the container entrypoint + args. Use $HOME for the user's home directory.
+	Command []string `json:"command,omitempty"`
+
+	// LatestVersionURL is a URL that returns the latest version as plain text (for auto-update detection)
+	LatestVersionURL string `json:"latest_version_url,omitempty"`
+
+	// LatestVersionGitHubRelease is a GitHub "owner/repo" whose latest release tag_name is the version
+	LatestVersionGitHubRelease string `json:"latest_version_github_release,omitempty"`
+
 	// MountsRO are read-only mounts specific to this tool
 	MountsRO []string `json:"mounts_ro,omitempty"`
 
@@ -94,6 +112,11 @@ type SourceInfo struct {
 	Env                map[string]string            // value -> source path
 	PreRunHooks        map[string]string            // value -> source path
 	PostBuildHooks     map[string]string            // value -> source path
+	ToolDescription               map[string]string            // tool -> source
+	ToolDockerfile                map[string]string            // tool -> source
+	ToolCommand                   map[string]string            // tool -> source
+	ToolLatestVersionURL          map[string]string            // tool -> source
+	ToolLatestVersionGitHubRelease map[string]string           // tool -> source
 	ToolMountsRO       map[string]map[string]string // tool -> value -> source
 	ToolMountsRW       map[string]map[string]string // tool -> value -> source
 	ToolEnv            map[string]map[string]string // tool -> value -> source
@@ -181,6 +204,23 @@ func Merge(base, overlay Config) Config {
 	}
 	for name, tool := range overlay.Tools {
 		if existing, ok := result.Tools[name]; ok {
+			// Definition fields: overlay takes precedence if set
+			if tool.Description != "" {
+				existing.Description = tool.Description
+			}
+			if tool.Dockerfile != "" {
+				existing.Dockerfile = tool.Dockerfile
+			}
+			if len(tool.Command) > 0 {
+				existing.Command = tool.Command
+			}
+			if tool.LatestVersionURL != "" {
+				existing.LatestVersionURL = tool.LatestVersionURL
+			}
+			if tool.LatestVersionGitHubRelease != "" {
+				existing.LatestVersionGitHubRelease = tool.LatestVersionGitHubRelease
+			}
+			// Configuration fields: append arrays
 			existing.MountsRO = append(existing.MountsRO, tool.MountsRO...)
 			existing.MountsRW = append(existing.MountsRW, tool.MountsRW...)
 			existing.Env = append(existing.Env, tool.Env...)
@@ -215,22 +255,27 @@ func Merge(base, overlay Config) Config {
 // NewSourceInfo creates a new empty SourceInfo
 func NewSourceInfo() *SourceInfo {
 	return &SourceInfo{
-		MountsRO:           make(map[string]string),
-		MountsRW:           make(map[string]string),
-		Env:                make(map[string]string),
-		PreRunHooks:        make(map[string]string),
-		PostBuildHooks:     make(map[string]string),
-		ToolMountsRO:       make(map[string]map[string]string),
-		ToolMountsRW:       make(map[string]map[string]string),
-		ToolEnv:            make(map[string]map[string]string),
-		ToolPreRunHooks:    make(map[string]map[string]string),
-		ToolPostBuildHooks: make(map[string]map[string]string),
-		RepoTool:           make(map[string]string),
-		RepoMountsRO:       make(map[string]map[string]string),
-		RepoMountsRW:       make(map[string]map[string]string),
-		RepoEnv:            make(map[string]map[string]string),
-		RepoPreRunHooks:    make(map[string]map[string]string),
-		RepoPostBuildHooks: make(map[string]map[string]string),
+		MountsRO:                       make(map[string]string),
+		MountsRW:                       make(map[string]string),
+		Env:                            make(map[string]string),
+		PreRunHooks:                    make(map[string]string),
+		PostBuildHooks:                 make(map[string]string),
+		ToolDescription:                make(map[string]string),
+		ToolDockerfile:                 make(map[string]string),
+		ToolCommand:                    make(map[string]string),
+		ToolLatestVersionURL:           make(map[string]string),
+		ToolLatestVersionGitHubRelease: make(map[string]string),
+		ToolMountsRO:                   make(map[string]map[string]string),
+		ToolMountsRW:                   make(map[string]map[string]string),
+		ToolEnv:                        make(map[string]map[string]string),
+		ToolPreRunHooks:                make(map[string]map[string]string),
+		ToolPostBuildHooks:             make(map[string]map[string]string),
+		RepoTool:                       make(map[string]string),
+		RepoMountsRO:                   make(map[string]map[string]string),
+		RepoMountsRW:                   make(map[string]map[string]string),
+		RepoEnv:                        make(map[string]map[string]string),
+		RepoPreRunHooks:                make(map[string]map[string]string),
+		RepoPostBuildHooks:             make(map[string]map[string]string),
 	}
 }
 
@@ -345,6 +390,23 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		info.PostBuildHooks[v] = source
 	}
 	for toolName, toolCfg := range cfg.Tools {
+		// Track definition fields
+		if toolCfg.Description != "" {
+			info.ToolDescription[toolName] = source
+		}
+		if toolCfg.Dockerfile != "" {
+			info.ToolDockerfile[toolName] = source
+		}
+		if len(toolCfg.Command) > 0 {
+			info.ToolCommand[toolName] = source
+		}
+		if toolCfg.LatestVersionURL != "" {
+			info.ToolLatestVersionURL[toolName] = source
+		}
+		if toolCfg.LatestVersionGitHubRelease != "" {
+			info.ToolLatestVersionGitHubRelease[toolName] = source
+		}
+		// Track configuration fields
 		if info.ToolMountsRO[toolName] == nil {
 			info.ToolMountsRO[toolName] = make(map[string]string)
 		}

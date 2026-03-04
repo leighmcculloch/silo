@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -19,8 +20,47 @@ type Tool struct {
 	Description     string                           // human-readable (e.g. "Claude Code - Anthropic's CLI")
 	DockerfileStage string                           // Dockerfile fragment (FROM base AS <name> ...)
 	Command         func(home string) []string       // container entrypoint + args
-	DefaultConfig   func() config.ToolConfig         // default mounts/env/hooks
 	LatestVersion   func(ctx context.Context) string // optional: returns latest version string for cache-busting
+}
+
+// NewTool constructs a Tool from a name and ToolConfig. This is the bridge
+// between the config-driven tool definitions and the runtime Tool type.
+func NewTool(name string, tc config.ToolConfig) Tool {
+	// Capture command slice so the closure doesn't share mutable state.
+	cmdSlice := make([]string, len(tc.Command))
+	copy(cmdSlice, tc.Command)
+
+	t := Tool{
+		Name:            name,
+		Description:     tc.Description,
+		DockerfileStage: tc.Dockerfile,
+		Command: func(home string) []string {
+			cmd := make([]string, len(cmdSlice))
+			for i, c := range cmdSlice {
+				cmd[i] = strings.ReplaceAll(c, "$HOME", home)
+			}
+			return cmd
+		},
+	}
+	if tc.LatestVersionURL != "" {
+		t.LatestVersion = FetchURLVersion(tc.LatestVersionURL)
+	} else if tc.LatestVersionGitHubRelease != "" {
+		t.LatestVersion = FetchGitHubReleaseVersion(tc.LatestVersionGitHubRelease)
+	}
+	return t
+}
+
+// ToolsFromConfig builds a slice of Tool from the tools map in config.
+// Only tools with a Dockerfile defined are included (these are runnable tools).
+func ToolsFromConfig(cfg config.Config) []Tool {
+	var tt []Tool
+	for name, tc := range cfg.Tools {
+		if tc.Dockerfile == "" {
+			continue
+		}
+		tt = append(tt, NewTool(name, tc))
+	}
+	return tt
 }
 
 // FetchVersion fetches the latest version and writes it to the cache. Intended
@@ -80,18 +120,43 @@ func FetchURLVersion(url string) func(ctx context.Context) string {
 	}
 }
 
-var versionCachePath = func(tool string) string {
-	return filepath.Join(xdg.CacheHome, "silo", "tool-versions", tool)
+// FetchGitHubReleaseVersion returns a LatestVersion function that queries
+// the GitHub releases API for a repo (e.g. "github/copilot-cli") and returns
+// the tag_name of the latest release.
+func FetchGitHubReleaseVersion(repo string) func(ctx context.Context) string {
+	return func(ctx context.Context) string {
+		url := "https://api.github.com/repos/" + repo + "/releases/latest"
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return ""
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return ""
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return ""
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return ""
+		}
+
+		var release struct {
+			TagName string `json:"tag_name"`
+		}
+		if err := json.Unmarshal(body, &release); err != nil {
+			return ""
+		}
+		return release.TagName
+	}
 }
 
-// DefaultToolConfigs builds the map that config.DefaultConfig needs from a
-// slice of tool definitions.
-func DefaultToolConfigs(tt []Tool) map[string]config.ToolConfig {
-	m := make(map[string]config.ToolConfig, len(tt))
-	for _, t := range tt {
-		if t.DefaultConfig != nil {
-			m[t.Name] = t.DefaultConfig()
-		}
-	}
-	return m
+var versionCachePath = func(tool string) string {
+	return filepath.Join(xdg.CacheHome, "silo", "tool-versions", tool)
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/leighmcculloch/silo/config"
@@ -124,6 +125,30 @@ func def(s, fallback string) string {
 	return s
 }
 
+// truncateDockerfile returns a summary for display instead of the full Dockerfile text.
+func truncateDockerfile(s string) string {
+	if s == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) <= 1 {
+		return s
+	}
+	return fmt.Sprintf("%s ... (%d lines)", lines[0], len(lines))
+}
+
+// scalarSourceAsMap creates a per-element source map from a scalar source string.
+func scalarSourceAsMap(values []string, source string) map[string]string {
+	if source == "" {
+		return nil
+	}
+	m := make(map[string]string, len(values))
+	for _, v := range values {
+		m[v] = source
+	}
+	return m
+}
+
 // Show outputs the current merged configuration as JSONC with source comments.
 func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	cfg, src := config.LoadAllWithSources(toolDefaults)
@@ -145,6 +170,11 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	for ti, tn := range toolNames {
 		tc := cfg.Tools[tn]
 		w.openObject("    ", tn)
+		w.nullableString("      ", "description", tc.Description, def(src.ToolDescription[tn], "default"), true)
+		w.nullableString("      ", "dockerfile", truncateDockerfile(tc.Dockerfile), def(src.ToolDockerfile[tn], "default"), true)
+		w.array("      ", "command", tc.Command, scalarSourceAsMap(tc.Command, def(src.ToolCommand[tn], "default")), true)
+		w.nullableString("      ", "latest_version_url", tc.LatestVersionURL, def(src.ToolLatestVersionURL[tn], "default"), true)
+		w.nullableString("      ", "latest_version_github_release", tc.LatestVersionGitHubRelease, def(src.ToolLatestVersionGitHubRelease[tn], "default"), true)
 		w.array("      ", "mounts_ro", tc.MountsRO, src.ToolMountsRO[tn], true)
 		w.array("      ", "mounts_rw", tc.MountsRW, src.ToolMountsRW[tn], true)
 		w.array("      ", "env", tc.Env, src.ToolEnv[tn], true)
@@ -193,6 +223,11 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	for ti, tn := range toolNames {
 		tc := cfg.Tools[tn]
 		w.openObject("    ", tn)
+		w.nullableString("      ", "description", tc.Description, "", true)
+		w.nullableString("      ", "dockerfile", truncateDockerfile(tc.Dockerfile), "", true)
+		w.array("      ", "command", tc.Command, nil, true)
+		w.nullableString("      ", "latest_version_url", tc.LatestVersionURL, "", true)
+		w.nullableString("      ", "latest_version_github_release", tc.LatestVersionGitHubRelease, "", true)
 		w.array("      ", "mounts_ro", tc.MountsRO, nil, true)
 		w.array("      ", "mounts_rw", tc.MountsRW, nil, true)
 		w.array("      ", "env", tc.Env, nil, true)

@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
   // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
   // "backend": "docker",
-  // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)
+  // Default tool to run (prompts if not set)
   // "tool": "claude",
   // Read-only directories or files to mount into the container
   // "mounts_ro": [],
@@ -15,9 +15,21 @@
   // "post_build_hooks": [],
   // Shell commands to run inside the container before the tool
   // "pre_run_hooks": [],
-  // Tool-specific configuration (merged with global config above)
-  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
-  // "tools": {},
+  // Tool definitions and configuration (merged with built-in defaults).
+  // Built-in tools (claude, opencode, copilot) have defaults for all fields.
+  // You can override any field or define entirely new tools.
+  // "tools": {
+  //   "claude": {
+  //     "env": ["CLAUDE_SPECIFIC_VAR"]
+  //   },
+  //   "my-custom-tool": {
+  //     "description": "My Custom AI Tool",
+  //     "dockerfile": "FROM base AS my-custom-tool\nARG HOME\nRUN curl -fsSL https://example.com/install.sh | bash\n# SILO_POST_BUILD_HOOKS_MY-CUSTOM-TOOL",
+  //     "command": ["$HOME/.local/bin/my-tool", "--flag"],
+  //     "latest_version_url": "https://example.com/version",
+  //     "mounts_rw": ["~/.my-tool"]
+  //   }
+  // },
   // Repository-specific configuration (applied when git remote URL contains the key).
   // Multiple patterns can match; they are merged in order of specificity (shortest first).
   // Example: "repos": {
