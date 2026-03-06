@@ -29,7 +29,6 @@ jobs:
           mkdir -p _site
           pandoc README.md --template=site-template.html --metadata title="silo" -o _site/index.html
           cp presentation.html _site/presentation.html
-          cp board-book.html _site/board-book.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
