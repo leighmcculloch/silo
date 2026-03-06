@@ -586,7 +586,7 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 2: WHAT WE'RE TALKING ABOUT
+     SLIDE 2: WHAT IS SILO
      =========================================== -->
 <section class="slide" data-slide="2">
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
@@ -596,7 +596,17 @@
         <p class="reveal" style="max-width: 50ch;">
             A CLI tool that runs AI coding agents in <strong>isolated containers</strong> and <strong>lightweight VMs</strong> &mdash; so they get full access without touching our machine.
         </p>
-        <hr class="neon-divider reveal" style="margin: 0;">
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 3: AGENDA
+     =========================================== -->
+<section class="slide" data-slide="3">
+    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal"><span class="neon-cyan">Agenda</span></h2>
+        <hr class="neon-divider reveal">
         <div class="reveal" style="display: flex; gap: clamp(0.5rem, 2vw, 1.5rem); max-width: 700px;">
             <div style="flex: 1;">
                 <h3 class="neon-magenta" style="margin-bottom: var(--element-gap);">The journey</h3>
@@ -615,12 +625,12 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 3: THE PROBLEM
+     SLIDE 4: THE PROBLEM
      =========================================== -->
-<section class="slide" data-slide="3">
+<section class="slide" data-slide="4">
     <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="slide-content stagger">
-        <h2 class="reveal">AI agents need <span class="neon-cyan">broad access</span></h2>
+        <h2 class="reveal">AI agents need <span class="neon-cyan">freedom</span></h2>
         <hr class="neon-divider reveal">
         <ul class="neon-list reveal">
             <li>They <strong>read files</strong>, <strong>run commands</strong>, <strong>modify code</strong></li>
@@ -632,14 +642,14 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 4: THE TENSION
+     SLIDE 5: THE TENSION
      =========================================== -->
-<section class="slide section-slide" data-slide="4">
+<section class="slide section-slide" data-slide="5">
     <div class="glow-orb cyan" style="width:200px;height:200px;top:20%;left:5%;"></div>
     <div class="glow-orb magenta" style="width:200px;height:200px;bottom:20%;right:10%;"></div>
     <div class="slide-content stagger">
         <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
-        <h2 class="reveal">The fundamental tradeoff</h2>
+        <h2 class="reveal">But we need <span class="neon-magenta">control</span></h2>
         <hr class="neon-divider reveal">
         <div class="flow reveal">
             <div class="flow-box">
@@ -659,9 +669,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 5: PERMISSIONS
+     SLIDE 6: PERMISSIONS
      =========================================== -->
-<section class="slide" data-slide="5">
+<section class="slide" data-slide="6">
     <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb magenta" style="width:160px;height:160px;bottom:12%;left:6%;"></div>
     <div class="slide-content stagger">
@@ -699,9 +709,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 6: SANDBOXING
+     SLIDE 7: SANDBOXING
      =========================================== -->
-<section class="slide" data-slide="6">
+<section class="slide" data-slide="7">
     <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:140px;height:140px;top:15%;right:6%;"></div>
     <div class="slide-content stagger">
@@ -715,9 +725,6 @@
                     <li>Hard to get right &mdash; <strong>build caching broke</strong>, Go build cache errors, flaky tool behavior</li>
                     <li>Often falls back to the <strong>permissions list</strong> anyway &mdash; only a small edge</li>
                 </ul>
-                <p style="margin-top: var(--element-gap);">
-                    If you're not using any isolation right now, <strong>turn on sandboxing</strong> in Claude Code. It's the best place to start &mdash; good safety with minimal effort.
-                </p>
             </div>
             <div class="code-block" style="text-align: left; align-self: start;">
                 > <span class="cmd">/sandbox</span>
@@ -727,9 +734,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 7: RUN THEM SOMEWHERE ELSE
+     SLIDE 8: RUN THEM SOMEWHERE ELSE
      =========================================== -->
-<section class="slide" data-slide="7">
+<section class="slide" data-slide="8">
     <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
@@ -746,9 +753,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 8: CONTAINERS / VMS
+     SLIDE 9: CONTAINERS / VMS
      =========================================== -->
-<section class="slide" data-slide="8">
+<section class="slide" data-slide="9">
     <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
     <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
     <div class="slide-content stagger">
@@ -780,12 +787,12 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 9: THE SOLUTION
+     SLIDE 10: THE SOLUTION
      =========================================== -->
-<section class="slide section-slide" data-slide="9">
+<section class="slide section-slide" data-slide="10">
     <div class="slide-content stagger">
         <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
-        <h2 class="reveal">Isolate, <span class="text-gradient">don't restrict</span></h2>
+        <h2 class="reveal">Lots of little <span class="text-gradient">silos</span></h2>
         <hr class="neon-divider reveal">
         <div class="reveal" style="display: flex; justify-content: center;">
             <div style="border: 1px solid var(--text-secondary); border-radius: 16px; padding: clamp(0.75rem, 2vw, 1.5rem); display: flex; flex-direction: column; align-items: center; gap: clamp(0.4rem, 1vw, 0.75rem);">
@@ -819,9 +826,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 10: GIVE IT A GO
+     SLIDE 11: GIVE IT A GO
      =========================================== -->
-<section class="slide title-slide" data-slide="10">
+<section class="slide title-slide" data-slide="11">
     <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
     <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
     <div class="corner-decoration top-right"></div>
@@ -846,9 +853,112 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 11: SUPPORTED TOOLS
+     SLIDE 12: HOW SILO WORKS — SECTION TITLE
      =========================================== -->
-<section class="slide" data-slide="11">
+<section class="slide section-slide" data-slide="12">
+    <div class="glow-orb cyan" style="width:250px;height:250px;top:-60px;right:15%;"></div>
+    <div class="glow-orb magenta" style="width:200px;height:200px;bottom:-40px;left:20%;"></div>
+    <div class="slide-content stagger">
+        <span class="slide-label reveal" style="color: var(--accent-cyan);">// under the hood</span>
+        <h2 class="reveal">How <span class="text-gradient">silo</span> works</h2>
+        <hr class="neon-divider reveal">
+        <p class="reveal" style="max-width: 45ch;">
+            What happens when you run <span class="mono neon-cyan">silo claude</span>
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 13: THE FLOW
+     =========================================== -->
+<section class="slide" data-slide="13">
+    <span class="slide-label reveal" style="color: var(--accent-cyan);">// under the hood</span>
+    <div class="slide-content stagger">
+        <div class="reveal" style="display: flex; flex-direction: column; align-items: stretch; gap: 0; max-width: 700px; margin: 0 auto;">
+            <!-- Row 1: command -->
+            <div style="display: flex; justify-content: center;">
+                <div class="flow-box highlight" style="padding: clamp(0.3rem, 0.6vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem);"><span class="mono" style="font-size: var(--small-size);">$ silo claude</span></div>
+            </div>
+            <!-- Down arrow -->
+            <div style="display: flex; justify-content: center; padding: clamp(0.1rem, 0.3vh, 0.2rem) 0;"><svg width="20" height="24" viewBox="0 0 20 24" style="display: block;"><line x1="10" y1="2" x2="10" y2="18" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M5,14 L10,20 L15,14" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <!-- Row 2: config -->
+            <div style="display: flex; justify-content: center;">
+                <div class="flow-box" style="padding: clamp(0.3rem, 0.6vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem);"><span style="font-size: var(--small-size);">Resolve config</span></div>
+            </div>
+            <!-- Down arrow -->
+            <div style="display: flex; justify-content: center; padding: clamp(0.1rem, 0.3vh, 0.2rem) 0;"><svg width="20" height="24" viewBox="0 0 20 24" style="display: block;"><line x1="10" y1="2" x2="10" y2="18" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M5,14 L10,20 L15,14" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <!-- Row 2: Build image -->
+            <div style="border: 1px solid var(--border-glow); border-radius: 10px; padding: clamp(0.3rem, 0.8vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem); background: var(--bg-card); backdrop-filter: blur(10px); display: flex; align-items: center; gap: clamp(0.3rem, 0.8vw, 0.5rem); justify-content: center; flex-wrap: wrap;">
+                <span style="font-family: var(--font-mono); font-size: clamp(0.5rem, 0.8vw, 0.7rem); color: var(--text-secondary);">build:</span>
+                <div class="flow-box" style="padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.4rem, 1vw, 0.75rem);"><span style="font-size: var(--small-size);">Base image</span></div>
+                <svg width="32" height="16" viewBox="0 0 32 16" style="flex-shrink: 0;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <div class="flow-box" style="padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.4rem, 1vw, 0.75rem);"><span style="font-size: var(--small-size);">Tool layer</span></div>
+                <svg width="32" height="16" viewBox="0 0 32 16" style="flex-shrink: 0;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <div class="flow-box" style="padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.4rem, 1vw, 0.75rem); border-color: rgba(0, 240, 255, 0.3);"><span style="font-size: var(--small-size); font-family: var(--font-mono); color: var(--accent-cyan);">post_build_hooks</span></div>
+            </div>
+            <!-- Async note -->
+            <div style="text-align: center; line-height: 1; padding: clamp(0.05rem, 0.2vh, 0.15rem) 0;"><span style="font-family: var(--font-mono); color: var(--accent-magenta); font-size: clamp(0.5rem, 0.8vw, 0.65rem);">&#8593; async: fetch latest version &rarr; rebuild in background</span></div>
+            <!-- Down arrow -->
+            <div style="display: flex; justify-content: center; padding: clamp(0.1rem, 0.3vh, 0.2rem) 0;"><svg width="20" height="24" viewBox="0 0 20 24" style="display: block;"><line x1="10" y1="2" x2="10" y2="18" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M5,14 L10,20 L15,14" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <!-- Row 3: Stage mounts -->
+            <div style="display: flex; justify-content: center;">
+                <div class="flow-box" style="padding: clamp(0.3rem, 0.6vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem);"><span style="font-size: var(--small-size);">Stage mounts</span></div>
+            </div>
+            <!-- Down arrow -->
+            <div style="display: flex; justify-content: center; padding: clamp(0.1rem, 0.3vh, 0.2rem) 0;"><svg width="20" height="24" viewBox="0 0 20 24" style="display: block;"><line x1="10" y1="2" x2="10" y2="18" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M5,14 L10,20 L15,14" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <!-- Row 4: Container -->
+            <div style="border: 1px solid var(--border-glow); border-radius: 10px; padding: clamp(0.3rem, 0.8vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem); background: var(--bg-card); backdrop-filter: blur(10px); display: flex; align-items: center; gap: clamp(0.3rem, 0.8vw, 0.5rem); justify-content: center;">
+                <span style="font-family: var(--font-mono); font-size: clamp(0.5rem, 0.8vw, 0.7rem); color: var(--text-secondary);">run:</span>
+                <div class="flow-box" style="padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.4rem, 1vw, 0.75rem); border-color: rgba(255, 45, 170, 0.3);"><span style="font-size: var(--small-size); font-family: var(--font-mono);">pre_run_hooks</span></div>
+                <svg width="32" height="16" viewBox="0 0 32 16" style="flex-shrink: 0;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <div class="flow-box highlight" style="padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.4rem, 1vw, 0.75rem); border-color: rgba(0, 240, 255, 0.5); box-shadow: 0 0 25px var(--accent-cyan-glow);"><span class="mono" style="font-size: var(--small-size);">claude</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 14: MOUNT MAPPING
+     =========================================== -->
+<section class="slide" data-slide="14">
+    <span class="slide-label reveal" style="color: var(--accent-cyan);">// under the hood</span>
+    <div class="glow-orb magenta" style="width:160px;height:160px;bottom:12%;right:6%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">Mount <span class="neon-cyan">mapping</span></h2>
+        <hr class="neon-divider reveal">
+        <div class="reveal" style="display: grid; grid-template-columns: 1fr auto 1fr; gap: clamp(0.2rem, 0.5vh, 0.4rem) clamp(0.5rem, 1.5vw, 1rem); align-items: center; max-width: 90vw; margin: 0 auto; font-size: clamp(0.55rem, 1vw, 0.8rem); white-space: nowrap;">
+            <!-- Header -->
+            <div style="font-family: var(--font-mono); color: var(--text-secondary); text-align: right;">Host</div>
+            <div></div>
+            <div style="font-family: var(--font-mono); color: var(--text-secondary);">Container</div>
+            <!-- Row 1 -->
+            <div class="code-block" style="text-align: right; padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem); border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);"><span class="neon-cyan">~/Code/rs-soroban-sdk-feat-worktree/</span></div>
+            <svg width="32" height="16" viewBox="0 0 32 16" style="justify-self: center;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="code-block" style="padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem); border-color: rgba(0, 240, 255, 0.4); box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);"><span class="neon-cyan">~/Code/rs-soroban-sdk-feat-worktree/</span></div>
+            <!-- Row 2 -->
+            <div class="code-block" style="text-align: right; padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-cyan">~/Code/rs-soroban-sdk/</span></div>
+            <svg width="32" height="16" viewBox="0 0 32 16" style="justify-self: center;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="code-block" style="padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-cyan">~/Code/rs-soroban-sdk/</span></div>
+            <!-- Row 3: claude dir -->
+            <div class="code-block" style="text-align: right; padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-magenta">~/.claude/</span></div>
+            <svg width="32" height="16" viewBox="0 0 32 16" style="justify-self: center;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="code-block" style="padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-magenta">~/.claude/</span></div>
+            <!-- Row 4: claude.json file -->
+            <div class="code-block" style="text-align: right; padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-magenta">~/.claude.json</span></div>
+            <svg width="32" height="16" viewBox="0 0 32 16" style="justify-self: center;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="code-block" style="padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span class="neon-magenta">~/.claude.json</span></div>
+            <!-- Row 5: api key file -->
+            <div class="code-block" style="text-align: right; padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span style="color: var(--accent-purple);">~/.apikey_github_ro</span></div>
+            <svg width="32" height="16" viewBox="0 0 32 16" style="justify-self: center;"><line x1="2" y1="8" x2="24" y2="8" stroke="rgba(122,130,160,0.6)" stroke-width="1.5"/><path d="M20,3 L27,8 L20,13" fill="none" stroke="rgba(122,130,160,0.6)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="code-block" style="padding: clamp(0.2rem, 0.5vw, 0.4rem) clamp(0.4rem, 0.8vw, 0.6rem);"><span style="color: var(--accent-purple);">~/.apikey_github_ro</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 15: SUPPORTED TOOLS
+     =========================================== -->
+<section class="slide" data-slide="15">
     <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Supported <span class="neon-cyan">tools</span></h2>
@@ -874,9 +984,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 12: TWO BACKENDS
+     SLIDE 16: TWO BACKENDS
      =========================================== -->
-<section class="slide" data-slide="12">
+<section class="slide" data-slide="16">
     <span class="slide-label reveal">// features</span>
     <div class="glow-orb magenta" style="width:200px;height:200px;bottom:10%;right:5%;"></div>
     <div class="slide-content stagger">
@@ -909,9 +1019,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 13: WHAT'S INSIDE
+     SLIDE 17: WHAT'S INSIDE
      =========================================== -->
-<section class="slide" data-slide="13">
+<section class="slide" data-slide="17">
     <span class="slide-label reveal">// features</span>
     <div class="slide-content stagger">
         <h2 class="reveal">Pre-built <span class="neon-cyan">dev environment</span></h2>
@@ -950,9 +1060,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 14: SHARED CONFIG MOUNTS
+     SLIDE 18: SHARED CONFIG MOUNTS
      =========================================== -->
-<section class="slide" data-slide="14">
+<section class="slide" data-slide="18">
     <span class="slide-label reveal">// features</span>
     <div class="glow-orb magenta" style="width:180px;height:180px;top:15%;left:5%;"></div>
     <div class="slide-content stagger">
@@ -975,9 +1085,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 15: AUTO-UPDATING AGENTS
+     SLIDE 19: AUTO-UPDATING AGENTS
      =========================================== -->
-<section class="slide" data-slide="15">
+<section class="slide" data-slide="19">
     <span class="slide-label reveal">// features</span>
     <div class="glow-orb cyan" style="width:200px;height:200px;top:15%;right:10%;"></div>
     <div class="slide-content stagger">
@@ -999,145 +1109,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 16: CONFIG COMMANDS
-     =========================================== -->
-<section class="slide" data-slide="16">
-    <span class="slide-label reveal">// features</span>
-    <div class="slide-content stagger">
-        <h2 class="reveal"><span class="neon-magenta">Configurable</span></h2>
-        <hr class="neon-divider reveal">
-        <div class="card-grid reveal" style="grid-template-columns: 1fr; max-width: 550px;">
-            <div>
-                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Create a starter config file</p>
-                <div class="code-block" style="text-align: left;"><span class="cmd">silo config init</span></div>
-            </div>
-            <div>
-                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Show built-in defaults</p>
-                <div class="code-block" style="text-align: left;"><span class="cmd">silo config default</span></div>
-            </div>
-            <div>
-                <p style="font-size: var(--small-size); margin-bottom: var(--element-gap);">Edit a config file in your editor</p>
-                <div class="code-block" style="text-align: left;"><span class="cmd">silo config edit</span></div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 17: HIERARCHICAL CONFIG
-     =========================================== -->
-<section class="slide" data-slide="17">
-    <span class="slide-label reveal">// features</span>
-    <div class="slide-content stagger">
-        <h2 class="reveal">Hierarchical <span class="neon-magenta">config</span></h2>
-        <hr class="neon-divider reveal">
-        <div class="flow reveal" style="margin-bottom: 0;">
-            <div class="flow-box">Built-in defaults</div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box">~/.config/silo/silo.jsonc</div>
-            <div class="flow-arrow">&rarr;</div>
-            <div class="flow-box highlight">./silo.jsonc</div>
-        </div>
-        <div class="reveal" style="display: flex; flex-direction: column; align-items: center; gap: var(--element-gap);">
-            <div class="code-block" style="text-align: left;"><span class="cmd">silo config show</span></div>
-            <div class="code-block" style="text-align: left;">
-                {<br>
-                &nbsp;&nbsp;<span class="string">"backend"</span>: <span class="string">"docker"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
-                &nbsp;&nbsp;<span class="string">"env"</span>: [<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"GITHUB_TOKEN"</span>, <span class="comment">// ~/.config/silo/silo.jsonc</span><br>
-                &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"PROJECT_KEY"</span> <span class="comment">// ./silo.jsonc</span><br>
-                &nbsp;&nbsp;]<br>
-                }
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 18: REPO-AWARE CONFIG
-     =========================================== -->
-<section class="slide" data-slide="18">
-    <span class="slide-label reveal">// features</span>
-    <div class="slide-content stagger">
-        <h2 class="reveal">Repository-aware <span class="neon-cyan">config</span></h2>
-        <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 800px;">
-            <span class="comment">// Apply settings by git remote URL</span><br>
-            <span class="string">"repos"</span>: {<br>
-            &nbsp;&nbsp;<span class="string">"github.com/myorg"</span>: {<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"env"</span>: [<span class="string">"ORG_API_KEY"</span>],<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"post_build_hooks"</span>: [<span class="string">"npm i -g @myorg/cli"</span>]<br>
-            &nbsp;&nbsp;},<br>
-            &nbsp;&nbsp;<span class="string">"github.com/myorg/special"</span>: {<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="string">"env"</span>: [<span class="string">"SPECIAL_TOKEN"</span>]<br>
-            &nbsp;&nbsp;}<br>
-            }
-        </div>
-        <p class="reveal" style="max-width: 50ch;">
-            Substring matching on remote URLs. Multiple matches merge by specificity (shortest pattern first).
-        </p>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 19: HOOKS
-     =========================================== -->
-<section class="slide" data-slide="19">
-    <span class="slide-label reveal">// features</span>
-    <div class="glow-orb magenta" style="width:180px;height:180px;bottom:15%;left:5%;"></div>
-    <div class="slide-content stagger">
-        <h2 class="reveal"><span class="text-gradient">Hooks</span> system</h2>
-        <hr class="neon-divider reveal">
-        <div class="two-col reveal">
-            <div class="card" style="border-color: rgba(0, 240, 255, 0.3);">
-                <h3 class="neon-cyan">post_build_hooks</h3>
-                <p style="margin-bottom: var(--element-gap);">Run once after image build.</p>
-                <div class="code-block">
-                    <span class="comment"># Install MCP servers</span><br>
-                    <span class="cmd">deno install</span> <span class="flag">--global</span><br>
-                    &nbsp;&nbsp;npm:server-perplexity
-                </div>
-            </div>
-            <div class="card" style="border-color: rgba(255, 45, 170, 0.3);">
-                <h3 class="neon-magenta">pre_run_hooks</h3>
-                <p style="margin-bottom: var(--element-gap);">Run every invocation.</p>
-                <div class="code-block">
-                    <span class="comment"># Load secrets</span><br>
-                    <span class="cmd">source</span> ~/.env_api_keys
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 20: CONTAINER MANAGEMENT
+     SLIDE 20: THE BIGGER PICTURE (was 25)
      =========================================== -->
 <section class="slide" data-slide="20">
-    <span class="slide-label reveal">// features</span>
-    <div class="slide-content stagger">
-        <h2 class="reveal">Container <span class="neon-cyan">management</span></h2>
-        <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 800px;">
-            <span class="comment"># List all silo containers</span><br>
-            <span class="cmd">silo ls</span><br><br>
-            <span class="comment"># Execute a command in a running container</span><br>
-            <span class="cmd">silo exec</span> myapp-1 <span class="flag">--</span> ls -la<br><br>
-            <span class="comment"># Open a shell</span><br>
-            <span class="cmd">silo shell</span> myapp-1<br><br>
-            <span class="comment"># Remove containers</span><br>
-            <span class="cmd">silo rm</span> myapp-1 myapp-2
-        </div>
-        <p class="reveal" style="font-size: var(--body-size);">
-            Containers are named &lt;project&gt;-&lt;N&gt; based on our current directory.
-        </p>
-    </div>
-</section>
-
-<!-- ===========================================
-     SLIDE 21: THE BIGGER PICTURE
-     =========================================== -->
-<section class="slide" data-slide="21">
     <span class="slide-label reveal">// features</span>
     <div class="glow-orb cyan" style="width:160px;height:160px;top:12%;right:8%;"></div>
     <div class="glow-orb magenta" style="width:140px;height:140px;bottom:15%;left:6%;"></div>
@@ -1168,9 +1142,9 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 22: CLOSING
+     SLIDE 21: CLOSING
      =========================================== -->
-<section class="slide title-slide" data-slide="22">
+<section class="slide title-slide" data-slide="21">
     <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
     <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
     <div class="corner-decoration top-right"></div>
@@ -1225,67 +1199,64 @@
         // Slide 1: Title
         "Welcome everyone. Today I want to talk about silo — a tool I built to solve a problem I had when using agents for coding. The problem was, how do I use them safely. Everything I'm showing today, including this presentation, is built with Opus 4.5 and 4.6 using GitHub Copilot CLI and Claude Code CLI, and much of silo has also been built with silo now too. To setup the framing of the talk, I'm showing my workflow, things that work for me, and how I got here. This might work for you too, but there's a good chance it won't. My main hope is that you leave with some new knowledge about the options you can to isolate your agent workloads, or new inspiration for how you can use agents to build infrasrtucture for your own workflows.",
 
-        // Slide 2: What We're Talking About
-        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets read-write access to the project directory, the agent tool configs, and is given full access — yolo mode — but only inside the container. Is this perfect isolation? No, but for me it is enough, at least for now. I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
+        // Slide 2: What Is Silo
+        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets read-write access to the project directory, the agent tool configs, and is given full access — yolo mode — but only inside the container. Is this perfect isolation? No, but for me it is enough, at least for now.",
 
-        // Slide 3: The Problem
-        "AI coding agents need broad access — they read files, run commands, modify code. But the default setup we get with most AI tools is we get asked for permission, on everyting. Review, approve, review, approve, and so on. We become the bottleneck. While agents used in this way may make our experience of coding feel easier, there will be a limit to the productivity gains we get. To really leverage these tools, we need them unblocked — running in yolo mode. But that means trusting them with our whole machine.",
+        // Slide 3: Agenda
+        "I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
 
-        // Slide 4: The Tension
+        // Slide 4: The Problem
+        "AI coding agents need broad access — they read files, run commands, modify code. But the default setup we get with most AI tools is we get asked for permission, on everyting. Review, approve, review, approve, and so on. We become the bottleneck. While agents used in this way may make our experience of coding feel easier, there will be a limit to the productivity gains we get. To leverage these tools effectively, we need the agent unblocked, so we're in control of when we're interrupted, rather than the tool interrupting us all the time.",
+
+        // Slide 5: The Tension
         "So we're stuck with this tradeoff. We can give the agent full access and accept the security risk — it could run anything on our machine. It could do anything to our GitHub account. Or we restrict it and we're babysitting. Neither option is great.",
 
-        // Slide 5: Permissions
+        // Slide 6: Permissions
         "My first attempt at solving this was permissions. Lots and lots of permissions. I built this massive allow-list — over a hundred rules. Every git subcommand, every gh subcommand, every cargo and go and deno command, specific read and write paths. It felt thorough and it's pretty effective. But it's still super risky. One time I permitted 'gh api' and an agent commented on a completely random GitHub discussion that had nothing to do with our work. Super embarrassing. This experience really highlighted for me the difficulty with any sort of rules-based approach.",
 
-        // Slide 6: Sandboxing
+        // Slide 7: Sandboxing
         "Next I tried sandboxing. OpenAI's Codex CLI shipped sandbox mode first, then Claude Code added it. I also experimented with macOS sandbox-exec and writing my own sandbox rules. It was hard to get right though — build caching didn't work, I kept hitting errors with the Go build cache, tools would behave unpredictably. And often the sandbox still falls back to the permissions list anyway. So it was only a small edge over permissions alone. That said — if you're not using any isolation right now, turn on sandboxing in Claude Code. It's the best place to start. You get a good amount of safety with minimal setup.",
 
-        // Slide 7: Run Them Somewhere Else
+        // Slide 8: Run Them Somewhere Else
         "Another option is running agents somewhere else entirely. Claude's web interface, GitHub's Copilot coding agent. They're great for long-running investigative tasks like bug finding. Good for completely hands off, arms length spikes — you're not in there in the code with your IDE, so it suits exploratory work. Also great for kicking off the start of some work, then continuing later locally. The tradeoff is you're on machines you don't control, without the tools and configs you have locally, and it's often limited.",
 
-        // Slide 8: Containers
+        // Slide 9: Containers
         "And that brings us to containers. This is the solution I use most of the time today. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
 
-        // Slide 9: The Solution
+        // Slide 10: The Solution
         "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
 
-        // Slide 10: Give It a Go
+        // Slide 11: Give It a Go
         "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it. Let me show you a quick demo.",
 
-        // Slide 11: Supported Tools
+        // Slide 12: How Silo Works — Section Title
+        "OK so let's go under the hood. What actually happens when you run silo claude?",
+
+        // Slide 13: The Flow
+        "Here's the full flow. When you run silo claude, it first resolves configuration — merging built-in defaults, global config, and local config files. Then it resolves the image — images are content-addressed, so if nothing changed it uses the cache. Next it stages mount points — directories bind-mount directly, but I wanted to be able to mount individual files, and that needs special handling: they're staged into hardlinked temp directories, those temp directories are mounted into the VM, and then the files within are symlinked inside the container at the original path. Then it starts the container and launches the AI tool in yolo mode. The first run takes a minute or two for the image build, but after that it's nearly instant.",
+
+        // Slide 14: Mount Mapping
+        "Here's how mount mapping works. Every path appears at exactly the same location inside the container as on the host. Your working directory, tool config directories like ~/.claude, individual files like ~/.claude.json — they all map to identical paths. And silo auto-detects git worktrees — if you're working in a worktree, the parent .git directory is mounted too so git operations just work. This is important because hardcoded paths in your configs and scripts all behave the same. Under the hood, directories bind-mount directly, but Apple's container CLI only supports directory mounts, so individual files get staged — silo creates a temp directory with a hard link to the file, mounts that directory, then symlinks the file to its expected path inside the container.",
+
+        // Slide 15: Supported Tools
         "silo supports three AI coding tools today. Claude Code from Anthropic, OpenCode, and GitHub Copilot CLI. We just prefix our usual command with 'silo'. The tool is auto-detected or we pick one interactively.",
 
-        // Slide 12: Two Backends
+        // Slide 16: Two Backends
         "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. An important distinction: the Apple Container VM can run an entire Docker engine inside it — so when your agent uses Docker, it's truly isolated. With Docker-in-Docker, it's a shared engine and easy to break out of. silo auto-detects which one is available — it prefers Apple Containers when installed.",
 
-        // Slide 13: What's Inside
+        // Slide 17: What's Inside
         "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded. And importantly, the filesystem structure is identical — if your home is /Users/cooluser on your Mac, that's exactly what it is inside the container. So everything just works, even if you have hardcoded paths in your configs or scripts.",
 
-        // Slide 14: Seamless local ↔ silo
-        "My favourite feature is the seamless handoff between local and silo. silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session.",
+        // Slide 18: Seamless local ↔ silo
+        "My favourite feature is the seamless handoff between local and silo. silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session. Worth trying out both. Claude Web: Login to claude.ai and go to the coding tab. GitHub Coding Agent: Assign @copilot on an issue, or mention @copilot in a PR, or click the robot icon near the top of any GitHub page.",
 
-        // Slide 15: Auto-Updating Agents
+        // Slide 19: Auto-Updating Agents
         "silo automatically keeps your agents up to date. There's a background version check that runs async with zero added latency. When a new release of Claude Code, OpenCode, or Copilot CLI is detected, the image rebuilds on the next run. You're always running the latest version. Under the hood, images use content-addressed tagging — a hash of the Dockerfile, tool, and build args — so rebuilds only happen when something actually changes.",
 
-        // Slide 16: Config Commands
-        "silo has a full set of config commands. Init creates a sample config file. Default shows the built-in defaults. Paths shows all config files being merged. Show displays the merged result with source annotations. And edit opens a config file in your editor.",
-
-        // Slide 17: Hierarchical Config
-        "Configuration is hierarchical JSONC. Built-in defaults, global config, then local config files from root to cwd. Arrays are appended, not replaced. And config show tells us exactly where each setting came from with source annotations.",
-
-        // Slide 18: Repo-Aware Config
-        "My favorite feature: repository-aware configuration. We can key config by git remote URL substrings. So all repos in our org get certain settings. A specific repo can override those. Matches merge by specificity.",
-
-        // Slide 19: Hooks
-        "Two types of hooks for customization. Post-build hooks run once when the image is built — great for installing additional tools or MCP servers. Pre-run hooks run every time before the AI tool starts — good for loading secrets or setting up state.",
-
-        // Slide 20: Container Management
-        "Standard container management commands. List containers with silo ls, exec into them, open a shell, or remove them. Containers are named after our project directory with auto-incrementing numbers.",
-
-        // Slide 21: The Bigger Picture
+        // Slide 20: The Bigger Picture
         "So here's the takeaway: everyone should be doing something to isolate their AI agents. silo is just one example of a way to isolate using containers and VMs. You don't need silo to do this — it's just a tool to aid with it. You can use these CLI agent tools in Docker containers started by a shell script. And silo is also just what I'm doing today. In the era of AI, tooling doesn't survive long — I might not be using this in two months. The important thing is the practice, not the specific tool. You've got options: permission lists, sandbox modes, Docker containers, VMs, remote instances. There are lots of similar tools popping up that folks are vibe coding. And that's another option — vibe code your own!",
 
-        // Slide 22: Closing
+        // Slide 21: Closing
         "That's silo. Three lines to get started. It's open source under Apache 2.0, built in Go, targeting macOS. Give it a try and let me know what you think. Thank you."
     ];
 
