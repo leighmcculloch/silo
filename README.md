@@ -65,13 +65,13 @@ go install github.com/leighmcculloch/silo@latest
 
 ```
 brew tap leighmcculloch/silo
-brew install --HEAD silo
+brew install --HEAD leighmcculloch/silo/silo
 ```
 
 Upgrade with:
 
 ```
-brew upgrade --fetch-head silo
+brew upgrade --fetch-head leighmcculloch/silo/silo
 ```
 
 ### Prerequisites
