@@ -131,6 +131,7 @@ You can also set the backend in your configuration file.
 |---------|--------|-----------------|
 | Platform | Any | macOS only |
 | Isolation | Shared Linux VM | Per-container VM |
+| Docker Inside | Shared Engine | Per-container Engine |
 | File mounts | Direct | Staged + symlinks |
 | Security | Dropped caps, no-new-privileges | VM isolation |
 | Resource control | Docker defaults | Explicit CPU/memory |
