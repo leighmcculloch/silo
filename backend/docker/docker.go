@@ -285,12 +285,13 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}()
 
-	// Copy stdin to container, intercepting double Ctrl-C to kill
+	// Copy stdin to container, intercepting triple Ctrl-C to kill
 	// Use a context to stop the goroutine when the container exits
 	stdinCtx, stdinCancel := context.WithCancel(ctx)
 	defer stdinCancel()
 	go func() {
-		var lastCtrlC time.Time
+		var firstCtrlC time.Time
+		var ctrlCCount int
 		buf := make([]byte, 256)
 		for {
 			// Check if we should stop
@@ -306,12 +307,17 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 				for i := 0; i < n; i++ {
 					if buf[i] == 0x03 {
 						now := time.Now()
-						if now.Sub(lastCtrlC) < time.Second {
-							// Double Ctrl-C - kill container
-							c.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
-							return
+						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
+							ctrlCCount++
+							if ctrlCCount >= 3 {
+								// Triple Ctrl-C - kill container
+								c.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
+								return
+							}
+						} else {
+							firstCtrlC = now
+							ctrlCCount = 1
 						}
-						lastCtrlC = now
 					}
 				}
 				attachResp.Conn.Write(buf[:n])
@@ -536,11 +542,12 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 		go c.monitorExecTTYSize(ctx, execResp.ID, fd)
 	}
 
-	// Copy stdin to exec, intercepting double Ctrl-C to exit
+	// Copy stdin to exec, intercepting triple Ctrl-C to exit
 	stdinCtx, stdinCancel := context.WithCancel(ctx)
 	defer stdinCancel()
 	go func() {
-		var lastCtrlC time.Time
+		var firstCtrlC time.Time
+		var ctrlCCount int
 		buf := make([]byte, 256)
 		for {
 			select {
@@ -554,10 +561,16 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 				for i := 0; i < n; i++ {
 					if buf[i] == 0x03 {
 						now := time.Now()
-						if now.Sub(lastCtrlC) < time.Second {
-							return
+						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
+							ctrlCCount++
+							if ctrlCCount >= 3 {
+								// Triple Ctrl-C - exit
+								return
+							}
+						} else {
+							firstCtrlC = now
+							ctrlCCount = 1
 						}
-						lastCtrlC = now
 					}
 				}
 				attachResp.Conn.Write(buf[:n])

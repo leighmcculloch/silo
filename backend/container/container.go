@@ -410,9 +410,10 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		io.Copy(os.Stdout, ptmx)
 	}()
 
-	// Copy stdin to container, intercepting double Ctrl-C to kill
+	// Copy stdin to container, intercepting triple Ctrl-C to kill
 	go func() {
-		var lastCtrlC time.Time
+		var firstCtrlC time.Time
+		var ctrlCCount int
 		buf := make([]byte, 256)
 		for {
 			n, err := os.Stdin.Read(buf)
@@ -421,14 +422,19 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 				for i := 0; i < n; i++ {
 					if buf[i] == 0x03 {
 						now := time.Now()
-						if now.Sub(lastCtrlC) < time.Second {
-							// Double Ctrl-C - kill container
-							if opts.Name != "" {
-								exec.Command("container", "rm", "-f", opts.Name).Run()
+						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
+							ctrlCCount++
+							if ctrlCCount >= 3 {
+								// Triple Ctrl-C - kill container
+								if opts.Name != "" {
+									exec.Command("container", "rm", "-f", opts.Name).Run()
+								}
+								return
 							}
-							return
+						} else {
+							firstCtrlC = now
+							ctrlCCount = 1
 						}
-						lastCtrlC = now
 					}
 				}
 				ptmx.Write(buf[:n])
@@ -701,9 +707,10 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 		cmd.Process.Kill()
 	}()
 
-	// Copy stdin to container, intercepting double Ctrl-C to kill exec
+	// Copy stdin to container, intercepting triple Ctrl-C to kill exec
 	go func() {
-		var lastCtrlC time.Time
+		var firstCtrlC time.Time
+		var ctrlCCount int
 		buf := make([]byte, 256)
 		for {
 			n, err := os.Stdin.Read(buf)
@@ -711,12 +718,17 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 				for i := 0; i < n; i++ {
 					if buf[i] == 0x03 {
 						now := time.Now()
-						if now.Sub(lastCtrlC) < time.Second {
-							// Double Ctrl-C - kill exec process
-							cmd.Process.Kill()
-							return
+						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
+							ctrlCCount++
+							if ctrlCCount >= 3 {
+								// Triple Ctrl-C - kill exec process
+								cmd.Process.Kill()
+								return
+							}
+						} else {
+							firstCtrlC = now
+							ctrlCCount = 1
 						}
-						lastCtrlC = now
 					}
 				}
 				ptmx.Write(buf[:n])
@@ -730,7 +742,7 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 	waitErr := cmd.Wait()
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			// Killed by signal (e.g. double Ctrl-C) is not an error
+			// Killed by signal (e.g. triple Ctrl-C) is not an error
 			if exitErr.ExitCode() == -1 {
 				return nil
 			}

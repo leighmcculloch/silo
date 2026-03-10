@@ -397,7 +397,7 @@ Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp
 
 - **TTY support**: Full terminal emulation with colors and formatting
 - **Resize handling**: Terminal resize signals (SIGWINCH) are forwarded
-- **Double Ctrl-C**: Press Ctrl-C twice quickly to force-kill a stuck container
+- **Triple Ctrl-C**: Press Ctrl-C three times quickly to force-kill a stuck container
 - **Clean exit**: Terminal state is restored on exit
 
 ### Listing Containers
