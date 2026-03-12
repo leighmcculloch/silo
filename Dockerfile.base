@@ -60,9 +60,10 @@ RUN mkdir -p ${HOME}/.local \
 # Install Node.js and npm
 ENV PATH="${HOME}/.local/node/bin:${PATH}"
 RUN ARCH=$(dpkg --print-architecture) \
-    && NODE_VERSION=$(curl -fsSL https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
-    && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${ARCH} ${HOME}/.local/node
+    && case "${ARCH}" in amd64) NODE_ARCH=x64 ;; arm64) NODE_ARCH=arm64 ;; *) NODE_ARCH="${ARCH}" ;; esac \
+    && NODE_VERSION=$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '.[0].version | ltrimstr("v")') \
+    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
+    && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${NODE_ARCH} ${HOME}/.local/node
 
 # Install Rust (stable + nightly) with wasm32v1-none target and rust-analyzer
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
