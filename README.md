@@ -157,9 +157,10 @@ The Fly backend runs your silo environment on remote Fly.io machines. This is us
 **Setup:**
 
 1. Install the Fly CLI: `curl -L https://fly.io/install.sh | sh`
-2. Authenticate: `fly auth login`
-3. Create a Fly app for silo (one-time): `fly apps create <your-app-name>`
-4. Configure silo with your app name:
+2. Install [mutagen](https://mutagen.io) for file sync: `brew install mutagen-io/mutagen/mutagen`
+3. Authenticate: `fly auth login`
+4. Create a Fly app for silo (one-time): `fly apps create <your-app-name>`
+5. Configure silo with your app name:
    ```jsonc
    // ~/.config/silo/silo.jsonc
    {
