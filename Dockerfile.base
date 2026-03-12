@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     jq \
     ncurses-base \
     zsh \
+    rsync \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE (for container backend which runs in a VM)

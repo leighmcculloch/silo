@@ -20,6 +20,8 @@ type BackgroundBuildOptions struct {
 	BuildArgs  map[string]string
 	Backend    string
 	Tool       string
+	FlyApp     string
+	FlyRegion  string
 }
 
 // buildManifest is the JSON structure written to the build state directory.
@@ -28,24 +30,35 @@ type buildManifest struct {
 	ImageTag   string            `json:"image_tag"`
 	Tool       string            `json:"tool"`
 	Backend    string            `json:"backend,omitempty"`
+	FlyApp     string            `json:"fly_app,omitempty"`
+	FlyRegion  string            `json:"fly_region,omitempty"`
 	BuildArgs  map[string]string `json:"build_args"`
 	Dockerfile string            `json:"dockerfile"`
 }
 
 // ReadBuildManifest reads the build manifest from a state directory.
-func ReadBuildManifest(dir string) (imageTag, tool, backend, dockerfile string, buildArgs map[string]string, err error) {
+func ReadBuildManifest(dir string) (imageTag string, cfg config.Config, tool, dockerfile string, buildArgs map[string]string, err error) {
 	data, err := os.ReadFile(filepath.Join(dir, "build.json"))
 	if err != nil {
-		return "", "", "", "", nil, fmt.Errorf("read manifest: %w", err)
+		return "", config.Config{}, "", "", nil, fmt.Errorf("read manifest: %w", err)
 	}
 	var m buildManifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return "", "", "", "", nil, fmt.Errorf("parse manifest: %w", err)
+		return "", config.Config{}, "", "", nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	if m.ImageTag == "" || m.Tool == "" {
-		return "", "", "", "", nil, fmt.Errorf("manifest missing required fields (image_tag, tool)")
+		return "", config.Config{}, "", "", nil, fmt.Errorf("manifest missing required fields (image_tag, tool)")
 	}
-	return m.ImageTag, m.Tool, m.Backend, m.Dockerfile, m.BuildArgs, nil
+	c := config.Config{
+		Backend: m.Backend,
+		Backends: config.BackendsConfig{
+			Fly: config.FlyConfig{
+				App:    m.FlyApp,
+				Region: m.FlyRegion,
+			},
+		},
+	}
+	return m.ImageTag, c, m.Tool, m.Dockerfile, m.BuildArgs, nil
 }
 
 // LaunchBackgroundBuild writes the build inputs to the build state directory
@@ -62,6 +75,8 @@ func LaunchBackgroundBuild(opts BackgroundBuildOptions) error {
 		ImageTag:   opts.ImageTag,
 		Tool:       opts.Tool,
 		Backend:    opts.Backend,
+		FlyApp:     opts.FlyApp,
+		FlyRegion:  opts.FlyRegion,
 		BuildArgs:  opts.BuildArgs,
 		Dockerfile: opts.Dockerfile,
 	}

@@ -37,9 +37,26 @@ type Config struct {
 	// Tools defines available AI tools with their configurations
 	Tools map[string]ToolConfig `json:"tools,omitempty"`
 
+	// Backends defines backend-specific configuration.
+	Backends BackendsConfig `json:"backends,omitempty"`
+
 	// Repos defines repository-specific configurations that are applied when
 	// a git remote URL contains the specified key as a substring.
 	Repos map[string]RepoConfig `json:"repos,omitempty"`
+}
+
+// BackendsConfig holds configuration specific to each backend.
+type BackendsConfig struct {
+	Fly FlyConfig `json:"fly,omitempty"`
+}
+
+// FlyConfig holds configuration for the Fly.io backend.
+type FlyConfig struct {
+	// App is the Fly.io app name. Required when using the fly backend.
+	App string `json:"app,omitempty"`
+
+	// Region is the Fly.io region for new machines. Default: "syd".
+	Region string `json:"region,omitempty"`
 }
 
 // ToolConfig represents configuration for a specific AI tool
@@ -89,6 +106,8 @@ type RepoConfig struct {
 type SourceInfo struct {
 	Backend            string                       // source path for backend setting
 	Tool               string                       // source path for tool setting
+	FlyApp             string                       // source path for backends.fly.app setting
+	FlyRegion          string                       // source path for backends.fly.region setting
 	MountsRO           map[string]string            // value -> source path
 	MountsRW           map[string]string            // value -> source path
 	Env                map[string]string            // value -> source path
@@ -166,6 +185,14 @@ func Merge(base, overlay Config) Config {
 	// Tool: overlay takes precedence if set
 	if overlay.Tool != "" {
 		result.Tool = overlay.Tool
+	}
+
+	// Fly config: overlay takes precedence if set
+	if overlay.Backends.Fly.App != "" {
+		result.Backends.Fly.App = overlay.Backends.Fly.App
+	}
+	if overlay.Backends.Fly.Region != "" {
+		result.Backends.Fly.Region = overlay.Backends.Fly.Region
 	}
 
 	// Append arrays
@@ -328,6 +355,12 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	}
 	if cfg.Tool != "" {
 		info.Tool = source
+	}
+	if cfg.Backends.Fly.App != "" {
+		info.FlyApp = source
+	}
+	if cfg.Backends.Fly.Region != "" {
+		info.FlyRegion = source
 	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source

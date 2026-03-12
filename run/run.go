@@ -18,6 +18,7 @@ import (
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
+	flybackend "github.com/leighmcculloch/silo/backend/fly"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/git"
@@ -114,7 +115,7 @@ func Tool(opts Options) error {
 	if progress != nil {
 		progress.SetSection("Backend")
 	}
-	backendClient, err := CreateBackend(cfg.Backend, stderr, opts.Verbose)
+	backendClient, err := CreateBackend(cfg, stderr, opts.Verbose)
 	if err != nil {
 		if progress != nil {
 			progress.Complete()
@@ -376,6 +377,8 @@ func Tool(opts Options) error {
 				Dockerfile: dockerfile,
 				BuildArgs:  newBuildArgs,
 				Backend:    cfg.Backend,
+				FlyApp:     cfg.Backends.Fly.App,
+				FlyRegion:  cfg.Backends.Fly.Region,
 				Tool:       tool,
 			})
 		}()
@@ -502,7 +505,8 @@ func repoURLMatches(url, pattern string) bool {
 }
 
 // CreateBackend creates the appropriate backend based on configuration.
-func CreateBackend(backendType string, stderr io.Writer, verbose bool) (backend.Backend, error) {
+func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.Backend, error) {
+	backendType := cfg.Backend
 	if backendType == "" {
 		// Default to container if available, otherwise docker
 		if _, err := exec.LookPath("container"); err == nil {
@@ -531,8 +535,17 @@ func CreateBackend(backendType string, stderr io.Writer, verbose bool) (backend.
 			return nil, fmt.Errorf("failed to initialize container backend: %w", err)
 		}
 		return client, nil
+	case "fly":
+		if verbose {
+			cli.LogTo(stderr, "Using fly.io machines backend...")
+		}
+		client, err := flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize fly backend: %w", err)
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly)", backendType)
 	}
 }
 

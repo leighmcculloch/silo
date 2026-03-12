@@ -58,5 +58,10 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 	return ""
 }
 
+// FileMountsAreSymlinks is a stub.
+func (c *Client) FileMountsAreSymlinks() bool {
+	return false
+}
+
 // Ensure Client implements backend.Backend at compile time.
 var _ backend.Backend = (*Client)(nil)

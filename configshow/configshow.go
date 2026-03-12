@@ -154,6 +154,14 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	}
 	w.closeObject("  ", true)
 
+	// Backends
+	w.openObject("  ", "backends")
+	w.openObject("    ", "fly")
+	w.nullableString("      ", "app", cfg.Backends.Fly.App, def(src.FlyApp, "default"), true)
+	w.stringField("      ", "region", def(cfg.Backends.Fly.Region, "syd"), def(src.FlyRegion, "default"), false)
+	w.closeObject("    ", false)
+	w.closeObject("  ", true)
+
 	// Repos
 	repoNames := sortedKeys(cfg.Repos)
 	w.openObject("  ", "repos")
@@ -200,6 +208,13 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 		w.array("      ", "post_build_hooks", tc.PostBuildHooks, nil, false)
 		w.closeObject("    ", ti < len(toolNames)-1)
 	}
+	w.closeObject("  ", true)
+
+	// Backends
+	w.openObject("  ", "backends")
+	w.openObject("    ", "fly")
+	w.stringField("      ", "region", "syd", "", false)
+	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
 	// Repos (empty by default)

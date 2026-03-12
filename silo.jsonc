@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
+  "post_build_hooks": [
+    "curl -L https://fly.io/install.sh | sh"
+  ],
+  "pre_run_hooks": [
+    "export FLYCTL_INSTALL=\"$HOME/.fly\"",
+    "export PATH=\"$FLYCTL_INSTALL/bin:$PATH\""
+  ]
+}

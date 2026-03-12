@@ -11,9 +11,9 @@
     },
     "backend": {
       "type": "string",
-      "enum": ["docker", "container"],
-      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs. Default: 'container' if installed, else 'docker'",
-      "examples": ["docker", "container"]
+      "enum": ["docker", "container", "fly"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines. Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container", "fly"]
     },
     "tool": {
       "type": "string",
@@ -60,6 +60,30 @@
       },
       "description": "Shell commands to run inside the container after building the image. These are baked into the image and cached.",
       "examples": [["apt-get update && apt-get install -y ripgrep", "npm install -g typescript"]]
+    },
+    "backends": {
+      "type": "object",
+      "description": "Backend-specific configuration.",
+      "properties": {
+        "fly": {
+          "type": "object",
+          "description": "Configuration for the Fly.io backend.",
+          "properties": {
+            "app": {
+              "type": "string",
+              "description": "Fly.io app name. Required when using the fly backend. App names are globally unique on Fly.io — create one with 'fly apps create <name>'.",
+              "examples": ["my-silo-app"]
+            },
+            "region": {
+              "type": "string",
+              "description": "Fly.io region for new machines. Default: 'syd'. See https://fly.io/docs/reference/regions/ for available regions.",
+              "examples": ["syd", "sjc", "iad", "lhr"]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "tools": {
       "type": "object",
