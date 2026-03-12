@@ -89,6 +89,7 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	args := []string{"deploy",
 		"--app", c.app,
 		"--remote-only",
+		"--build-only",
 		"--image-label", tag,
 		"--dockerfile", filepath.Join(tmpDir, "Dockerfile"),
 		"--config", filepath.Join(tmpDir, "fly.toml"),
@@ -157,9 +158,6 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 	// Record that this image has been built
 	saveImageBuilt(tag)
-
-	// Clean up machines created by fly deploy (side-effect)
-	c.cleanupDeployMachines(ctx)
 
 	return tag, nil
 }
@@ -795,20 +793,6 @@ func (c *Client) handleInteractiveSession(ctx context.Context, cmd *exec.Cmd, pt
 		return fmt.Errorf("session error: %w", waitErr)
 	}
 	return nil
-}
-
-// cleanupDeployMachines destroys machines created by fly deploy that aren't
-// silo-managed machines (i.e., machines without silo metadata).
-func (c *Client) cleanupDeployMachines(ctx context.Context) {
-	machines, err := c.listMachines(ctx)
-	if err != nil {
-		return
-	}
-	for _, m := range machines {
-		if !isSiloMachine(m) {
-			c.destroyMachine(ctx, m.ID)
-		}
-	}
 }
 
 // filterMountWait removes the mount wait hook from pre-run hooks.
