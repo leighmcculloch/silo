@@ -1,9 +1,16 @@
 {
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
-  // Backend to use: "docker" or "container" (default: "container" if installed, else "docker")
+  // Backend to use: "docker", "container", or "fly" (default: "container" if installed, else "docker")
   // "backend": "docker",
   // Default tool to run: "claude", "opencode", or "copilot" (prompts if not set)
   // "tool": "claude",
+  // Backend-specific configuration
+  // "backends": {
+  //   "fly": {
+  //     "app": "my-silo-app",  // required for fly backend (create with: fly apps create <name>)
+  //     "region": "syd"        // default: "syd"
+  //   }
+  // },
   // Read-only directories or files to mount into the container
   // "mounts_ro": [],
   // Read-write directories or files to mount into the container

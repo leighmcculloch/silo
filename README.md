@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers or Apple containers (lightweight VMs). The coding tools are configured to run in yolo mode.
+Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in yolo mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -79,6 +79,7 @@ brew upgrade --fetch-head leighmcculloch/silo/silo
 - **Go 1.25+**: To install silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
+- **Fly.io CLI (`fly`)**: Required for the `fly` backend (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/))
 
 ## Usage
 
@@ -100,14 +101,15 @@ silo opencode -- --version
 
 ### Choosing a Backend
 
-Silo supports two backends and auto-detects which one to use if none specified:
+Silo supports three backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 | Docker | `--backend docker` | Uses Docker containers |
+| Fly | `--backend fly` | Remote VMs on Fly.io |
 
-**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker.
+**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` backend must be selected explicitly.
 
 ```bash
 # Use auto-detected backend (container if available, else docker)
@@ -119,6 +121,9 @@ silo --backend docker claude
 # Explicitly use Apple container backend
 silo --backend container claude
 
+# Explicitly use Fly.io backend
+silo --backend fly claude
+
 # Force rebuild of the container image (ignore cache)
 silo --force-build claude
 ```
@@ -127,15 +132,16 @@ You can also set the backend in your configuration file.
 
 #### Backend Comparison
 
-| Feature | Docker | Apple Container |
-|---------|--------|-----------------|
-| Platform | Any | macOS only |
-| Isolation | Shared Linux VM | Per-container VM |
-| Docker Inside | Shared Engine | Per-container Engine |
-| File mounts | Direct | Staged + symlinks |
-| Security | Dropped caps, no-new-privileges | VM isolation |
-| Resource control | Docker defaults | Explicit CPU/memory |
-| API | Docker SDK | CLI subprocess |
+| Feature | Docker | Apple Container | Fly |
+|---------|--------|-----------------|-----|
+| Platform | Any | macOS only | Any |
+| Isolation | Shared Linux VM | Per-container VM | Remote VM |
+| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine |
+| File mounts | Direct | Staged + symlinks | Synced (mutagen) |
+| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation |
+| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults |
+| API | Docker SDK | CLI subprocess | Fly CLI subprocess |
+| Reconnect | No | No | Yes (`silo reconnect`) |
 
 
 #### Why Apple Containers on macOS?
@@ -143,6 +149,52 @@ You can also set the backend in your configuration file.
 Docker on macOS runs all containers inside a single shared Linux VM that typically has broad access to the host filesystem (e.g., your entire home directory). The containers inside that VM share this access.
 
 Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See [apple/container#technical-overview](https://github.com/apple/container/blob/main/docs/technical-overview.md) and [youtube](https://www.youtube.com/watch?v=JvQtvbhtXmo) for more details.
+
+#### Fly.io Backend
+
+The Fly backend runs your silo environment on remote Fly.io machines. This is useful when you want to offload compute to a remote VM or run silo from a machine that doesn't have Docker or Apple containers.
+
+**Setup:**
+
+1. Install the Fly CLI: `curl -L https://fly.io/install.sh | sh`
+2. Authenticate: `fly auth login`
+3. Create a Fly app for silo (one-time): `fly apps create <your-app-name>`
+4. Configure silo with your app name:
+   ```jsonc
+   // ~/.config/silo/silo.jsonc
+   {
+     "backend": "fly",
+     "backends": {
+       "fly": { "app": "<your-app-name>" }
+     }
+   }
+   ```
+
+**How it works:**
+
+- **Build**: Images are built remotely using Fly's Depot builders and pushed to `registry.fly.io/<app>:<tag>`
+- **Run**: A Fly machine is created from the image, files are continuously synced using [mutagen](https://mutagen.io), then an interactive SSH session connects you to the tool
+- **Exit**: Final changes are flushed back, then the machine is destroyed
+- **Reconnect**: If your connection drops, use `silo reconnect <name>` to reconnect to the still-running machine
+
+**Configuration:**
+
+| Setting | Config Key | Env Var | Default | Description |
+|---------|-----------|---------|---------|-------------|
+| App name | `backends.fly.app` | `FLY_APP` | *(required)* | The Fly app to create machines in |
+| Region | `backends.fly.region` | `FLY_REGION` | `syd` | The Fly region for new machines |
+
+App names are globally unique on Fly.io — you must create your own with `fly apps create <name>`.
+
+**File sync:**
+
+Since Fly machines don't support bind mounts, files are continuously synced using [mutagen](https://mutagen.io):
+- **Read-only mounts** use one-way sync (local → remote)
+- **Read-write mounts** use bidirectional sync (changes on either side are propagated)
+
+Mutagen syncs only deltas, so it's efficient even for large directories. If your connection drops, the remote machine keeps working with the files it had. When you reconnect, mutagen picks up where it left off, syncing only what changed on either side.
+
+Requires `mutagen` installed locally (`brew install mutagen-io/mutagen/mutagen`).
 
 ## Configuration
 
@@ -175,11 +227,19 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker" or "container" (default: container if installed, else docker)
+  // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
   "backend": "container",
 
   // Default tool: "claude", "opencode", or "copilot" (if not set, interactive prompt is shown)
   "tool": "claude",
+
+  // Backend-specific configuration
+  // "backends": {
+  //   "fly": {
+  //     "app": "my-silo-app",  // required for fly backend
+  //     "region": "syd"        // default: "syd"
+  //   }
+  // },
 
   // Read-only mounts (paths visible to the AI but not writable)
   "mounts_ro": [
@@ -400,6 +460,20 @@ Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp
 - **Triple Ctrl-C**: Press Ctrl-C three times quickly to force-kill a stuck container
 - **Clean exit**: Terminal state is restored on exit
 
+### Reconnecting (Fly Backend)
+
+If your SSH connection drops while using the Fly backend, the machine keeps running. You can reconnect to it:
+
+```bash
+# List running machines to find the name
+silo ls --backend fly
+
+# Reconnect to a running machine
+silo --backend fly reconnect myproject-1
+```
+
+On a normal exit, files are synced back and the machine is destroyed automatically. When reconnecting, the machine is not destroyed on disconnect — use `silo rm` to clean up manually if needed.
+
 ### Listing Containers
 
 See all silo-created containers:
@@ -411,6 +485,7 @@ silo ls
 # List from specific backend only
 silo ls --backend docker
 silo ls --backend container
+silo ls --backend fly
 
 # Quiet mode (just container names)
 silo ls -q
@@ -432,6 +507,7 @@ silo rm $(silo ls -q)
 # Remove from specific backend only
 silo rm --backend docker myproject-1
 silo rm --backend container myproject-2
+silo rm --backend fly myproject-3
 ```
 
 ## Examples
@@ -501,6 +577,30 @@ export GITHUB_TOKEN=ghp_...
 Or per-invocation:
 ```bash
 silo --backend container claude
+```
+
+### Using Fly.io Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "fly",
+  "backends": {
+    "fly": { "app": "my-silo-app" }
+  }
+}
+```
+
+```bash
+# First-time setup
+fly auth login
+fly apps create my-silo-app
+
+# Run
+silo claude
+
+# If your connection drops, reconnect
+silo reconnect myproject-1
 ```
 
 ### Multiple Tool Configuration
