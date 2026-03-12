@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,7 +18,6 @@ import (
 	"github.com/creack/pty"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
-	"github.com/leighmcculloch/silo/config"
 )
 
 // Client implements backend.Backend using Fly.io Machines.
@@ -55,11 +55,31 @@ func (c *Client) FileMountsAreSymlinks() bool { return false }
 // NeedsMountWait reports false; files are uploaded before the tool runs.
 func (c *Client) NeedsMountWait() bool { return false }
 
-// ImageExists checks if an image tag has been previously built and pushed.
+// ImageExists checks if an image tag exists in the Fly.io registry.
 func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
-	stateFile := filepath.Join(config.XDGStateHomeDir(), "silo", "fly-images", name)
-	_, err := os.Stat(stateFile)
-	return err == nil, nil
+	// Get fly auth token
+	out, err := exec.CommandContext(ctx, "fly", "auth", "token", "-q").Output()
+	if err != nil {
+		return false, nil // can't check, assume not exists
+	}
+	token := strings.TrimSpace(string(out))
+
+	// Check Docker Registry v2 API for the manifest
+	url := fmt.Sprintf("https://registry.fly.io/v2/%s/manifests/%s", c.app, name)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return false, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, nil
+	}
+	resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK, nil
 }
 
 // Build builds a container image using Fly's remote builders and pushes to the
@@ -155,9 +175,6 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		}
 		return "", fmt.Errorf("fly build failed: %w", err)
 	}
-
-	// Record that this image has been built
-	saveImageBuilt(tag)
 
 	return tag, nil
 }
@@ -806,12 +823,6 @@ func filterMountWait(hooks []string) []string {
 		result = append(result, h)
 	}
 	return result
-}
-
-func saveImageBuilt(tag string) {
-	dir := filepath.Join(config.XDGStateHomeDir(), "silo", "fly-images")
-	_ = os.MkdirAll(dir, 0o755)
-	_ = os.WriteFile(filepath.Join(dir, tag), []byte(tag), 0o644)
 }
 
 // Ensure Client implements backend.Backend at compile time.
