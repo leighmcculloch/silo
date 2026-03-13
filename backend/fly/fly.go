@@ -502,70 +502,6 @@ exec fly ssh console --app %s --machine %s --user root -q -C "$*"
 	return dir, func() { os.RemoveAll(dir) }, nil
 }
 
-// installMutagenAgent uploads the mutagen agent binary to the remote machine.
-// Mutagen expects the agent at ~/.mutagen/agents/<version>/mutagen-agent.
-func (c *Client) installMutagenAgent(ctx context.Context, machineID string) error {
-	mutagenPath, err := exec.LookPath("mutagen")
-	if err != nil {
-		return fmt.Errorf("mutagen not found: %w", err)
-	}
-
-	// Get mutagen version
-	out, err := exec.CommandContext(ctx, mutagenPath, "version").Output()
-	if err != nil {
-		return fmt.Errorf("failed to get mutagen version: %w", err)
-	}
-	version := strings.TrimSpace(string(out))
-
-	// Check if agent is already installed on remote
-	agentPath := fmt.Sprintf(".mutagen/agents/%s/mutagen-agent", version)
-	checkCmd := fmt.Sprintf("test -x %s", shellquote.Join(agentPath))
-	if err := c.sshExec(ctx, machineID, checkCmd); err == nil {
-		return nil // already installed
-	}
-
-	// Find the agents archive next to the mutagen binary
-	mutagenDir := filepath.Dir(mutagenPath)
-	agentsArchive := filepath.Join(mutagenDir, "mutagen-agents.tar.gz")
-	if _, err := os.Stat(agentsArchive); err != nil {
-		return fmt.Errorf("mutagen-agents.tar.gz not found at %s: %w", agentsArchive, err)
-	}
-
-	// Extract the linux_amd64 agent (Fly machines are always linux/amd64)
-	tmpDir, err := os.MkdirTemp("", "silo-mutagen-agent-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmpDir)
-
-	extractCmd := exec.CommandContext(ctx, "tar", "xzf", agentsArchive, "-C", tmpDir, "linux_amd64")
-	if err := extractCmd.Run(); err != nil {
-		return fmt.Errorf("failed to extract mutagen agent: %w", err)
-	}
-
-	agentBinary, err := os.ReadFile(filepath.Join(tmpDir, "linux_amd64"))
-	if err != nil {
-		return fmt.Errorf("failed to read agent binary: %w", err)
-	}
-
-	// Upload agent binary to remote
-	installScript := fmt.Sprintf("mkdir -p .mutagen/agents/%s && cat > %s && chmod +x %s",
-		version, shellquote.Join(agentPath), shellquote.Join(agentPath))
-	cmd := exec.CommandContext(ctx, "fly", "ssh", "console",
-		"--app", c.app,
-		"--machine", machineID,
-		"--user", "root",
-		"-q",
-		"-C", fmt.Sprintf("bash -c %s", shellquote.Join(installScript)),
-	)
-	cmd.Stdin = strings.NewReader(string(agentBinary))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to install mutagen agent: %w\n%s", err, string(out))
-	}
-
-	return nil
-}
-
 // startMutagenSync starts continuous file sync using mutagen.
 // RO mounts use one-way-replica (local→remote), RW mounts use two-way-safe.
 // Returns a cleanup function that flushes final changes and terminates sessions.
@@ -577,11 +513,6 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 	mutagenPath, err := exec.LookPath("mutagen")
 	if err != nil {
 		return nil, fmt.Errorf("mutagen is required for the fly backend (install from https://mutagen.io): %w", err)
-	}
-
-	// Install mutagen agent on remote
-	if err := c.installMutagenAgent(ctx, machineID); err != nil {
-		return nil, fmt.Errorf("failed to install mutagen agent on remote: %w", err)
 	}
 
 	// Create SSH dir for mutagen

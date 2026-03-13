@@ -78,6 +78,12 @@ RUN ARCH=$(dpkg --print-architecture) \
     && GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
 
+# Install mutagen agent (for fly backend file sync)
+RUN ARCH=$(dpkg --print-architecture) \
+    && case "${ARCH}" in amd64) MUTAGEN_ARCH=amd64 ;; arm64) MUTAGEN_ARCH=arm64 ;; *) MUTAGEN_ARCH="${ARCH}" ;; esac \
+    && MUTAGEN_VERSION=$(curl -fsSL https://api.github.com/repos/mutagen-io/mutagen/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fsSL "https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_linux_${MUTAGEN_ARCH}_v${MUTAGEN_VERSION}.tar.gz" | tar -C ${HOME}/.local/bin -xz mutagen-agent
+
 # Install MCP servers
 RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
 
