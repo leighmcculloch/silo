@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -109,7 +110,8 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 	args := []string{"deploy",
 		"--app", c.app,
 		"--remote-only",
-		"--build-only",
+		"--ha=false",
+		"--strategy", "immediate",
 		"--image-label", tag,
 		"--dockerfile", filepath.Join(tmpDir, "Dockerfile"),
 		"--config", filepath.Join(tmpDir, "fly.toml"),
@@ -176,7 +178,24 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		return "", fmt.Errorf("fly build failed: %w", err)
 	}
 
+	// Clean up machines created by fly deploy (side-effect of pushing the image)
+	c.cleanupDeployMachines(ctx)
+
 	return tag, nil
+}
+
+// cleanupDeployMachines destroys machines created by fly deploy that aren't
+// silo-managed machines (i.e., machines without silo metadata).
+func (c *Client) cleanupDeployMachines(ctx context.Context) {
+	machines, err := c.listMachines(ctx)
+	if err != nil {
+		return
+	}
+	for _, m := range machines {
+		if !isSiloMachine(m) {
+			c.destroyMachine(ctx, m.ID)
+		}
+	}
 }
 
 // Run creates a Fly machine, syncs files, and connects interactively.
@@ -184,32 +203,45 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	imageRef := fmt.Sprintf("registry.fly.io/%s:%s", c.app, opts.Image)
 
 	// 1. Create machine with sleep infinity (keeps it running for sync + reconnect)
+	fmt.Fprintf(os.Stderr, "  → Creating machine...\n")
 	machineID, err := c.createMachine(ctx, imageRef, opts)
 	if err != nil {
 		return err
 	}
+	fmt.Fprintf(os.Stderr, "  → Machine created: %s\n", machineID)
 
 	// Always destroy on exit
 	defer func() {
+		fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
 		destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		c.destroyMachine(destroyCtx, machineID)
 	}()
 
 	// 2. Wait for machine to start
-	if err := c.waitForState(ctx, machineID, "started", 60*time.Second); err != nil {
+	fmt.Fprintf(os.Stderr, "  → Waiting for machine to start...\n")
+	if err := c.waitForState(ctx, machineID, "started", 5*time.Minute); err != nil {
 		return err
 	}
 
-	// 3. Start file sync (mutagen: initial sync + continuous bidirectional)
+	// 3. Wait for SSH to be ready
+	fmt.Fprintf(os.Stderr, "  → Waiting for SSH...\n")
+	if err := c.waitForSSH(ctx, machineID, 60*time.Second); err != nil {
+		return err
+	}
+
+	// 4. Start file sync (mutagen: initial sync + continuous bidirectional)
+	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
 	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW)
 	if err != nil {
 		return fmt.Errorf("file sync failed: %w", err)
 	}
+	fmt.Fprintf(os.Stderr, "  → Files synced\n")
 
-	// 4. Run pre-run hooks (skip mount wait since files are already synced)
+	// 5. Run pre-run hooks (skip mount wait since files are already synced)
 	hooks := filterMountWait(opts.PreRunHooks)
 	if len(hooks) > 0 {
+		fmt.Fprintf(os.Stderr, "  → Running pre-run hooks...\n")
 		hookScript := strings.Join(hooks, " && ")
 		if err := c.sshExec(ctx, machineID, hookScript); err != nil {
 			stopSync()
@@ -218,9 +250,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// 5. Connect interactively with the tool command
+	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
 	connectErr := c.connectInteractive(ctx, machineID, opts)
 
 	// 6. Stop continuous sync (flushes final changes)
+	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
 	stopSync()
 
 	return connectErr
@@ -233,7 +267,7 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 		return err
 	}
 
-	user := os.Getenv("USER")
+	user := currentUsername()
 	if user == "" {
 		user = "root"
 	}
@@ -386,6 +420,9 @@ func (c *Client) createMachine(ctx context.Context, imageRef string, opts backen
 		"--restart", "no",
 	}
 
+	// Set VM size: 4 shared CPUs + 8GB RAM (max for shared CPUs)
+	args = append(args, "--vm-cpus", "4", "--vm-memory", "8192")
+
 	// Set metadata to identify this as a silo machine
 	args = append(args, "-m", "silo=true")
 	args = append(args, "-m", "silo-name="+opts.Name)
@@ -399,12 +436,10 @@ func (c *Client) createMachine(ctx context.Context, imageRef string, opts backen
 
 	cmd := exec.CommandContext(ctx, "fly", args...)
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to create fly machine: %w\n%s", err, string(output))
-	}
 
-	// Parse machine ID from output. fly machine run outputs:
-	//   " Machine ID: 819525a99ed768"
+	// Parse machine ID from output even on error, since fly machine run may
+	// return an error if its internal start timeout expires, but the machine
+	// was still created and may start successfully with more time.
 	for _, line := range strings.Split(string(output), "\n") {
 		line = strings.TrimSpace(line)
 		if id, ok := strings.CutPrefix(line, "Machine ID: "); ok {
@@ -412,10 +447,14 @@ func (c *Client) createMachine(ctx context.Context, imageRef string, opts backen
 		}
 	}
 
-	// Fallback: look up by name
-	machines, err := c.listMachines(ctx)
 	if err != nil {
-		return "", fmt.Errorf("machine created but couldn't find ID: %w", err)
+		return "", fmt.Errorf("failed to create fly machine: %w\n%s", err, string(output))
+	}
+
+	// Fallback: look up by name
+	machines, listErr := c.listMachines(ctx)
+	if listErr != nil {
+		return "", fmt.Errorf("machine created but couldn't find ID: %w", listErr)
 	}
 	for _, m := range machines {
 		if m.Config.Metadata["silo-name"] == opts.Name {
@@ -439,6 +478,28 @@ func (c *Client) waitForState(ctx context.Context, machineID, state string, time
 		return fmt.Errorf("waiting for machine %s: %w\n%s", state, err, string(output))
 	}
 	return nil
+}
+
+func (c *Client) waitForSSH(ctx context.Context, machineID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		cmd := exec.CommandContext(ctx, "fly", "ssh", "console",
+			"--app", c.app,
+			"--machine", machineID,
+			"--user", "root",
+			"-q",
+			"-C", "true",
+		)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+	return fmt.Errorf("SSH not ready after %s", timeout)
 }
 
 func (c *Client) destroyMachine(ctx context.Context, machineID string) error {
@@ -521,11 +582,30 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		return nil, err
 	}
 
-	// Ensure mutagen daemon is running
-	exec.CommandContext(ctx, mutagenPath, "daemon", "start").Run()
+	// Create a dedicated mutagen data directory for this session.
+	// This gives us our own daemon instance with the correct SSH path,
+	// without interfering with any existing mutagen daemon.
+	mutagenDataDir, err := os.MkdirTemp("", "silo-mutagen-data-*")
+	if err != nil {
+		sshCleanup()
+		return nil, err
+	}
 
-	// Env for mutagen commands
-	mutagenEnv := append(os.Environ(), "MUTAGEN_SSH_PATH="+sshDir)
+	// MUTAGEN_SSH_PATH must be set in the daemon's environment.
+	// MUTAGEN_DATA_DIRECTORY isolates our daemon from any existing one.
+	mutagenEnv := append(os.Environ(),
+		"MUTAGEN_SSH_PATH="+sshDir,
+		"MUTAGEN_DATA_DIRECTORY="+mutagenDataDir,
+	)
+
+	fmt.Fprintf(os.Stderr, "    mutagen: starting daemon...\n")
+	startCmd := exec.CommandContext(ctx, mutagenPath, "daemon", "start")
+	startCmd.Env = mutagenEnv
+	if err := startCmd.Run(); err != nil {
+		os.RemoveAll(mutagenDataDir)
+		sshCleanup()
+		return nil, fmt.Errorf("failed to start mutagen daemon: %w", err)
+	}
 
 	type mount struct {
 		path string
@@ -539,6 +619,26 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		mounts = append(mounts, mount{path: p, mode: "two-way-safe"})
 	}
 
+	// Create parent directories on the remote for all mount paths.
+	// Mutagen cannot create sync roots if their parent doesn't exist.
+	// Use the parent dir for files (detected by checking if local path is a file).
+	{
+		var mkdirPaths []string
+		for _, m := range mounts {
+			p := m.path
+			if info, err := os.Stat(p); err == nil && !info.IsDir() {
+				p = filepath.Dir(p)
+			}
+			mkdirPaths = append(mkdirPaths, shellquote.Join(p))
+		}
+		mkdirScript := fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " "))
+		if err := c.sshExecAs(ctx, machineID, "root", mkdirScript); err != nil {
+			os.RemoveAll(mutagenDataDir)
+			sshCleanup()
+			return nil, fmt.Errorf("failed to create remote directories: %w", err)
+		}
+	}
+
 	var sessionNames []string
 	cleanupSessions := func() {
 		for _, name := range sessionNames {
@@ -546,41 +646,128 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			terminateCmd.Env = mutagenEnv
 			terminateCmd.Run()
 		}
+		// Stop our isolated daemon and clean up
+		stopCmd := exec.Command(mutagenPath, "daemon", "stop")
+		stopCmd.Env = mutagenEnv
+		stopCmd.Run()
+		os.RemoveAll(mutagenDataDir)
 		sshCleanup()
 	}
 
+	// Resolve local paths and build session list
+	type session struct {
+		name      string
+		localPath string
+		mount     mount
+	}
+	var sessions []session
 	for i, m := range mounts {
 		if _, err := os.Stat(m.path); err != nil {
 			continue
 		}
 
-		sessionName := fmt.Sprintf("silo-%s-%d", machineID, i)
-		cmd := exec.CommandContext(ctx, mutagenPath, "sync", "create",
-			"--name", sessionName,
-			"--sync-mode", m.mode,
-			m.path, "fly:"+m.path,
-		)
-		cmd.Env = mutagenEnv
-		if out, err := cmd.CombinedOutput(); err != nil {
+		// Resolve symlinks on the local path so mutagen can open the sync root
+		localPath := m.path
+		if resolved, err := filepath.EvalSymlinks(localPath); err == nil {
+			localPath = resolved
+		} else {
+			if target, linkErr := os.Readlink(localPath); linkErr == nil {
+				if !filepath.IsAbs(target) {
+					target = filepath.Join(filepath.Dir(localPath), target)
+				}
+				localPath = target
+			} else {
+				fmt.Fprintf(os.Stderr, "    mutagen: warning: cannot resolve %s: %v\n", m.path, err)
+			}
+		}
+
+		sessions = append(sessions, session{
+			name:      fmt.Sprintf("silo-%s-%d", machineID, i),
+			localPath: localPath,
+			mount:     m,
+		})
+	}
+
+	// Create all sessions in parallel
+	type createResult struct {
+		idx int
+		err error
+	}
+	results := make(chan createResult, len(sessions))
+	for i, s := range sessions {
+		sessionNames = append(sessionNames, s.name)
+		fmt.Fprintf(os.Stderr, "    mutagen: syncing %s (%s)...\n", s.mount.path, s.mount.mode)
+		go func(idx int, s session) {
+			cmd := exec.CommandContext(ctx, mutagenPath, "sync", "create",
+				"--name", s.name,
+				"--sync-mode", s.mount.mode,
+				s.localPath, "fly:"+s.mount.path,
+			)
+			cmd.Env = mutagenEnv
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				err = fmt.Errorf("mutagen sync create failed for %s: %w\n%s", s.mount.path, err, string(out))
+			}
+			results <- createResult{idx: idx, err: err}
+		}(i, s)
+	}
+	for range sessions {
+		r := <-results
+		if r.err != nil {
 			cleanupSessions()
-			return nil, fmt.Errorf("mutagen sync create failed for %s: %w\n%s", m.path, err, string(out))
+			return nil, r.err
 		}
-		sessionNames = append(sessionNames, sessionName)
 	}
 
-	// Flush to ensure initial sync completes
-	for _, name := range sessionNames {
-		flushCmd := exec.CommandContext(ctx, mutagenPath, "sync", "flush", name)
-		flushCmd.Env = mutagenEnv
-		flushCmd.Run()
+	// Flush all sessions in parallel to wait for initial sync,
+	// polling for progress while we wait.
+	fmt.Fprintf(os.Stderr, "    mutagen: waiting for initial sync (%d sessions)...\n", len(sessions))
+
+	flushResults := make(chan createResult, len(sessions))
+	for i, s := range sessions {
+		go func(idx int, s session) {
+			flushCmd := exec.CommandContext(ctx, mutagenPath, "sync", "flush", s.name)
+			flushCmd.Env = mutagenEnv
+			out, err := flushCmd.CombinedOutput()
+			if err != nil {
+				listCmd := exec.CommandContext(ctx, mutagenPath, "sync", "list", s.name)
+				listCmd.Env = mutagenEnv
+				listOut, _ := listCmd.CombinedOutput()
+				err = fmt.Errorf("mutagen sync flush failed for %s: %w\n%s\nSession status:\n%s", s.name, err, string(out), string(listOut))
+			}
+			flushResults <- createResult{idx: idx, err: err}
+		}(i, s)
 	}
 
-	// Fix ownership on remote (mutagen runs as root via fly ssh)
-	user := os.Getenv("USER")
+	// Track completed flushes for progress
+	completed := 0
+	total := len(sessions)
+
+	var flushErr error
+	for range sessions {
+		r := <-flushResults
+		if r.err != nil && flushErr == nil {
+			flushErr = r.err
+		}
+		completed++
+		if completed < total {
+			fmt.Fprintf(os.Stderr, "    mutagen: %d/%d sessions synced...\n", completed, total)
+		}
+	}
+
+	if flushErr != nil {
+		cleanupSessions()
+		return nil, flushErr
+	}
+
+	// Fix ownership on remote (mutagen syncs as root via fly ssh)
+	user := currentUsername()
 	if user != "" {
+		var paths []string
 		for _, m := range mounts {
-			c.sshExec(ctx, machineID, fmt.Sprintf("chown -R %s:%s %s", user, user, shellquote.Join(m.path)))
+			paths = append(paths, shellquote.Join(m.path))
 		}
+		c.sshExecAs(ctx, machineID, "root", fmt.Sprintf("chown -R %s:%s %s", user, user, strings.Join(paths, " ")))
 	}
 
 	return func() {
@@ -595,12 +782,22 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 }
 
 func (c *Client) sshExec(ctx context.Context, machineID, script string) error {
+	return c.sshExecAs(ctx, machineID, "", script)
+}
+
+func (c *Client) sshExecAs(ctx context.Context, machineID, user, script string) error {
+	if user == "" {
+		user = currentUsername()
+		if user == "" {
+			user = "root"
+		}
+	}
 	cmd := exec.CommandContext(ctx, "fly", "ssh", "console",
 		"--app", c.app,
 		"--machine", machineID,
-		"--user", "root",
+		"--user", user,
 		"-q",
-		"-C", fmt.Sprintf("bash -c %s", shellquote.Join(script)),
+		"-C", fmt.Sprintf("bash -l -c %s", shellquote.Join(script)),
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -623,7 +820,7 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 	}
 
 	// Determine the user to connect as (matches Dockerfile USER directive)
-	user := os.Getenv("USER")
+	user := currentUsername()
 	if user == "" {
 		user = "root"
 	}
@@ -636,19 +833,25 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 		"-q",
 	}
 	if cmdStr != "" {
-		args = append(args, "-C", fmt.Sprintf("bash -c %s", shellquote.Join(cmdStr)))
+		shellCmd := fmt.Sprintf("bash -l -c %s", shellquote.Join(cmdStr))
+		args = append(args, "-C", shellCmd)
 	}
 
-	cmd := exec.Command("fly", args...)
+	cmd := exec.CommandContext(ctx, "fly", args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	// Use PTY for proper terminal handling
-	ptmx, err := pty.Start(cmd)
-	if err != nil {
-		return fmt.Errorf("failed to connect to machine: %w", err)
+	if err := cmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == -1 {
+				return nil // killed by signal
+			}
+			return fmt.Errorf("session exited with status %d", exitErr.ExitCode())
+		}
+		return fmt.Errorf("session error: %w", err)
 	}
-	defer ptmx.Close()
-
-	return c.handleInteractiveSession(ctx, cmd, ptmx)
+	return nil
 }
 
 func (c *Client) handleInteractiveSession(ctx context.Context, cmd *exec.Cmd, ptmx *os.File) error {
@@ -754,6 +957,18 @@ func filterMountWait(hooks []string) []string {
 		result = append(result, h)
 	}
 	return result
+}
+
+// currentUsername returns the current user's username, falling back to
+// os/user.Current if the USER environment variable is not set.
+func currentUsername() string {
+	if u := os.Getenv("USER"); u != "" {
+		return u
+	}
+	if u, err := user.Current(); err == nil {
+		return u.Username
+	}
+	return "root"
 }
 
 // Ensure Client implements backend.Backend at compile time.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -142,7 +143,12 @@ func Tool(opts Options) error {
 
 	// Get current user info
 	home := os.Getenv("HOME")
-	user := os.Getenv("USER")
+	username := os.Getenv("USER")
+	if username == "" {
+		if u, err := user.Current(); err == nil {
+			username = u.Username
+		}
+	}
 	uid := os.Getuid()
 	cwd, _ := os.Getwd()
 
@@ -187,7 +193,7 @@ func Tool(opts Options) error {
 	dockerfile := dockerfileWithHooks(opts.Dockerfile, cfg.PostBuildHooks, tool, toolPostBuildHooks, repoPostBuildHooks)
 	buildArgs := map[string]string{
 		"HOME": home,
-		"USER": user,
+		"USER": username,
 		"UID":  fmt.Sprintf("%d", uid),
 	}
 
