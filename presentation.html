@@ -992,14 +992,14 @@
     <div class="slide-content stagger">
         <h2 class="reveal">Two isolation <span class="neon-cyan">backends</span></h2>
         <hr class="neon-divider reveal">
-        <div class="two-col reveal">
+        <div class="reveal" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: clamp(0.5rem, 1.5vw, 1rem);">
             <div class="card" style="border-color: rgba(255, 45, 170, 0.3);">
                 <h3 class="neon-magenta">Docker</h3>
                 <ul class="neon-list" style="margin-top: var(--element-gap);">
                     <li>Works on <strong>any platform</strong></li>
-                    <li>All containers share <strong>one Linux VM</strong></li>
-                    <li><strong>Container isolation</strong> (shared kernel)</li>
-                    <li>Docker inside = <strong>shared engine</strong>, easy breakout</li>
+                    <li>Containers share <strong>one Linux VM</strong></li>
+                    <li>Shared kernel</li>
+                    <li><strong>Shared Docker</strong> engine</li>
                 </ul>
             </div>
             <div class="card" style="border-color: rgba(0, 240, 255, 0.3);">
@@ -1008,7 +1008,16 @@
                     <li><strong>macOS only</strong></li>
                     <li>Each container = <strong>its own VM</strong></li>
                     <li><strong>VM isolation</strong> (own kernel)</li>
-                    <li>Docker inside = <strong>own engine</strong>, fully isolated</li>
+                    <li><strong>Own Docker</strong> engine</li>
+                </ul>
+            </div>
+            <div class="card" style="border-color: rgba(255, 255, 255, 0.1); opacity: 0.4;">
+                <h3 style="color: var(--text-secondary);">Fly.io</h3>
+                <ul class="neon-list" style="margin-top: var(--element-gap);">
+                    <li>Works on <strong>any platform</strong></li>
+                    <li>Each container = <strong>its own VM</strong></li>
+                    <li><strong>VM isolation</strong> (own kernel)</li>
+                    <li><strong>Own Docker</strong> engine</li>
                 </ul>
             </div>
         </div>
