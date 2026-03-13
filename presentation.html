@@ -224,6 +224,11 @@
             text-shadow: 0 0 8px var(--accent-cyan-glow);
         }
 
+        .neon-list.muted li::before {
+            color: var(--text-secondary);
+            text-shadow: none;
+        }
+
         .neon-list li strong { color: var(--text-primary); }
 
         /* ===========================================
@@ -1011,13 +1016,14 @@
                     <li><strong>Own Docker</strong> engine</li>
                 </ul>
             </div>
-            <div class="card" style="border-color: rgba(255, 255, 255, 0.1); opacity: 0.4;">
+            <div class="card" style="border-color: rgba(255, 255, 255, 0.1); opacity: 0.4; position: relative; overflow: hidden;">
+                <div style="position: absolute; top: 43px; right: -75px; background: rgba(122, 130, 160, 0.3); color: var(--text-secondary); font-family: var(--font-mono); font-size: clamp(0.8rem, 1.3vw, 1.1rem); padding: 4px 60px; transform: rotate(45deg); letter-spacing: 0.05em; z-index: 1; white-space: nowrap;">experimenting</div>
                 <h3 style="color: var(--text-secondary);">Fly.io</h3>
-                <ul class="neon-list" style="margin-top: var(--element-gap);">
-                    <li>Works on <strong>any platform</strong></li>
-                    <li>Each container = <strong>its own VM</strong></li>
-                    <li><strong>VM isolation</strong> (own kernel)</li>
-                    <li><strong>Own Docker</strong> engine</li>
+                <ul class="neon-list muted" style="margin-top: var(--element-gap);">
+                    <li style="color: var(--text-secondary);"><strong>Remote</strong></li>
+                    <li style="color: var(--text-secondary);">Each container = <strong>its own VM</strong></li>
+                    <li style="color: var(--text-secondary);"><strong>VM isolation</strong> (own kernel)</li>
+                    <li style="color: var(--text-secondary);"><strong>Own Docker</strong> engine</li>
                 </ul>
             </div>
         </div>
