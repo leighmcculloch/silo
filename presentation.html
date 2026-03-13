@@ -58,8 +58,8 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         html {
-            scroll-behavior: smooth;
-            scroll-snap-type: y mandatory;
+            scroll-behavior: auto;
+            scroll-snap-type: none;
             height: 100%;
             overflow-x: hidden;
         }
@@ -397,23 +397,9 @@
            ANIMATIONS
            =========================================== */
         .reveal {
-            opacity: 0;
-            transform: translateY(25px);
-            transition: opacity var(--duration) var(--ease-out-expo),
-                        transform var(--duration) var(--ease-out-expo);
-        }
-
-        .slide.visible .reveal {
             opacity: 1;
-            transform: translateY(0);
+            transform: none;
         }
-
-        .stagger > :nth-child(1) { transition-delay: 0.05s; }
-        .stagger > :nth-child(2) { transition-delay: 0.12s; }
-        .stagger > :nth-child(3) { transition-delay: 0.19s; }
-        .stagger > :nth-child(4) { transition-delay: 0.26s; }
-        .stagger > :nth-child(5) { transition-delay: 0.33s; }
-        .stagger > :nth-child(6) { transition-delay: 0.40s; }
 
         /* ===========================================
            PROGRESS BAR
@@ -1367,7 +1353,7 @@
 
         goToSlide(index) {
             if (index >= 0 && index < this.totalSlides) {
-                this.slides[index].scrollIntoView({ behavior: 'smooth' });
+                this.slides[index].scrollIntoView({ behavior: 'instant' });
                 this.currentIndex = index;
             }
         }
