@@ -1,5 +1,11 @@
 {
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
+  "backends": {
+    "fly": {
+      "app": "silovms",
+      "region": "syd"
+    }
+  },
   "post_build_hooks": [
     "curl -L https://fly.io/install.sh | sh"
   ],

@@ -79,10 +79,16 @@ RUN ARCH=$(dpkg --print-architecture) \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
 
 # Install mutagen agent (for fly backend file sync)
+# Mutagen expects its agent at ~/.mutagen/agents/<version>/mutagen-agent.
+# The release tarball contains mutagen-agents.tar.gz which has platform-specific agent binaries.
 RUN ARCH=$(dpkg --print-architecture) \
-    && case "${ARCH}" in amd64) MUTAGEN_ARCH=amd64 ;; arm64) MUTAGEN_ARCH=arm64 ;; *) MUTAGEN_ARCH="${ARCH}" ;; esac \
     && MUTAGEN_VERSION=$(curl -fsSL https://api.github.com/repos/mutagen-io/mutagen/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_linux_${MUTAGEN_ARCH}_v${MUTAGEN_VERSION}.tar.gz" | tar -C ${HOME}/.local/bin -xz mutagen-agent
+    && curl -fsSL "https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_linux_${ARCH}_v${MUTAGEN_VERSION}.tar.gz" | tar -xz -C /tmp mutagen-agents.tar.gz \
+    && mkdir -p ${HOME}/.mutagen/agents/${MUTAGEN_VERSION} \
+    && tar -xzf /tmp/mutagen-agents.tar.gz -C ${HOME}/.mutagen/agents/${MUTAGEN_VERSION} linux_${ARCH} \
+    && mv ${HOME}/.mutagen/agents/${MUTAGEN_VERSION}/linux_${ARCH} ${HOME}/.mutagen/agents/${MUTAGEN_VERSION}/mutagen-agent \
+    && chmod +x ${HOME}/.mutagen/agents/${MUTAGEN_VERSION}/mutagen-agent \
+    && rm /tmp/mutagen-agents.tar.gz
 
 # Install MCP servers
 RUN go install github.com/github/github-mcp-server/cmd/github-mcp-server@latest
