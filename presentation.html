@@ -572,20 +572,6 @@
 </section>
 
 <!-- ===========================================
-     SLIDE 2: WHAT IS SILO
-     =========================================== -->
-<section class="slide" data-slide="2">
-    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
-    <div class="slide-content stagger">
-        <h2 class="reveal">What is <span class="neon-cyan">silo</span>?</h2>
-        <hr class="neon-divider reveal">
-        <p class="reveal" style="max-width: 50ch;">
-            A CLI tool that runs AI coding agents in <strong>isolated containers</strong> and <strong>lightweight VMs</strong> &mdash; so they get full access without touching our machine.
-        </p>
-    </div>
-</section>
-
-<!-- ===========================================
      SLIDE 3: AGENDA
      =========================================== -->
 <section class="slide" data-slide="3">
@@ -695,6 +681,21 @@
 </section>
 
 <!-- ===========================================
+     SLIDE 6b: PERMISSIONS — GITHUB INCIDENT
+     =========================================== -->
+<section class="slide" data-slide="6b">
+    <span class="slide-label reveal" style="color: var(--accent-magenta);">// journey</span>
+    <div class="glow-orb magenta" style="width:160px;height:160px;bottom:10%;right:8%;"></div>
+    <div class="slide-content" style="align-items: center; gap: var(--content-gap);">
+        <h2 class="reveal" style="font-size: var(--h3-size);">The <span class="neon-magenta">gh api</span> incident</h2>
+        <div class="reveal" style="display: flex; gap: clamp(0.5rem, 2vw, 1.5rem); justify-content: center; align-items: center; max-height: 70vh;">
+            <img src="presentation-github-1.png" alt="GitHub discussion the agent commented on" style="max-height: min(65vh, 500px); max-width: 45%; border-radius: 10px; border: 1px solid var(--border-glow); object-fit: contain;">
+            <img src="presentation-github-2.png" alt="The agent's unrelated comment" style="max-height: min(65vh, 500px); max-width: 45%; border-radius: 10px; border: 1px solid var(--border-glow); object-fit: contain;">
+        </div>
+    </div>
+</section>
+
+<!-- ===========================================
      SLIDE 7: SANDBOXING
      =========================================== -->
 <section class="slide" data-slide="7">
@@ -773,6 +774,20 @@
 </section>
 
 <!-- ===========================================
+     SLIDE 2: WHAT IS SILO (moved between 9 and 10)
+     =========================================== -->
+<section class="slide" data-slide="2">
+    <div class="glow-orb cyan" style="width:180px;height:180px;top:10%;right:8%;"></div>
+    <div class="slide-content stagger">
+        <h2 class="reveal">What is <span class="neon-cyan">silo</span>?</h2>
+        <hr class="neon-divider reveal">
+        <p class="reveal" style="max-width: 50ch;">
+            A CLI tool that runs AI coding agents in <strong>isolated containers</strong> and <strong>lightweight VMs</strong> &mdash; so they get full access without touching our machine.
+        </p>
+    </div>
+</section>
+
+<!-- ===========================================
      SLIDE 10: THE SOLUTION
      =========================================== -->
 <section class="slide section-slide" data-slide="10">
@@ -815,26 +830,25 @@
      SLIDE 11: GIVE IT A GO
      =========================================== -->
 <section class="slide title-slide" data-slide="11">
-    <div class="glow-orb cyan" style="width:300px;height:300px;top:-100px;left:20%;"></div>
-    <div class="glow-orb magenta" style="width:250px;height:250px;bottom:-80px;right:15%;"></div>
     <div class="corner-decoration top-right"></div>
     <div class="corner-decoration bottom-left"></div>
+    <!-- Full-slide glow positioned behind everything -->
+    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0;">
+        <div style="width: 70%; height: 50%; background: radial-gradient(ellipse at center, rgba(0, 240, 255, 0.3) 0%, rgba(139, 92, 246, 0.15) 25%, rgba(255, 45, 170, 0.1) 45%, transparent 70%); filter: blur(80px);"></div>
+    </div>
+    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 0;">
+        <div style="width: 85%; height: 65%; background: radial-gradient(ellipse at center, rgba(0, 240, 255, 0.12) 0%, rgba(255, 45, 170, 0.08) 35%, transparent 65%); filter: blur(120px);"></div>
+    </div>
     <div class="slide-content stagger">
-        <h1 class="reveal text-gradient">Give it a go</h1>
+        <h2 class="reveal" style="padding-bottom: 0.05em;">Using <span class="text-gradient">silo</span></h2>
         <hr class="neon-divider reveal">
-        <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
+        <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap; position: relative; z-index: 1; background: #0a0d14; border-color: rgba(0, 240, 255, 0.7); box-shadow: 0 0 8px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3), 0 0 8px rgba(255, 45, 170, 0.4), 0 0 25px rgba(255, 45, 170, 0.2), inset 0 0 30px rgba(0, 240, 255, 0.06), inset 0 0 60px rgba(255, 45, 170, 0.03);">
             <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
             <span class="comment"># or</span><br>
             <span class="cmd">go install</span> github.com/leighmcculloch/silo<span class="flag">@latest</span><br><br>
             <span class="comment"># then</span><br>
             <span class="cmd">silo</span>
         </div>
-        <p class="reveal mono neon-cyan" style="letter-spacing: 0.15em;">
-            github.com/leighmcculloch/silo
-        </p>
-        <p class="reveal" style="font-size: var(--body-size);">
-            Apache 2.0 · macOS · Docker & Apple Containers
-        </p>
     </div>
 </section>
 
@@ -860,7 +874,7 @@
 <section class="slide" data-slide="13">
     <span class="slide-label reveal" style="color: var(--accent-cyan);">// under the hood</span>
     <div class="slide-content stagger">
-        <div class="reveal" style="display: flex; flex-direction: column; align-items: stretch; gap: 0; max-width: 700px; margin: 0 auto;">
+        <div class="reveal" style="display: flex; flex-direction: column; align-items: stretch; gap: 0; max-width: 700px; margin: 0 auto; transform: scale(1.3); transform-origin: center center;">
             <!-- Row 1: command -->
             <div style="display: flex; justify-content: center;">
                 <div class="flow-box highlight" style="padding: clamp(0.3rem, 0.6vw, 0.5rem) clamp(0.5rem, 1.2vw, 1rem);"><span class="mono" style="font-size: var(--small-size);">$ silo claude</span></div>
@@ -1102,7 +1116,7 @@
     <div class="glow-orb cyan" style="width:160px;height:160px;top:12%;right:8%;"></div>
     <div class="glow-orb magenta" style="width:140px;height:140px;bottom:15%;left:6%;"></div>
     <div class="slide-content stagger">
-        <h2 class="reveal">Everyone should be <span class="text-gradient">isolating</span></h2>
+        <h2 class="reveal">What <span class="text-gradient">works for you</span>?</h2>
         <hr class="neon-divider reveal">
         <div class="card-grid reveal" style="grid-template-columns: repeat(6, 1fr);">
             <div class="card">
@@ -1112,10 +1126,10 @@
                 <h3 class="neon-magenta">Sandbox modes</h3>
             </div>
             <div class="card">
-                <h3 style="color: var(--accent-purple);">Claude web</h3>
+                <h3 style="color: var(--accent-purple);">Claude web / GitHub Coding Agent</h3>
             </div>
             <div class="card">
-                <h3 class="neon-cyan">VS Code Dev Containers</h3>
+                <h3 class="neon-cyan">Docker / VS Code Dev Containers</h3>
             </div>
             <div class="card">
                 <h3 class="neon-magenta">VMs</h3>
@@ -1136,8 +1150,7 @@
     <div class="corner-decoration top-right"></div>
     <div class="corner-decoration bottom-left"></div>
     <div class="slide-content stagger">
-        <h1 class="reveal text-gradient">Give it a go</h1>
-        <hr class="neon-divider reveal">
+        <h1 class="reveal text-gradient">Thanks</h1>
         <div class="code-block reveal" style="max-width: 800px; text-align: left; white-space: nowrap;">
             <span class="cmd">brew install</span> <span class="flag">--HEAD</span> leighmcculloch/silo/silo<br><br>
             <span class="comment"># or</span><br>
@@ -1183,22 +1196,22 @@
        =========================================== */
     const SPEAKER_NOTES = [
         // Slide 1: Title
-        "Welcome everyone. Today I want to talk about silo — a tool I built to solve a problem I had when using agents for coding. The problem was, how do I use them safely. Everything I'm showing today, including this presentation, is built with Opus 4.5 and 4.6 using GitHub Copilot CLI and Claude Code CLI, and much of silo has also been built with silo now too. To setup the framing of the talk, I'm showing my workflow, things that work for me, and how I got here. This might work for you too, but there's a good chance it won't. I'm also showing you what I do today, and that will probably change a month or two from now, given how fast this space is moving. My main hope is that you leave with some new knowledge about the options you can to isolate your agent workloads, or new inspiration for how you can use agents to build infrasrtucture for your own workflows.",
-
-        // Slide 2: What Is Silo
-        "silo is a CLI tool that runs AI coding agents inside isolated containers and lightweight VMs. The agent gets read-write access to the project directory, the agent tool configs, and is given full access — yolo mode — but only inside the container. Is this perfect isolation? No, but for me it is enough, at least for now.",
+        "Welcome everyone. Today I want to talk about silo — a tool I built to make it safer to use agents in their auto-approve modes. Before we dive in further I want to frame what we're going to look at. I'm showing my workflow, things that work for me, and how I got here. This might work for you too, but it might not. So just take what's useful to you. I'm also showing you what I do today, but given how fast this space is moving, that will probably change a month or two from now. My main hope from talking about silo is that we start talking and thinking more about using agents safely, because I think this is important to our own safety, as well as important if we want to get the most out of the tools. One more thing before we get started, everything I'm showing today, including this presentation, is built with Opus 4.5 and 4.6 using GitHub Copilot CLI and Claude Code CLI, and most of the work building silo has happened inside silo.",
 
         // Slide 3: Agenda
         "I'll walk through the journey of how I got here, then dive deeper into how silo works, and finish with a demo.",
 
         // Slide 4: The Problem
-        "AI coding agents need broad access — they read files, run commands, modify code. But the default setup we get with most AI tools is we get asked for permission, on everyting. Review, approve, review, approve, and so on. We become the bottleneck. While agents used in this way may make our experience of coding feel easier, there will be a limit to the productivity gains we get. To leverage these tools effectively, we need the agent unblocked and working asynchronously with us, not synchronously.",
+        "AI coding agents need broad freedom to be effective — they read files, run commands, modify code. But the default setup we get with most AI tools is we get asked for permission, on everyting. Review, approve, review, approve, and so on. This creates a synchronous workflow where we become the bottleneck. While agents used in this way may make our experience of coding feel easier, there's a pretty low ceiling to the productivity gains we get. To leverage these tools effectively, we need the agent unblocked and working asynchronously with us, not synchronously.",
 
         // Slide 5: The Tension
-        "So we're stuck with this tradeoff. We can give the agent full access and accept the security risk — it could run anything on our machine. It could do anything to our GitHub account. Or we restrict it and we're babysitting. Neither option is great.",
+        "But we also need control. We can give the agent full access and accept the security risk — it might be fine. Or we can babysit it. Neither option is great.",
 
         // Slide 6: Permissions
-        "My first attempt at solving this was permissions. Lots and lots of permissions. I built this massive allow-list — over a hundred rules. Every git subcommand, every gh subcommand, every cargo and go and deno command, specific read and write paths. It felt thorough and it's pretty effective. But it's still super risky. One time I permitted 'gh api' and an agent commented on a completely random GitHub discussion that had nothing to do with our work. Super embarrassing. This experience really highlighted for me the difficulty with any sort of rules-based approach.",
+        "My first attempt at solving this was to go all in on permissions. Lots and lots of permissions. I built this massive allow-list — over a hundred rules. Every git subcommand, every gh subcommand, every cargo and go and deno command, specific read and write paths. It felt thorough and it's pretty effective. Until one day I had an incident. But it's still super risky. One time I permitted 'gh api' and an agent commented on a completely random GitHub discussion that had nothing to do with our work. Super embarrassing. This experience really highlighted for me the difficulty with any sort of rules-based approach.",
+
+        // Slide 6b: GitHub Incident
+        "I'd asked Claude to prepare a post for a GitHub discussion — just draft it, not post it yet. But it went ahead and posted it anyway, and it hallucinated where to post it. And then it realised the mistake it had made, so it then deleted the post. This happened in the span of a few seconds. I actually saw it happen, but didn't respond fast enough to stop it. So I actually had no idea initially what it had posted and deleted. As it happens luckily I have self-notifications turned on in GitHub, which means I get emails for my own actions. This is the GitHub discussion it chose — a feature request on a completely unrelated project. And that's the email on the right — Claude had replied to this discussion with the proposal we were preparing. It used gh api command, which I'd permitted for doing things like querying data on github. That's when it really clicked for me — permission lists can't capture intent. You can allow a command but you can't control what the agent decides to do with it.",
 
         // Slide 7: Sandboxing
         "Next I tried sandboxing. OpenAI's Codex CLI shipped sandbox mode first, then Claude Code added it. I also experimented with macOS sandbox-exec and writing my own sandbox rules. It was hard to get right though — build caching didn't work, I kept hitting errors with the Go build cache, tools would behave unpredictably. And often the sandbox still falls back to the permissions list anyway. So it was only a small edge over permissions alone. That said — if you're not using any isolation right now, turn on sandboxing in Claude Code. It's the best place to start. You get a good amount of safety with minimal setup.",
@@ -1207,40 +1220,43 @@
         "Another option is running agents somewhere else entirely. Claude's web interface, GitHub's Copilot coding agent. They're great for long-running investigative tasks like bug finding. Good for completely hands off, arms length spikes — you're not in there in the code with your IDE, so it suits exploratory work. Also great for kicking off the start of some work, then continuing later locally. The tradeoff is you're on machines you don't control, without the tools and configs you have locally, and it's often limited. And the workflow for me doesn't feel smooth. Using these tools doesn't keep me in a flow state.",
 
         // Slide 9: Containers
-        "And that brings us to containers. This is the solution I use most of the time today. Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. No permission lists to maintain, no fragile sandbox rules to debug. Just real isolation.",
+        "And that brings us to containers. This is the solution I use most of the time today. A container or VM is a place the AI can do the work, with minimal access to the actual host system, but we can give it unrestricted access to the container system.Instead of trying to enumerate what the agent can and can't do, we give it full access inside an isolated throwaway environment. And this is what I use silo to facilitate.",
+
+        // Slide 2 (moved): What Is Silo
+        "silo is a CLI tool that runs AI coding agents inside containers and lightweight VMs. The agent gets read-write access to the project directory, the agent tool configs, and is configured in its auto-approve mode — yolo mode — so it won't ask permission before doing anything.",
 
         // Slide 10: The Solution
-        "silo's approach is: don't restrict the agent, isolate it. The agent runs inside a container or lightweight VM with full yolo-mode access. But the blast radius is contained. It only sees our working directory and paths we explicitly mount.",
+        "silo is designed to be lightweight and so the experience of using it is similar to using docker. Multiple sessions can run at once in the same or different directories, and you can manage those sessions via the cli. The agent runs inside a container or lightweight VM depending on what backend you configure it with, and the agent is configured with its auto-approve mode.",
 
         // Slide 11: Give It a Go
-        "If you want to try it, it's two commands. brew install, silo. That's it. The container image builds automatically on first run. It rebuilds automatically when tools update. We don't have to think about any of it. Let me show you a quick demo.",
+        "Let's give it a go, I'll bring up a terminal and we can try it out. If you want to install it and try it as well while we're talking, it's two commands. brew install or go install, then silo. That's it. The container image builds automatically on first run.",
 
         // Slide 12: How Silo Works — Section Title
         "OK so let's go under the hood. What actually happens when you run silo claude?",
 
         // Slide 13: The Flow
-        "Here's the full flow. When you run silo claude, it first resolves configuration — merging built-in defaults, global config, and local config files. Then it resolves the image — images are content-addressed, so if nothing changed it uses the cache. Next it stages mount points — directories bind-mount directly, but I wanted to be able to mount individual files, and that needs special handling: they're staged into hardlinked temp directories, those temp directories are mounted into the VM, and then the files within are symlinked inside the container at the original path. Then it starts the container and launches the AI tool in yolo mode. The first run takes a minute or two for the image build, but after that it's nearly instant.",
+        "Here's the full flow. When you run silo claude, it first resolves configuration — merging built-in defaults, global config, and local config files. Then it resolves the image — the image has three layers: the base image, the tool layer which is claude, copilot, or opencode, and then finally a user configurable layer where you can inject post build hooks. Images are content-addressed, so their named based on their inputs and if nothing about the inputs changes it uses the cache, and only builds when it needs to. Next it stages mount points — directories bind-mount directly, but I wanted to be able to mount individual files like a single file containing an api key, and that needs special handling: they're staged into hardlinked temp directories, those temp directories are mounted into the VM, and then the files within are symlinked inside the container at the original path. Then it starts the container and launches the AI tool in its auto-approve mode. The first run takes a minute or two for the image build, but after that it's pretty fast.",
 
         // Slide 14: Mount Mapping
-        "Here's how mount mapping works. Every path appears at exactly the same location inside the container as on the host. Your working directory, tool config directories like ~/.claude, individual files like ~/.claude.json — they all map to identical paths. And silo auto-detects git worktrees — if you're working in a worktree, the parent .git directory is mounted too so git operations just work. This is important because hardcoded paths in your configs and scripts all behave the same. Under the hood, directories bind-mount directly, but Apple's container CLI only supports directory mounts, so individual files get staged — silo creates a temp directory with a hard link to the file, mounts that directory, then symlinks the file to its expected path inside the container.",
+        "In the flow I mentioned that files and directories get mounted. A few paths mount by default: your working directory, tool config directories like ~/.claude, individual files like ~/.claude.json — they all map to identical paths. The identical paths is makes the experience feel more seamless, because the paths are the same inside the VM as they are on my local. Also it makes some things like git worktrees work seamlessly since they rely paths knowing where the common git directory is. And silo auto-detects git worktrees — if you're working in a worktree, the parent .git directory is mounted too so git operations will work. The paths mounted are configurable, so you can add additional read-only or read-writes mounts.",
 
         // Slide 15: Supported Tools
         "silo supports three AI coding tools today. Claude Code from Anthropic, OpenCode, and GitHub Copilot CLI. We just prefix our usual command with 'silo'. The tool is auto-detected or we pick one interactively.",
 
         // Slide 16: Two Backends
-        "There are two isolation backends. Docker works everywhere. Apple Containers are macOS-only but provide stronger isolation. An important distinction: the Apple Container VM can run an entire Docker engine inside it — so when your agent uses Docker, it's truly isolated. With Docker-in-Docker, it's a shared engine and easy to break out of. silo auto-detects which one is available — it prefers Apple Containers when installed.",
+        "There are two backends. Docker and Apple Containers. Docker works everywhere. Apple Containers are macOS-only but provide better isolation. Docker on mac is a shared Linux VM running multiple containers, where-as Apple Containers is one lightweight VM per container. The biggest win with this is that an Apple Container VM can run its own Docker engine inside it — so if you do any work with docker images, all that work will be isolated inside the VM as well. silo auto-detects which one is available — it prefers Apple Containers when installed.",
 
         // Slide 17: What's Inside
         "The container comes with a full dev environment. Ubuntu 24.04, Node, Go, Rust, git, GitHub CLI, Docker, LSP servers, and MCP servers pre-installed. Our git identity is automatically forwarded. And importantly, the filesystem structure is identical — if your home is /Users/cooluser on your Mac, that's exactly what it is inside the container. So everything just works, even if you have hardcoded paths in your configs or scripts.",
 
         // Slide 18: Seamless local ↔ silo
-        "My favourite feature is the seamless handoff between local and silo. silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session. Worth trying out both. Claude Web: Login to claude.ai and go to the coding tab. GitHub Coding Agent: Assign @copilot on an issue, or mention @copilot in a PR, or click the robot icon near the top of any GitHub page.",
+        "My favourite feature is the seamless handoff between local and silo. silo mounts our tool config directories from the host — ~/.claude, ~/.config/opencode, ~/.config/.copilot. This means we can switch freely between local and silo'd instances. A great pattern: run silo with a read-only GitHub token for everyday work, and when we need write access, pop open a local agent that picks up the same session. I use the --continue option to continue the session in my local claude.",
 
         // Slide 19: Auto-Updating Agents
-        "silo automatically keeps your agents up to date. There's a background version check that runs async with zero added latency. When a new release of Claude Code, OpenCode, or Copilot CLI is detected, the image rebuilds on the next run. You're always running the latest version. Under the hood, images use content-addressed tagging — a hash of the Dockerfile, tool, and build args — so rebuilds only happen when something actually changes.",
+        "silo automatically keeps your agents up to date. There's a background version check that runs async with zero added latency. When a new release of Claude Code, OpenCode, or Copilot CLI is detected, the image rebuilds in the background, and then you get the updated version on the next run.",
 
         // Slide 20: The Bigger Picture
-        "So here's the takeaway: everyone should be doing something to isolate their AI agents. silo is just one example of a way to isolate using containers and VMs. You don't need silo to do this — it's just a tool to aid with it. You can use these CLI agent tools in Docker containers started by a shell script. And silo is also just what I'm doing today. In the era of AI, tooling doesn't survive long — I might not be using this in two months. The important thing is the practice, not the specific tool. You've got options: permission lists, sandbox modes, Docker containers, VMs, remote instances. There are lots of similar tools popping up that folks are vibe coding. And that's another option — vibe code your own!",
+        "So silo helps me give the agent a lot more freedom while I retain a lot of control. silo is just one way to isolate using containers and VMs. You don't need silo to do this. You can use these CLI agent tools in Docker containers started by a shell script. The important thing is the practice, not the specific tool. You've got options: Docker containers, VMs, remote instances. There are lots of similar tools popping up that folks are vibe coding. And that's another option — vibe code your own! Agents make it really easy to write your own infrastructure.",
 
         // Slide 21: Closing
         "That's silo. Three lines to get started. It's open source under Apache 2.0, built in Go, targeting macOS. Give it a try and let me know what you think. Thank you."
