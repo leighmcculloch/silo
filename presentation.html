@@ -70,6 +70,12 @@
             color: var(--text-primary);
             overflow-x: hidden;
             height: 100%;
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE/Edge */
+        }
+
+        body::-webkit-scrollbar {
+            display: none; /* Chrome, Safari, Opera */
         }
 
         /* Grid background */
