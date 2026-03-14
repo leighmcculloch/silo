@@ -497,6 +497,11 @@ func (c *Client) NextContainerName(ctx context.Context, baseName string) string 
 	return fmt.Sprintf("%s-%d", baseName, maxNum+1)
 }
 
+// Reconnect falls back to opening a shell for Docker containers.
+func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOptions) error {
+	return c.Exec(ctx, name, []string{"/bin/bash"})
+}
+
 // Exec runs a command inside a running container with interactive TTY.
 func (c *Client) Exec(ctx context.Context, name string, command []string) error {
 	// Resolve container name to ID and verify it's running

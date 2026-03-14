@@ -647,6 +647,11 @@ func (c *Client) Remove(ctx context.Context, names []string) ([]string, error) {
 	return removed, nil
 }
 
+// Reconnect falls back to opening a shell for Apple containers.
+func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOptions) error {
+	return c.Exec(ctx, name, []string{"/bin/bash"})
+}
+
 // Exec runs a command inside a running container with interactive TTY.
 func (c *Client) Exec(ctx context.Context, name string, command []string) error {
 	// Verify container exists and is running

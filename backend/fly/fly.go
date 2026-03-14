@@ -5,11 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
-	"os/signal"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -65,14 +63,16 @@ func (c *Client) ImageExists(ctx context.Context, name string) (bool, error) {
 	}
 	token := strings.TrimSpace(string(out))
 
-	// Check Docker Registry v2 API for the manifest
+	// Check OCI registry API for the manifest.
+	// Fly's registry uses Basic auth (user "x", password is the fly token)
+	// and serves OCI image manifests.
 	url := fmt.Sprintf("https://registry.fly.io/v2/%s/manifests/%s", c.app, name)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
 	if err != nil {
 		return false, nil
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	req.SetBasicAuth("x", token)
+	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -210,23 +210,17 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 	fmt.Fprintf(os.Stderr, "  → Machine created: %s\n", machineID)
 
-	// Always destroy on exit
-	defer func() {
-		fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
-		destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		c.destroyMachine(destroyCtx, machineID)
-	}()
-
 	// 2. Wait for machine to start
 	fmt.Fprintf(os.Stderr, "  → Waiting for machine to start...\n")
 	if err := c.waitForState(ctx, machineID, "started", 5*time.Minute); err != nil {
+		c.destroyMachine(ctx, machineID)
 		return err
 	}
 
 	// 3. Wait for SSH to be ready
 	fmt.Fprintf(os.Stderr, "  → Waiting for SSH...\n")
 	if err := c.waitForSSH(ctx, machineID, 60*time.Second); err != nil {
+		c.destroyMachine(ctx, machineID)
 		return err
 	}
 
@@ -234,6 +228,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
 	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW, opts.CleanMountPaths)
 	if err != nil {
+		c.destroyMachine(ctx, machineID)
 		return fmt.Errorf("file sync failed: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "  → Files synced\n")
@@ -245,17 +240,34 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		hookScript := strings.Join(hooks, " && ")
 		if err := c.sshExec(ctx, machineID, hookScript); err != nil {
 			stopSync()
+			c.destroyMachine(ctx, machineID)
 			return fmt.Errorf("pre-run hook failed: %w", err)
 		}
 	}
 
-	// 5. Connect interactively with the tool command
+	// 6. Connect interactively with the tool command (via tmux)
 	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
 	connectErr := c.connectInteractive(ctx, machineID, opts)
 
-	// 6. Stop continuous sync (flushes final changes)
+	// 7. Check if the tmux session is still running (user detached vs tool exited).
+	// If the session still exists, keep the machine alive for reconnect.
+	// If it doesn't, the tool exited — destroy the machine.
+	tmuxAlive := c.isTmuxSessionAlive(ctx, machineID)
+
+	// 8. Stop continuous sync (flushes final changes)
 	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
 	stopSync()
+
+	if tmuxAlive {
+		fmt.Fprintf(os.Stderr, "  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, opts.Name)
+		return nil
+	}
+
+	// Tool exited, destroy the machine
+	fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
+	destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c.destroyMachine(destroyCtx, machineID)
 
 	return connectErr
 }
@@ -273,25 +285,37 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 	}
 
 	cmdStr := shellquote.Join(command...)
-	args := []string{"ssh", "console",
-		"--app", c.app,
-		"--machine", machineID,
-		"--pty",
-		"--user", user,
-		"-C", cmdStr,
-		"-q",
-	}
+	return c.flySSHInteractive(ctx, machineID, user, cmdStr)
+}
 
-	cmd := exec.Command("fly", args...)
-
-	// Use PTY for terminal handling
-	ptmx, err := pty.Start(cmd)
+// Reconnect re-syncs files and reattaches to the tool's tmux session.
+func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOptions) error {
+	machineID, err := c.resolveMachine(ctx, name)
 	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		return err
 	}
-	defer ptmx.Close()
 
-	return c.handleInteractiveSession(ctx, cmd, ptmx)
+	// Re-sync files (don't clean mount paths — tool is already running)
+	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
+	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW, nil)
+	if err != nil {
+		return fmt.Errorf("file sync failed: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "  → Files synced\n")
+
+	// Reattach to the tmux session
+	fmt.Fprintf(os.Stderr, "  → Reconnecting...\n")
+	user := currentUsername()
+	if user == "" {
+		user = "root"
+	}
+	connectErr := c.flySSHInteractive(ctx, machineID, user, "tmux attach-session -t silo")
+
+	// Stop sync (flush final changes)
+	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
+	stopSync()
+
+	return connectErr
 }
 
 // List returns all silo-created Fly machines.
@@ -820,14 +844,14 @@ func (c *Client) sshExecAs(ctx context.Context, machineID, user, script string) 
 func (c *Client) connectInteractive(ctx context.Context, machineID string, opts backend.RunOptions) error {
 	// Build the command to run inside the machine
 	fullCmd := append(opts.Command, opts.Args...)
-	var cmdStr string
+	var innerCmd string
 	if len(fullCmd) > 0 {
 		parts := []string{}
 		if opts.WorkDir != "" {
 			parts = append(parts, fmt.Sprintf("cd %s", shellquote.Join(opts.WorkDir)))
 		}
 		parts = append(parts, "exec "+shellquote.Join(fullCmd...))
-		cmdStr = strings.Join(parts, " && ")
+		innerCmd = strings.Join(parts, " && ")
 	}
 
 	// Determine the user to connect as (matches Dockerfile USER directive)
@@ -836,16 +860,34 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 		user = "root"
 	}
 
+	// Launch the tool inside a tmux session so it survives SSH disconnects.
+	// If the tmux session already exists (reconnect), attach to it.
+	// Otherwise, create a new session running the tool command.
+	tmuxCmd := fmt.Sprintf(
+		"tmux attach-session -t silo 2>/dev/null || tmux new-session -s silo %s",
+		shellquote.Join("bash", "-l", "-c", innerCmd),
+	)
+
+	return c.flySSHInteractive(ctx, machineID, user, tmuxCmd)
+}
+
+// isTmuxSessionAlive checks if the "silo" tmux session is still running on the machine.
+func (c *Client) isTmuxSessionAlive(ctx context.Context, machineID string) bool {
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	err := c.sshExec(checkCtx, machineID, "tmux has-session -t silo")
+	return err == nil
+}
+
+// flySSHInteractive runs an interactive fly ssh session with the given command.
+func (c *Client) flySSHInteractive(ctx context.Context, machineID, user, remoteCmd string) error {
 	args := []string{"ssh", "console",
 		"--app", c.app,
 		"--machine", machineID,
 		"--pty",
 		"--user", user,
 		"-q",
-	}
-	if cmdStr != "" {
-		shellCmd := fmt.Sprintf("bash -l -c %s", shellquote.Join(cmdStr))
-		args = append(args, "-C", shellCmd)
+		"-C", fmt.Sprintf("bash -c %s", shellquote.Join(remoteCmd)),
 	}
 
 	cmd := exec.CommandContext(ctx, "fly", args...)
@@ -861,98 +903,6 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 			return fmt.Errorf("session exited with status %d", exitErr.ExitCode())
 		}
 		return fmt.Errorf("session error: %w", err)
-	}
-	return nil
-}
-
-func (c *Client) handleInteractiveSession(ctx context.Context, cmd *exec.Cmd, ptmx *os.File) error {
-	// Handle terminal resize
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGWINCH)
-	go func() {
-		for range ch {
-			pty.InheritSize(os.Stdin, ptmx)
-		}
-	}()
-	ch <- syscall.SIGWINCH // Initial resize
-	defer signal.Stop(ch)
-
-	// Save and set raw terminal mode
-	fd := int(os.Stdin.Fd())
-	oldState, _ := getTermios(fd)
-	if oldState != nil {
-		setRawTermios(fd, oldState)
-	}
-	defer func() {
-		if oldState != nil {
-			restoreTermios(fd, oldState)
-		}
-		// Reset terminal modes
-		os.Stdout.WriteString("\x1b[?1000l") // Disable mouse click tracking
-		os.Stdout.WriteString("\x1b[?1002l") // Disable mouse button tracking
-		os.Stdout.WriteString("\x1b[?1003l") // Disable all mouse tracking
-		os.Stdout.WriteString("\x1b[?1006l") // Disable SGR mouse mode
-		os.Stdout.WriteString("\x1b[?25h")   // Show cursor
-	}()
-
-	// Forward signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	go func() {
-		select {
-		case <-sigCh:
-			cmd.Process.Kill()
-		case <-ctx.Done():
-			cmd.Process.Kill()
-		}
-	}()
-
-	// Copy output to stdout
-	go func() {
-		io.Copy(os.Stdout, ptmx)
-	}()
-
-	// Copy stdin to PTY with triple Ctrl-C detection
-	go func() {
-		var firstCtrlC time.Time
-		var ctrlCCount int
-		buf := make([]byte, 256)
-		for {
-			n, err := os.Stdin.Read(buf)
-			if n > 0 {
-				for i := 0; i < n; i++ {
-					if buf[i] == 0x03 {
-						now := time.Now()
-						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
-							ctrlCCount++
-							if ctrlCCount >= 3 {
-								cmd.Process.Kill()
-								return
-							}
-						} else {
-							firstCtrlC = now
-							ctrlCCount = 1
-						}
-					}
-				}
-				ptmx.Write(buf[:n])
-			}
-			if err != nil {
-				break
-			}
-		}
-	}()
-
-	waitErr := cmd.Wait()
-	if waitErr != nil {
-		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			if exitErr.ExitCode() == -1 {
-				return nil // killed by signal
-			}
-			return fmt.Errorf("session exited with status %d", exitErr.ExitCode())
-		}
-		return fmt.Errorf("session error: %w", waitErr)
 	}
 	return nil
 }
