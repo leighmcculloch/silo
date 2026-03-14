@@ -309,7 +309,8 @@ func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOpt
 	if user == "" {
 		user = "root"
 	}
-	connectErr := c.flySSHInteractive(ctx, machineID, user, "tmux attach-session -t silo")
+	connectErr := c.flySSHInteractive(ctx, machineID, user,
+		"export LANG=C.UTF-8 LC_ALL=C.UTF-8; tmux -u attach-session -t silo")
 
 	// Stop sync (flush final changes)
 	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
@@ -622,10 +623,13 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		"MUTAGEN_DATA_DIRECTORY="+mutagenDataDir,
 	)
 
-	fmt.Fprintf(os.Stderr, "    mutagen: starting daemon...\n")
+	progress := newSyncProgress(os.Stderr)
+	progress.setPhase("Starting sync daemon...")
+
 	startCmd := exec.CommandContext(ctx, mutagenPath, "daemon", "start")
 	startCmd.Env = mutagenEnv
 	if err := startCmd.Run(); err != nil {
+		progress.finish()
 		os.RemoveAll(mutagenDataDir)
 		sshCleanup()
 		return nil, fmt.Errorf("failed to start mutagen daemon: %w", err)
@@ -643,9 +647,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		mounts = append(mounts, mount{path: p, mode: "two-way-safe"})
 	}
 
-	// Prepare remote mount paths:
-	// 1. Remove image defaults so mutagen doesn't conflict with host configs
-	// 2. Create parent directories (mutagen can't create sync roots without parents)
+	progress.setPhase("Preparing remote paths...")
 	{
 		var scriptParts []string
 
@@ -668,6 +670,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " ")))
 
 		if err := c.sshExecAs(ctx, machineID, "root", strings.Join(scriptParts, " && ")); err != nil {
+			progress.finish()
 			os.RemoveAll(mutagenDataDir)
 			sshCleanup()
 			return nil, fmt.Errorf("failed to prepare remote directories: %w", err)
@@ -728,10 +731,10 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		idx int
 		err error
 	}
+	progress.setProgress("Creating sync sessions...", 0, len(sessions), "")
 	results := make(chan createResult, len(sessions))
 	for i, s := range sessions {
 		sessionNames = append(sessionNames, s.name)
-		fmt.Fprintf(os.Stderr, "    mutagen: syncing %s (%s)...\n", s.mount.path, s.mount.mode)
 		go func(idx int, s session) {
 			cmd := exec.CommandContext(ctx, mutagenPath, "sync", "create",
 				"--name", s.name,
@@ -746,17 +749,20 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			results <- createResult{idx: idx, err: err}
 		}(i, s)
 	}
+	createdCount := 0
 	for range sessions {
 		r := <-results
 		if r.err != nil {
+			progress.finish()
 			cleanupSessions()
 			return nil, r.err
 		}
+		createdCount++
+		progress.setProgress("Creating sync sessions...", createdCount, len(sessions), "")
 	}
 
-	// Flush all sessions in parallel to wait for initial sync,
-	// polling for progress while we wait.
-	fmt.Fprintf(os.Stderr, "    mutagen: waiting for initial sync (%d sessions)...\n", len(sessions))
+	// Flush all sessions in parallel to wait for initial sync.
+	progress.setProgress("Syncing files...", 0, len(sessions), "")
 
 	flushResults := make(chan createResult, len(sessions))
 	for i, s := range sessions {
@@ -774,26 +780,78 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		}(i, s)
 	}
 
-	// Track completed flushes for progress
-	completed := 0
-	total := len(sessions)
-
+	// Poll mutagen for detailed status while flushes run in background.
+	flushDone := make(chan struct{})
 	var flushErr error
-	for range sessions {
-		r := <-flushResults
-		if r.err != nil && flushErr == nil {
-			flushErr = r.err
+	syncedCount := 0
+	go func() {
+		for range sessions {
+			r := <-flushResults
+			if r.err != nil && flushErr == nil {
+				flushErr = r.err
+			}
+			syncedCount++
+			detail := ""
+			if r.idx < len(sessions) {
+				detail = tildePath(sessions[r.idx].mount.path)
+			}
+			progress.setProgress("Syncing files...", syncedCount, len(sessions), detail)
 		}
-		completed++
-		if completed < total {
-			fmt.Fprintf(os.Stderr, "    mutagen: %d/%d sessions synced...\n", completed, total)
+		close(flushDone)
+	}()
+
+	// Poll mutagen for detailed transfer status while waiting for flushes.
+	mutagenListTemplate := `{{range .}}{{.Name}}|{{.Status}}` +
+		`|{{with .BetaState}}{{with .StagingProgress}}{{.ReceivedSize}}/{{.TotalSize}}{{end}}{{end}}` +
+		`{{"\n"}}{{end}}`
+
+	pollStatus := func() {
+		cmd := exec.CommandContext(ctx, mutagenPath, "sync", "list",
+			"--template", mutagenListTemplate)
+		cmd.Env = mutagenEnv
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return
+		}
+		// Find any session that's actively transferring or doing work
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			parts := strings.SplitN(line, "|", 3)
+			if len(parts) < 2 {
+				continue
+			}
+			status := strings.TrimSpace(parts[1])
+			if status == "" || status == "Watching for changes" {
+				continue
+			}
+			detail := status
+			// Show transfer progress if available
+			if len(parts) == 3 && parts[2] != "" {
+				detail = status + " " + formatTransferSize(parts[2])
+			}
+			progress.setProgress("Syncing files...", syncedCount, len(sessions), detail)
+			return
+		}
+	}
+
+	pollTicker := time.NewTicker(500 * time.Millisecond)
+	defer pollTicker.Stop()
+pollLoop:
+	for {
+		select {
+		case <-flushDone:
+			break pollLoop
+		case <-pollTicker.C:
+			pollStatus()
 		}
 	}
 
 	if flushErr != nil {
+		progress.finish()
 		cleanupSessions()
 		return nil, flushErr
 	}
+
+	progress.finish()
 
 	// Fix ownership on remote (mutagen syncs as root via fly ssh)
 	user := currentUsername()
@@ -860,11 +918,24 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 		user = "root"
 	}
 
+	// Write tmux config: hide status bar (single window), enable mouse, UTF-8.
+	tmuxConf := `set -g status off
+set -g mouse on
+set -g default-terminal "tmux-256color"
+`
+	_ = c.sshExec(ctx, machineID, fmt.Sprintf("printf %%s %s > /tmp/.silo-tmux.conf",
+		shellquote.Join(tmuxConf)))
+
 	// Launch the tool inside a tmux session so it survives SSH disconnects.
 	// If the tmux session already exists (reconnect), attach to it.
 	// Otherwise, create a new session running the tool command.
 	tmuxCmd := fmt.Sprintf(
-		"tmux attach-session -t silo 2>/dev/null || tmux new-session -s silo %s",
+		"export LANG=C.UTF-8 LC_ALL=C.UTF-8; "+
+			"if tmux has-session -t silo 2>/dev/null; then "+
+			"tmux attach-session -t silo; "+
+			"else "+
+			"tmux -u -f /tmp/.silo-tmux.conf new-session -s silo -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 %s; "+
+			"fi",
 		shellquote.Join("bash", "-l", "-c", innerCmd),
 	)
 
