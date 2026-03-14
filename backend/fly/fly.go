@@ -565,6 +565,13 @@ func (c *Client) flySshDir(machineID string) (dir string, cleanup func(), err er
 		return "", nil, err
 	}
 
+	// Use the current user (not root) so synced files have correct ownership.
+	// Root access for mkdir/chown is done via separate sshExecAs calls.
+	user := currentUsername()
+	if user == "" {
+		user = "root"
+	}
+
 	script := fmt.Sprintf(`#!/bin/sh
 # SSH replacement for fly ssh console.
 # Called as: ssh [-oKey=Value ...] <host> <command...>
@@ -576,8 +583,8 @@ while [ $# -gt 0 ]; do
     *)   shift; break ;;  # skip host, rest is command
   esac
 done
-exec fly ssh console --app %s --machine %s --user root -q -C "$*"
-`, c.app, machineID)
+exec fly ssh console --app %s --machine %s --user %s -q -C "$*"
+`, c.app, machineID, user)
 
 	sshPath := filepath.Join(dir, "ssh")
 	if err := os.WriteFile(sshPath, []byte(script), 0700); err != nil {
@@ -668,6 +675,26 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			mkdirPaths = append(mkdirPaths, shellquote.Join(p))
 		}
 		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " ")))
+
+		// Chown mount paths and .mutagen to the user so mutagen (which runs
+		// as the user) can write files and execute its agent binary.
+		user := currentUsername()
+		if user != "" {
+			var chownPaths []string
+			for _, m := range mounts {
+				if info, err := os.Stat(m.path); err == nil && info.IsDir() {
+					chownPaths = append(chownPaths, shellquote.Join(m.path))
+				}
+			}
+			// The mutagen agent is pre-installed in the image as root;
+			// chown it so the user can execute it. Use explicit home path
+			// since this script runs as root (where $HOME=/root).
+			home := os.Getenv("HOME")
+			if home != "" {
+				chownPaths = append(chownPaths, shellquote.Join(filepath.Join(home, ".mutagen")))
+			}
+			scriptParts = append(scriptParts, fmt.Sprintf("chown -R %s:%s %s", user, user, strings.Join(chownPaths, " ")))
+		}
 
 		if err := c.sshExecAs(ctx, machineID, "root", strings.Join(scriptParts, " && ")); err != nil {
 			progress.finish()
@@ -852,16 +879,6 @@ pollLoop:
 	}
 
 	progress.finish()
-
-	// Fix ownership on remote (mutagen syncs as root via fly ssh)
-	user := currentUsername()
-	if user != "" {
-		var paths []string
-		for _, m := range mounts {
-			paths = append(paths, shellquote.Join(m.path))
-		}
-		c.sshExecAs(ctx, machineID, "root", fmt.Sprintf("chown -R %s:%s %s", user, user, strings.Join(paths, " ")))
-	}
 
 	return func() {
 		// Flush final changes before terminating
