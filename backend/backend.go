@@ -104,4 +104,9 @@ type RunOptions struct {
 
 	// PreRunHooks are shell commands to run before the main command
 	PreRunHooks []string
+
+	// CleanMountPaths are paths inside the container that should be removed
+	// before mounts are set up, to prevent image defaults from conflicting
+	// with host configs provided via mounts.
+	CleanMountPaths []string
 }
