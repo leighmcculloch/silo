@@ -435,16 +435,30 @@ func Tool(opts Options) error {
 		command = []string{opts.Entrypoint}
 		args = nil
 	}
+	// Collect mount paths that exist locally for pre-mount cleanup.
+	var cleanMountPaths []string
+	for _, m := range mountsRO {
+		if _, err := os.Lstat(m); err == nil {
+			cleanMountPaths = append(cleanMountPaths, m)
+		}
+	}
+	for _, m := range mountsRW {
+		if _, err := os.Lstat(m); err == nil {
+			cleanMountPaths = append(cleanMountPaths, m)
+		}
+	}
+
 	err = backendClient.Run(ctx, backend.RunOptions{
-		Image:       runImageTag,
-		Name:        containerName,
-		WorkDir:     cwd,
-		MountsRO:    mountsRO,
-		MountsRW:    mountsRW,
-		Env:         envVars,
-		Command:     command,
-		Args:        args,
-		PreRunHooks: preRunHooks,
+		Image:           runImageTag,
+		Name:            containerName,
+		WorkDir:         cwd,
+		MountsRO:        mountsRO,
+		MountsRW:        mountsRW,
+		Env:             envVars,
+		Command:         command,
+		Args:            args,
+		PreRunHooks:     preRunHooks,
+		CleanMountPaths: cleanMountPaths,
 	})
 
 	if err != nil {

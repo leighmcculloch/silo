@@ -232,7 +232,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	// 4. Start file sync (mutagen: initial sync + continuous bidirectional)
 	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
-	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW)
+	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW, opts.CleanMountPaths)
 	if err != nil {
 		return fmt.Errorf("file sync failed: %w", err)
 	}
@@ -566,7 +566,7 @@ exec fly ssh console --app %s --machine %s --user root -q -C "$*"
 // startMutagenSync starts continuous file sync using mutagen.
 // RO mounts use one-way-replica (local→remote), RW mounts use two-way-safe.
 // Returns a cleanup function that flushes final changes and terminates sessions.
-func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsRO, mountsRW []string) (cleanup func(), err error) {
+func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsRO, mountsRW, cleanPaths []string) (cleanup func(), err error) {
 	if len(mountsRO) == 0 && len(mountsRW) == 0 {
 		return func() {}, nil
 	}
@@ -619,10 +619,20 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		mounts = append(mounts, mount{path: p, mode: "two-way-safe"})
 	}
 
-	// Create parent directories on the remote for all mount paths.
-	// Mutagen cannot create sync roots if their parent doesn't exist.
-	// Use the parent dir for files (detected by checking if local path is a file).
+	// Prepare remote mount paths:
+	// 1. Remove image defaults so mutagen doesn't conflict with host configs
+	// 2. Create parent directories (mutagen can't create sync roots without parents)
 	{
+		var scriptParts []string
+
+		if len(cleanPaths) > 0 {
+			var rmPaths []string
+			for _, p := range cleanPaths {
+				rmPaths = append(rmPaths, shellquote.Join(p))
+			}
+			scriptParts = append(scriptParts, fmt.Sprintf("rm -rf %s", strings.Join(rmPaths, " ")))
+		}
+
 		var mkdirPaths []string
 		for _, m := range mounts {
 			p := m.path
@@ -631,11 +641,12 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			}
 			mkdirPaths = append(mkdirPaths, shellquote.Join(p))
 		}
-		mkdirScript := fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " "))
-		if err := c.sshExecAs(ctx, machineID, "root", mkdirScript); err != nil {
+		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " ")))
+
+		if err := c.sshExecAs(ctx, machineID, "root", strings.Join(scriptParts, " && ")); err != nil {
 			os.RemoveAll(mutagenDataDir)
 			sshCleanup()
-			return nil, fmt.Errorf("failed to create remote directories: %w", err)
+			return nil, fmt.Errorf("failed to prepare remote directories: %w", err)
 		}
 	}
 

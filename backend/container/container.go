@@ -298,9 +298,23 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Build the complete list of pre-run hooks in order:
+	// 0. Clean mount paths (removes image defaults before mounts overlay them)
 	// 1. Symlink commands (creates symlinks for file mounts - may be dangling initially)
 	// 2. Pre-run hooks from opts (includes mount wait hook, docker daemon hook, user hooks)
 	var allPreRunHooks []string
+
+	// Clean mount paths that aren't directory bind mounts (those are
+	// already overlaid by the bind mount). File mounts use symlinks so
+	// the image default must be removed first.
+	fileMountPaths := make(map[string]bool)
+	for _, fm := range fileMounts {
+		fileMountPaths[fm.path] = true
+	}
+	for _, p := range opts.CleanMountPaths {
+		if fileMountPaths[p] {
+			allPreRunHooks = append(allPreRunHooks, fmt.Sprintf("rm -rf %s", shellquote.Join(p)))
+		}
+	}
 	allPreRunHooks = append(allPreRunHooks, symlinkCmds...)
 	allPreRunHooks = append(allPreRunHooks, opts.PreRunHooks...)
 
