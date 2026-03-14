@@ -287,14 +287,14 @@ Use --local or --global to skip the prompt.`,
 
 	reconnectCmd := &cobra.Command{
 		Use:               "reconnect [container]",
-		Short:             "Reconnect to a running silo container (re-syncs files for fly backend)",
+		Short:             "Reconnect to a running silo container's tool session",
 		GroupID:           "container",
-		Long:              `Reconnect to a running silo container. For fly.io machines, this re-syncs files and opens a shell.`,
-		Example:           `  silo reconnect myproject-1`,
+		Long:              `Reconnect to a running silo container's tool session. Re-syncs files and reattaches to the running tool (e.g., claude, copilot).`,
+		Example:           `  silo reconnect silo-1`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: completeContainerNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
+			return runReconnect(cmd, args[0], stderr)
 		},
 	}
 	reconnectCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
@@ -752,6 +752,65 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 
 		// If the error is "not found", try the next backend.
 		// If the error is something else (not running, exec failure), return it.
+		if !strings.Contains(err.Error(), "not found") {
+			return err
+		}
+	}
+
+	return fmt.Errorf("container %s not found", name)
+}
+
+func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
+	ctx := context.Background()
+
+	backendFlag, _ := cmd.Flags().GetString("backend")
+	cfg := config.LoadAll(toolDefaults())
+	cwd, _ := os.Getwd()
+
+	// Collect mount paths for re-sync using the same logic as a normal run.
+	// We use an empty tool name — global and repo mounts are still collected.
+	repoMatches := run.GetMatchingRepos(cfg, cwd)
+	mountsRO, mountsRW := run.CollectMounts("", cfg, cwd, repoMatches, nil)
+
+	// Collect clean mount paths (same logic as run.Tool)
+	var cleanMountPaths []string
+	for _, m := range mountsRO {
+		if _, err := os.Lstat(m); err == nil {
+			cleanMountPaths = append(cleanMountPaths, m)
+		}
+	}
+	for _, m := range mountsRW {
+		if _, err := os.Lstat(m); err == nil {
+			cleanMountPaths = append(cleanMountPaths, m)
+		}
+	}
+
+	opts := backend.RunOptions{
+		MountsRO:        mountsRO,
+		MountsRW:        mountsRW,
+		CleanMountPaths: cleanMountPaths,
+	}
+
+	var backends []string
+	if backendFlag != "" {
+		backends = []string{backendFlag}
+	} else {
+		backends = []string{"docker", "container", "fly"}
+	}
+
+	for _, backendType := range backends {
+		backendClient, err := createBackendByType(backendType, cfg)
+		if err != nil {
+			continue
+		}
+
+		err = backendClient.Reconnect(ctx, name, opts)
+		backendClient.Close()
+
+		if err == nil {
+			return nil
+		}
+
 		if !strings.Contains(err.Error(), "not found") {
 			return err
 		}

@@ -25,6 +25,11 @@ type Backend interface {
 	// container is not found or not running.
 	Exec(ctx context.Context, name string, command []string) error
 
+	// Reconnect re-syncs files and reattaches to the running tool session.
+	// For backends that don't support reconnection, this falls back to Exec
+	// with a shell.
+	Reconnect(ctx context.Context, name string, opts RunOptions) error
+
 	// List returns all silo-created containers
 	List(ctx context.Context) ([]ContainerInfo, error)
 

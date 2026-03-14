@@ -234,7 +234,7 @@ func Tool(opts Options) error {
 	opsWg.Add(4)
 	go func() {
 		defer opsWg.Done()
-		mountsRO, mountsRW = collectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
+		mountsRO, mountsRW = CollectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
 	}()
 	go func() {
 		defer opsWg.Done()
@@ -428,6 +428,9 @@ func Tool(opts Options) error {
 		progress.Complete()
 	}
 
+	// Always print the container name so users know what to pass to reconnect/shell/rm.
+	cli.LogTo(stderr, "Container: %s", containerName)
+
 	// Run the container/VM
 	command := opts.ToolDef.Command(home)
 	args := opts.ToolArgs
@@ -570,7 +573,8 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 }
 
 // collectMounts gathers all mount paths from config for a specific tool.
-func collectMounts(tool string, cfg config.Config, cwd string, repoMatches []RepoMatch, worktreeRoots []string) (mountsRO, mountsRW []string) {
+// CollectMounts gathers all mount paths from config for a specific tool.
+func CollectMounts(tool string, cfg config.Config, cwd string, repoMatches []RepoMatch, worktreeRoots []string) (mountsRO, mountsRW []string) {
 	mountsRW = []string{cwd}
 
 	// Add tool-specific mounts

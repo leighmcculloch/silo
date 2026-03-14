@@ -43,6 +43,11 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 	return fmt.Errorf("container backend is only available on macOS")
 }
 
+// Reconnect is a stub that always returns an error.
+func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOptions) error {
+	return fmt.Errorf("container backend is only available on macOS")
+}
+
 // List is a stub that always returns an error.
 func (c *Client) List(ctx context.Context) ([]backend.ContainerInfo, error) {
 	return nil, fmt.Errorf("container backend is only available on macOS")

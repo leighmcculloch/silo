@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     ncurses-base \
     zsh \
     rsync \
+    tmux \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE (for container backend which runs in a VM)
