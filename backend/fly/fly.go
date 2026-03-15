@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -556,43 +557,179 @@ func (c *Client) resolveMachine(ctx context.Context, name string) (string, error
 	return "", fmt.Errorf("container %s not found", name)
 }
 
-// flySshDir creates a directory containing an SSH wrapper script as "ssh",
-// suitable for use as MUTAGEN_SSH_PATH (which expects a directory, not a file).
-// The wrapper translates SSH invocations into `fly ssh console` commands.
-func (c *Client) flySshDir(machineID string) (dir string, cleanup func(), err error) {
+// flySshDir creates a directory containing an SSH wrapper for mutagen,
+// suitable for use as MUTAGEN_SSH_PATH (which expects a directory containing
+// an "ssh" executable).
+//
+// It uses fly proxy for a direct TCP tunnel to the machine's SSH port and
+// fly ssh issue for credentials, with SSH ControlMaster for connection
+// multiplexing. This is much faster than the previous approach of spawning
+// a new `fly ssh console` process for every mutagen operation.
+func (c *Client) flySshDir(ctx context.Context, machineID string) (dir string, cleanup func(), err error) {
 	dir, err = os.MkdirTemp("", "silo-fly-sshdir-*")
 	if err != nil {
 		return "", nil, err
 	}
 
-	// Use the current user (not root) so synced files have correct ownership.
-	// Root access for mkdir/chown is done via separate sshExecAs calls.
 	user := currentUsername()
 	if user == "" {
 		user = "root"
 	}
 
-	script := fmt.Sprintf(`#!/bin/sh
-# SSH replacement for fly ssh console.
-# Called as: ssh [-oKey=Value ...] <host> <command...>
-# Skip flags and the host placeholder, run the rest on the Fly machine.
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -o*) shift ;;   # skip -oKey=Value (mutagen sends these)
-    -*)  shift ;;   # skip other flags
-    *)   shift; break ;;  # skip host, rest is command
-  esac
-done
-exec fly ssh console --app %s --machine %s --user %s -q -C "$*"
-`, c.app, machineID, user)
+	// Get org for the app (needed by fly ssh issue).
+	org, err := c.appOrg(ctx)
+	if err != nil {
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("failed to get app org: %w", err)
+	}
 
-	sshPath := filepath.Join(dir, "ssh")
-	if err := os.WriteFile(sshPath, []byte(script), 0700); err != nil {
+	// Issue SSH credentials signed by the org's CA.
+	keyPath := filepath.Join(dir, "key")
+	issueCmd := exec.CommandContext(ctx, "fly", "ssh", "issue",
+		org, keyPath,
+		"--username", user+",root",
+		"--hours", "24",
+		"--overwrite",
+	)
+	if out, err := issueCmd.CombinedOutput(); err != nil {
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("fly ssh issue failed: %w\n%s", err, string(out))
+	}
+
+	// Find a free local port for the proxy.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("failed to find free port: %w", err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	// Start fly proxy to forward the local port to the machine's SSH port.
+	// --watch-stdin makes it terminate when our process exits.
+	remoteHost := fmt.Sprintf("%s.vm.%s.internal", machineID, c.app)
+	proxyCmd := exec.CommandContext(ctx, "fly", "proxy",
+		fmt.Sprintf("%d:22", port), remoteHost,
+		"--app", c.app,
+		"--watch-stdin",
+		"-q",
+	)
+	stdinPipe, err := proxyCmd.StdinPipe()
+	if err != nil {
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("failed to create proxy stdin pipe: %w", err)
+	}
+	proxyCmd.Stdout = nil
+	proxyCmd.Stderr = nil
+	if err := proxyCmd.Start(); err != nil {
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("fly proxy failed to start: %w", err)
+	}
+
+	// Wait for the proxy to establish the WireGuard tunnel and accept connections.
+	if err := waitForPort(ctx, port, 30*time.Second); err != nil {
+		stdinPipe.Close()
+		proxyCmd.Wait()
+		os.RemoveAll(dir)
+		return "", nil, fmt.Errorf("fly proxy did not become ready: %w", err)
+	}
+
+	// Write SSH config with ControlMaster for connection multiplexing.
+	// All mutagen operations reuse a single SSH connection.
+	// Use /tmp for the control socket to keep the path short (Unix socket
+	// paths are limited to 104 bytes on macOS).
+	controlPath := fmt.Sprintf("/tmp/silo-ssh-%d", port)
+	sshConfig := fmt.Sprintf(`Host fly
+  HostName 127.0.0.1
+  Port %d
+  User %s
+  IdentityFile %s
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  ControlMaster auto
+  ControlPath %s
+  ControlPersist 60
+  ServerAliveInterval 5
+  ServerAliveCountMax 3
+  LogLevel ERROR
+`, port, user, keyPath, controlPath)
+
+	configPath := filepath.Join(dir, "config")
+	if err := os.WriteFile(configPath, []byte(sshConfig), 0600); err != nil {
+		stdinPipe.Close()
+		proxyCmd.Wait()
 		os.RemoveAll(dir)
 		return "", nil, err
 	}
 
-	return dir, func() { os.RemoveAll(dir) }, nil
+	// Write SSH wrapper script. Mutagen calls it as:
+	//   ssh [-o Key=Value ...] <host> <command...>
+	// We strip options and the host placeholder, then call real ssh with our config.
+	script := fmt.Sprintf(`#!/bin/sh
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o) shift; shift ;;
+    -o*) shift ;;
+    -*) shift ;;
+    *) shift; break ;;
+  esac
+done
+exec ssh -F %s fly "$@"
+`, configPath)
+
+	sshPath := filepath.Join(dir, "ssh")
+	if err := os.WriteFile(sshPath, []byte(script), 0700); err != nil {
+		stdinPipe.Close()
+		proxyCmd.Wait()
+		os.RemoveAll(dir)
+		return "", nil, err
+	}
+
+	return dir, func() {
+		stdinPipe.Close()
+		proxyCmd.Wait()
+		os.Remove(controlPath) // clean up SSH control socket
+		os.RemoveAll(dir)
+	}, nil
+}
+
+// appOrg returns the organization slug for the client's app.
+func (c *Client) appOrg(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "fly", "status", "--app", c.app, "--json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	var info struct {
+		Organization struct {
+			Slug string `json:"slug"`
+		} `json:"Organization"`
+	}
+	if err := json.Unmarshal(out, &info); err != nil {
+		return "", fmt.Errorf("failed to parse app status: %w\n%s", err, string(out))
+	}
+	if info.Organization.Slug == "" {
+		return "", fmt.Errorf("could not determine org for app %s", c.app)
+	}
+	return info.Organization.Slug, nil
+}
+
+// waitForPort waits for a TCP port to accept connections.
+func waitForPort(ctx context.Context, port int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		conn, err := net.DialTimeout("tcp", addr, time.Second)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("timeout waiting for port %d", port)
 }
 
 // startMutagenSync starts continuous file sync using mutagen.
@@ -608,9 +745,13 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		return nil, fmt.Errorf("mutagen is required for the fly backend (install from https://mutagen.io): %w", err)
 	}
 
-	// Create SSH dir for mutagen
-	sshDir, sshCleanup, err := c.flySshDir(machineID)
+	progress := newSyncProgress(os.Stderr)
+
+	// Create SSH tunnel for mutagen (fly proxy + issued certs + ControlMaster)
+	progress.setPhase("Establishing SSH tunnel...")
+	sshDir, sshCleanup, err := c.flySshDir(ctx, machineID)
 	if err != nil {
+		progress.finish()
 		return nil, err
 	}
 
@@ -630,7 +771,6 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		"MUTAGEN_DATA_DIRECTORY="+mutagenDataDir,
 	)
 
-	progress := newSyncProgress(os.Stderr)
 	progress.setPhase("Starting sync daemon...")
 
 	startCmd := exec.CommandContext(ctx, mutagenPath, "daemon", "start")
