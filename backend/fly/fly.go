@@ -791,7 +791,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		mounts = append(mounts, mount{path: p, mode: "one-way-replica"})
 	}
 	for _, p := range mountsRW {
-		mounts = append(mounts, mount{path: p, mode: "two-way-safe"})
+		mounts = append(mounts, mount{path: p, mode: "two-way-resolved"})
 	}
 
 	progress.setPhase("Preparing remote paths...")
