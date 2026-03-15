@@ -119,7 +119,7 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
-	rootCmd.Flags().String("backend", "", "Backend to use: docker, container, fly")
+	rootCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -144,7 +144,7 @@ Configuration is loaded from (in order, merged):
 				return runTool(cmd, toolDef, args, stdout, stderr)
 			},
 		}
-		toolCmd.Flags().String("backend", "", "Backend to use: docker, container, fly")
+		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -234,7 +234,7 @@ Use --local or --global to skip the prompt.`,
 			return runList(cmd, args, stdout, stderr)
 		},
 	}
-	lsCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
+	lsCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
 	lsCmd.Flags().BoolP("quiet", "q", false, "Only display container names")
 	rootCmd.AddCommand(lsCmd)
 
@@ -247,7 +247,7 @@ Use --local or --global to skip the prompt.`,
 			return runRemove(cmd, args, stderr)
 		},
 	}
-	rmCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
+	rmCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
 	rmCmd.Flags().BoolP("force", "f", false, "Force removal of running containers")
 	rootCmd.AddCommand(rmCmd)
 
@@ -267,7 +267,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], args[1:], stderr)
 		},
 	}
-	execCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
+	execCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
 	rootCmd.AddCommand(execCmd)
 
 	shellCmd := &cobra.Command{
@@ -282,7 +282,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
 		},
 	}
-	shellCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
+	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
 	rootCmd.AddCommand(shellCmd)
 
 	reconnectCmd := &cobra.Command{
@@ -297,7 +297,7 @@ Use --local or --global to skip the prompt.`,
 			return runReconnect(cmd, args[0], stderr)
 		},
 	}
-	reconnectCmd.Flags().String("backend", "", "Backend to use: docker, container, fly (default: all)")
+	reconnectCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
 	rootCmd.AddCommand(reconnectCmd)
 
 	// Hidden __build subcommand — used by background build launcher.
