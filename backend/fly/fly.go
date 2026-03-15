@@ -313,9 +313,23 @@ func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOpt
 	connectErr := c.flySSHInteractive(ctx, machineID, user,
 		"export LANG=C.UTF-8 LC_ALL=C.UTF-8; tmux -u attach-session -t silo")
 
+	// Check if the tmux session is still running (user detached vs tool exited).
+	tmuxAlive := c.isTmuxSessionAlive(ctx, machineID)
+
 	// Stop sync (flush final changes)
 	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
 	stopSync()
+
+	if tmuxAlive {
+		fmt.Fprintf(os.Stderr, "  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, name)
+		return nil
+	}
+
+	// Tool exited, destroy the machine
+	fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
+	destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c.destroyMachine(destroyCtx, machineID)
 
 	return connectErr
 }
