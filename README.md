@@ -52,6 +52,7 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | Claude Code | `silo claude` | Anthropic's CLI for Claude |
 | OpenCode | `silo opencode` | AI coding CLI |
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
+| Mistral Vibe | `silo vibe` | Mistral's CLI coding assistant |
 
 ## Installation
 
@@ -93,6 +94,7 @@ silo
 silo claude
 silo opencode
 silo copilot
+silo vibe
 
 # Pass arguments to the tool (after --)
 silo claude -- --help
@@ -231,7 +233,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
   "backend": "container",
 
-  // Default tool: "claude", "opencode", or "copilot" (if not set, interactive prompt is shown)
+  // Default tool: "claude", "opencode", "copilot", or "vibe" (if not set, interactive prompt is shown)
   "tool": "claude",
 
   // Backend-specific configuration
@@ -349,6 +351,7 @@ Silo automatically mounts these paths (read-write):
 | Claude | `~/.claude.json`, `~/.claude/` |
 | OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/` (respecting XDG env vars) |
 | Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
+| Vibe | `~/.vibe/` |
 
 Additionally, some tools mount paths read-only to share configuration:
 
@@ -365,6 +368,7 @@ Some environment variables are automatically set or passed through:
 |------|----------------------|
 | OpenCode | `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` |
 | Copilot | `COPILOT_GITHUB_TOKEN` (passed through from host) |
+| Vibe | `MISTRAL_API_KEY` (passed through from host) |
 
 Git identity is configured automatically from your host:
 - `GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`

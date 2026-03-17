@@ -17,9 +17,9 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["claude", "opencode", "copilot"],
+      "enum": ["claude", "opencode", "copilot", "vibe"],
       "description": "Default tool to run. If not set, an interactive prompt is shown.",
-      "examples": ["claude", "opencode", "copilot"]
+      "examples": ["claude", "opencode", "copilot", "vibe"]
     },
     "mounts_ro": {
       "type": "array",
@@ -87,7 +87,7 @@
     },
     "tools": {
       "type": "object",
-      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'opencode', 'copilot').",
+      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'opencode', 'copilot', 'vibe').",
       "additionalProperties": {
         "$ref": "#/$defs/toolConfig"
       },
