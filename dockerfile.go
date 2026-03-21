@@ -14,14 +14,12 @@ var dockerfileBase string
 //go:embed silo.jsonc.example
 var sampleConfig string
 
-// Dockerfile returns the composed Dockerfile: base stage + all tool stages.
-func Dockerfile(tt []tools.Tool) string {
+// Dockerfile returns the composed Dockerfile: base stage + the selected tool stage.
+func Dockerfile(t tools.Tool) string {
 	var b strings.Builder
 	b.WriteString(dockerfileBase)
-	for _, t := range tt {
-		b.WriteString("\n")
-		b.WriteString(t.DockerfileStage)
-	}
+	b.WriteString("\n")
+	b.WriteString(t.DockerfileStage)
 	return b.String()
 }
 

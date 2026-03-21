@@ -6,41 +6,35 @@ import (
 )
 
 func TestDockerfile(t *testing.T) {
-	df := Dockerfile(supportedTools)
+	for _, tool := range supportedTools {
+		t.Run(tool.Name, func(t *testing.T) {
+			df := Dockerfile(tool)
 
-	if df == "" {
-		t.Error("expected dockerfile to not be empty")
-	}
+			if df == "" {
+				t.Error("expected dockerfile to not be empty")
+			}
 
-	// Check for base stage
-	if !strings.Contains(df, "FROM ubuntu:24.04 AS base") {
-		t.Error("expected dockerfile to contain base stage")
-	}
+			// Check for base stage
+			if !strings.Contains(df, "FROM ubuntu:24.04 AS base") {
+				t.Error("expected dockerfile to contain base stage")
+			}
 
-	// Check for opencode stage
-	if !strings.Contains(df, "FROM base AS opencode") {
-		t.Error("expected dockerfile to contain opencode stage")
-	}
+			// Check that it contains only this tool's stage
+			if !strings.Contains(df, "FROM base AS "+tool.Name) {
+				t.Errorf("expected dockerfile to contain %s stage", tool.Name)
+			}
 
-	// Check for claude stage
-	if !strings.Contains(df, "FROM base AS claude") {
-		t.Error("expected dockerfile to contain claude stage")
-	}
-
-	// Check for copilot stage
-	if !strings.Contains(df, "FROM base AS copilot") {
-		t.Error("expected dockerfile to contain copilot stage")
-	}
-
-	// Check for build args
-	if !strings.Contains(df, "ARG USER") {
-		t.Error("expected dockerfile to contain USER build arg")
-	}
-	if !strings.Contains(df, "ARG UID") {
-		t.Error("expected dockerfile to contain UID build arg")
-	}
-	if !strings.Contains(df, "ARG HOME") {
-		t.Error("expected dockerfile to contain HOME build arg")
+			// Check for build args
+			if !strings.Contains(df, "ARG USER") {
+				t.Error("expected dockerfile to contain USER build arg")
+			}
+			if !strings.Contains(df, "ARG UID") {
+				t.Error("expected dockerfile to contain UID build arg")
+			}
+			if !strings.Contains(df, "ARG HOME") {
+				t.Error("expected dockerfile to contain HOME build arg")
+			}
+		})
 	}
 }
 
@@ -52,9 +46,11 @@ func TestAvailableTools(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"opencode": true,
 		"claude":   true,
+		"codex":    true,
+		"opencode": true,
 		"copilot":  true,
+		"vibe":     true,
 	}
 
 	for _, tool := range tools {
@@ -74,9 +70,11 @@ func TestToolDescription(t *testing.T) {
 		tool     string
 		contains string
 	}{
-		{"opencode", "OpenCode"},
 		{"claude", "Claude"},
+		{"codex", "Codex"},
+		{"opencode", "OpenCode"},
 		{"copilot", "Copilot"},
+		{"vibe", "Vibe"},
 		{"unknown", "Unknown"},
 	}
 

@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI coding tools like Claude Code, OpenCode, and GitHub Copilot CLI in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in yolo mode.
+Silo lets you run AI coding tools like Claude Code, Codex, OpenCode, and GitHub Copilot CLI in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in yolo mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -50,6 +50,7 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | Tool | Command | Description |
 |------|---------|-------------|
 | Claude Code | `silo claude` | Anthropic's CLI for Claude |
+| Codex CLI | `silo codex` | OpenAI's CLI coding agent |
 | OpenCode | `silo opencode` | AI coding CLI |
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 | Mistral Vibe | `silo vibe` | Mistral's CLI coding assistant |
@@ -92,6 +93,7 @@ silo
 
 # Run a specific tool
 silo claude
+silo codex
 silo opencode
 silo copilot
 silo vibe
@@ -233,7 +235,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
   "backend": "container",
 
-  // Default tool: "claude", "opencode", "copilot", or "vibe" (if not set, interactive prompt is shown)
+  // Default tool: "claude", "codex", "opencode", "copilot", or "vibe" (if not set, interactive prompt is shown)
   "tool": "claude",
 
   // Backend-specific configuration
@@ -349,6 +351,7 @@ Silo automatically mounts these paths (read-write):
 | All | Current working directory |
 | All | Git worktree common directories (detected automatically) |
 | Claude | `~/.claude.json`, `~/.claude/` |
+| Codex | `~/.codex/` |
 | OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/` (respecting XDG env vars) |
 | Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
 | Vibe | `~/.vibe/` |
@@ -366,6 +369,7 @@ Some environment variables are automatically set or passed through:
 
 | Tool | Auto-set Variables |
 |------|----------------------|
+| Codex | `OPENAI_API_KEY` (passed through from host) |
 | OpenCode | `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` |
 | Copilot | `COPILOT_GITHUB_TOKEN` (passed through from host) |
 | Vibe | `MISTRAL_API_KEY` (passed through from host) |

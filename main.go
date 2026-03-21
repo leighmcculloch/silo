@@ -25,6 +25,7 @@ import (
 	"github.com/leighmcculloch/silo/tilde"
 	"github.com/leighmcculloch/silo/tools"
 	"github.com/leighmcculloch/silo/tools/claudecode"
+	"github.com/leighmcculloch/silo/tools/codexcli"
 	"github.com/leighmcculloch/silo/tools/copilotcli"
 	"github.com/leighmcculloch/silo/tools/mistralvibe"
 	"github.com/leighmcculloch/silo/tools/opencode"
@@ -39,6 +40,7 @@ var (
 	// add it here. To remove a tool: delete from this slice.
 	supportedTools = []tools.Tool{
 		claudecode.Tool,
+		codexcli.Tool,
 		opencode.Tool,
 		copilotcli.Tool,
 		mistralvibe.Tool,
@@ -91,7 +93,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
   ███████║██║███████╗╚██████╔╝
   ╚══════╝╚═╝╚══════╝ ╚═════╝
 `) + `
-Run AI coding assistants (Claude Code, OpenCode, Copilot, Mistral Vibe) in isolated
+Run AI coding assistants (Claude Code, Codex, OpenCode, Copilot, Mistral Vibe) in isolated
 Docker containers with proper security sandboxing.
 
 The container is configured with:
@@ -109,6 +111,7 @@ Configuration is loaded from (in order, merged):
 
   # Run a specific tool
   silo claude
+  silo codex
   silo opencode
   silo copilot
   silo vibe
@@ -386,7 +389,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	return run.Tool(run.Options{
 		ToolDef:     *toolDef,
 		Config:      cfg,
-		Dockerfile:  Dockerfile(supportedTools),
+		Dockerfile:  Dockerfile(*toolDef),
 		ForceBuild:  forceBuild,
 		NoCache:     noCache,
 		Verbose:     verbose,
@@ -434,7 +437,7 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		ToolDef:     toolDef,
 		ToolArgs:    toolArgs,
 		Config:      cfg,
-		Dockerfile:  Dockerfile(supportedTools),
+		Dockerfile:  Dockerfile(toolDef),
 		ForceBuild:  forceBuild,
 		NoCache:     noCache,
 		Verbose:     verbose,
