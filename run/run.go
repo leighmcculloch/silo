@@ -30,17 +30,19 @@ import (
 
 // Options configures a tool run.
 type Options struct {
-	ToolDef     tools.Tool
-	ToolArgs    []string
-	Config      config.Config
-	Dockerfile  string // raw Dockerfile template (before hook injection)
-	ForceBuild  bool
-	NoCache     bool
-	Verbose     bool
-	Entrypoint  string // run a custom command instead of the tool
-	ToolVersion string // pin a specific tool version (overrides cached version)
-	Stdout      io.Writer
-	Stderr      io.Writer
+	ToolDef       tools.Tool
+	ToolArgs      []string
+	Config        config.Config
+	Dockerfile    string // raw Dockerfile template (before hook injection)
+	ForceBuild    bool
+	NoCache       bool
+	Verbose       bool
+	Entrypoint    string   // run a custom command instead of the tool
+	ToolVersion   string   // pin a specific tool version (overrides cached version)
+	ExtraMountsRO []string // additional read-only mounts from CLI flags
+	ExtraMountsRW []string // additional read-write mounts from CLI flags
+	Stdout        io.Writer
+	Stderr        io.Writer
 }
 
 // Tool runs a tool inside a container.
@@ -234,7 +236,7 @@ func Tool(opts Options) error {
 	opsWg.Add(4)
 	go func() {
 		defer opsWg.Done()
-		mountsRO, mountsRW = CollectMounts(tool, cfg, cwd, repoMatches, worktreeRoots)
+		mountsRO, mountsRW = CollectMounts(tool, cfg, cwd, repoMatches, worktreeRoots, opts.ExtraMountsRO, opts.ExtraMountsRW)
 	}()
 	go func() {
 		defer opsWg.Done()
@@ -572,9 +574,9 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 	}
 }
 
-// collectMounts gathers all mount paths from config for a specific tool.
-// CollectMounts gathers all mount paths from config for a specific tool.
-func CollectMounts(tool string, cfg config.Config, cwd string, repoMatches []RepoMatch, worktreeRoots []string) (mountsRO, mountsRW []string) {
+// CollectMounts gathers all mount paths for a specific tool from the working
+// directory, config, git worktree roots, and additional CLI mounts.
+func CollectMounts(tool string, cfg config.Config, cwd string, repoMatches []RepoMatch, worktreeRoots, extraMountsRO, extraMountsRW []string) (mountsRO, mountsRW []string) {
 	mountsRW = []string{cwd}
 
 	// Add tool-specific mounts
@@ -607,6 +609,14 @@ func CollectMounts(tool string, cfg config.Config, cwd string, repoMatches []Rep
 
 	// Add git worktree roots (read-write for git operations)
 	mountsRW = append(mountsRW, worktreeRoots...)
+
+	// Add CLI-provided mounts last so ad hoc mounts are included alongside config mounts.
+	for _, m := range extraMountsRO {
+		mountsRO = append(mountsRO, expandCLIPath(m, cwd))
+	}
+	for _, m := range extraMountsRW {
+		mountsRW = append(mountsRW, expandCLIPath(m, cwd))
+	}
 
 	return mountsRO, mountsRW
 }
@@ -1113,4 +1123,13 @@ func expandPath(path string) string {
 		return os.Getenv("HOME")
 	}
 	return path
+}
+
+// expandCLIPath expands ~ and resolves relative CLI mount paths against cwd.
+func expandCLIPath(path, cwd string) string {
+	path = expandPath(path)
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Clean(filepath.Join(cwd, path))
 }

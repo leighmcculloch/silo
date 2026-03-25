@@ -75,6 +75,47 @@ func TestVersion(t *testing.T) {
 	}
 }
 
+func TestToolMountFlags(t *testing.T) {
+	rootCmd := newRootCmd(io.Discard, io.Discard)
+	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
+	if err != nil {
+		t.Fatalf("failed to find claude command: %v", err)
+	}
+
+	mountFlag := claudeCmd.Flags().Lookup("mount")
+	if mountFlag == nil {
+		t.Fatal("expected --mount flag on claude command")
+	}
+	if mountFlag.Shorthand != "m" {
+		t.Fatalf("expected --mount shorthand to be -m, got %q", mountFlag.Shorthand)
+	}
+
+	mountROFlag := claudeCmd.Flags().Lookup("mountro")
+	if mountROFlag == nil {
+		t.Fatal("expected --mountro flag on claude command")
+	}
+
+	if err := claudeCmd.Flags().Parse([]string{
+		"--mount", "/tmp/rw-a",
+		"-m", "/tmp/rw-b",
+		"--mountro", "/tmp/ro-a",
+	}); err != nil {
+		t.Fatalf("failed to parse mount flags: %v", err)
+	}
+
+	mountsRW, mountsRO, err := extraMountsFromFlags(claudeCmd)
+	if err != nil {
+		t.Fatalf("failed to read mount flags: %v", err)
+	}
+
+	if len(mountsRW) != 2 || mountsRW[0] != "/tmp/rw-a" || mountsRW[1] != "/tmp/rw-b" {
+		t.Fatalf("expected rw mounts [/tmp/rw-a /tmp/rw-b], got %v", mountsRW)
+	}
+	if len(mountsRO) != 1 || mountsRO[0] != "/tmp/ro-a" {
+		t.Fatalf("expected ro mounts [/tmp/ro-a], got %v", mountsRO)
+	}
+}
+
 func TestConfigShowCommand(t *testing.T) {
 	exitCode, stdout, _ := testcli.Main(t, []string{"config", "show"}, nil, mainFunc)
 

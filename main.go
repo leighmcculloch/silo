@@ -130,6 +130,7 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 	rootCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
+	addMountFlags(rootCmd)
 
 	// Define command groups (order here determines display order in --help)
 	rootCmd.AddGroup(
@@ -156,6 +157,7 @@ Configuration is loaded from (in order, merged):
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
 		toolCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
+		addMountFlags(toolCmd)
 		rootCmd.AddCommand(toolCmd)
 	}
 
@@ -385,17 +387,25 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get tool-version flag
 	toolVersion, _ := cmd.Flags().GetString("tool-version")
 
+	// Get additional mount flags
+	extraMountsRW, extraMountsRO, err := extraMountsFromFlags(cmd)
+	if err != nil {
+		return err
+	}
+
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:     *toolDef,
-		Config:      cfg,
-		Dockerfile:  Dockerfile(*toolDef),
-		ForceBuild:  forceBuild,
-		NoCache:     noCache,
-		Verbose:     verbose,
-		ToolVersion: toolVersion,
-		Stdout:      stdout,
-		Stderr:      stderr,
+		ToolDef:       *toolDef,
+		Config:        cfg,
+		Dockerfile:    Dockerfile(*toolDef),
+		ForceBuild:    forceBuild,
+		NoCache:       noCache,
+		Verbose:       verbose,
+		ToolVersion:   toolVersion,
+		ExtraMountsRW: extraMountsRW,
+		ExtraMountsRO: extraMountsRO,
+		Stdout:        stdout,
+		Stderr:        stderr,
 	})
 }
 
@@ -432,20 +442,45 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Get tool-version flag
 	toolVersion, _ := cmd.Flags().GetString("tool-version")
 
+	// Get additional mount flags
+	extraMountsRW, extraMountsRO, err := extraMountsFromFlags(cmd)
+	if err != nil {
+		return err
+	}
+
 	// Run the tool
 	return run.Tool(run.Options{
-		ToolDef:     toolDef,
-		ToolArgs:    toolArgs,
-		Config:      cfg,
-		Dockerfile:  Dockerfile(toolDef),
-		ForceBuild:  forceBuild,
-		NoCache:     noCache,
-		Verbose:     verbose,
-		Entrypoint:  entrypoint,
-		ToolVersion: toolVersion,
-		Stdout:      stdout,
-		Stderr:      stderr,
+		ToolDef:       toolDef,
+		ToolArgs:      toolArgs,
+		Config:        cfg,
+		Dockerfile:    Dockerfile(toolDef),
+		ForceBuild:    forceBuild,
+		NoCache:       noCache,
+		Verbose:       verbose,
+		Entrypoint:    entrypoint,
+		ToolVersion:   toolVersion,
+		ExtraMountsRW: extraMountsRW,
+		ExtraMountsRO: extraMountsRO,
+		Stdout:        stdout,
+		Stderr:        stderr,
 	})
+}
+
+func addMountFlags(cmd *cobra.Command) {
+	cmd.Flags().StringArrayP("mount", "m", nil, "Additional read-write path to mount into the container (repeatable)")
+	cmd.Flags().StringArray("mountro", nil, "Additional read-only path to mount into the container (repeatable)")
+}
+
+func extraMountsFromFlags(cmd *cobra.Command) (mountsRW, mountsRO []string, err error) {
+	mountsRW, err = cmd.Flags().GetStringArray("mount")
+	if err != nil {
+		return nil, nil, err
+	}
+	mountsRO, err = cmd.Flags().GetStringArray("mountro")
+	if err != nil {
+		return nil, nil, err
+	}
+	return mountsRW, mountsRO, nil
 }
 
 func selectTool() (string, error) {
@@ -776,7 +811,7 @@ func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
 	// Collect mount paths for re-sync using the same logic as a normal run.
 	// We use an empty tool name — global and repo mounts are still collected.
 	repoMatches := run.GetMatchingRepos(cfg, cwd)
-	mountsRO, mountsRW := run.CollectMounts("", cfg, cwd, repoMatches, nil)
+	mountsRO, mountsRW := run.CollectMounts("", cfg, cwd, repoMatches, nil, nil, nil)
 
 	// Collect clean mount paths (same logic as run.Tool)
 	var cleanMountPaths []string
