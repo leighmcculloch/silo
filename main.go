@@ -715,6 +715,11 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	}
 
 	for _, backendType := range backends {
+		toRemove := targetsByBackend[backendType]
+		if len(toRemove) == 0 {
+			continue
+		}
+
 		backendClient, err := createBackendByType(backendType, cfg)
 		if err != nil {
 			cli.LogWarningTo(stderr, "%s not available: %v", backendType, err)
@@ -722,7 +727,6 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 		}
 
 		// Unless -f is passed, refuse to remove running containers.
-		toRemove := targetsByBackend[backendType]
 		if !force {
 			containers, listErr := backendClient.List(ctx)
 			if listErr == nil {
