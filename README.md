@@ -504,9 +504,12 @@ Output shows container name, image, backend, and status.
 
 ### Removing Containers
 
-Remove specific silo containers by name:
+Remove specific silo containers by name, or run `silo rm` with no arguments to get an interactive multi-select list of all containers:
 
 ```bash
+# Open an interactive multi-select prompt
+silo rm
+
 # Remove specific containers
 silo rm myproject-1 myproject-2
 

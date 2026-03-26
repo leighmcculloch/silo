@@ -250,7 +250,7 @@ Use --local or --global to skip the prompt.`,
 		Use:     "rm [container...]",
 		Short:   "Remove silo containers",
 		GroupID: "container",
-		Args:    cobra.MinimumNArgs(1),
+		Args:    cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRemove(cmd, args, stderr)
 		},
@@ -707,12 +707,11 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 	backendFlag, _ := cmd.Flags().GetString("backend")
 	force, _ := cmd.Flags().GetBool("force")
 	cfg := config.LoadAll(toolDefaults())
+	backends := removeBackends(backendFlag)
 
-	var backends []string
-	if backendFlag != "" {
-		backends = []string{backendFlag}
-	} else {
-		backends = []string{"docker", "container", "fly"}
+	targetsByBackend, err := resolveRemoveTargets(ctx, cfg, backends, args, stderr)
+	if err != nil {
+		return err
 	}
 
 	for _, backendType := range backends {
@@ -723,25 +722,11 @@ func runRemove(cmd *cobra.Command, args []string, stderr io.Writer) error {
 		}
 
 		// Unless -f is passed, refuse to remove running containers.
-		toRemove := args
+		toRemove := targetsByBackend[backendType]
 		if !force {
 			containers, listErr := backendClient.List(ctx)
 			if listErr == nil {
-				running := make(map[string]bool)
-				for _, ctr := range containers {
-					if ctr.IsRunning {
-						running[ctr.Name] = true
-					}
-				}
-				var filtered []string
-				for _, name := range args {
-					if running[name] {
-						cli.LogWarningTo(stderr, "container %s is running, use -f to force removal", name)
-					} else {
-						filtered = append(filtered, name)
-					}
-				}
-				toRemove = filtered
+				toRemove = filterRunningContainers(toRemove, containers, stderr)
 			}
 		}
 
