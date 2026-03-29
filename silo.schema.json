@@ -11,9 +11,9 @@
     },
     "backend": {
       "type": "string",
-      "enum": ["docker", "container", "fly"],
-      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines. Default: 'container' if installed, else 'docker'",
-      "examples": ["docker", "container", "fly"]
+      "enum": ["docker", "container", "daytona", "fly"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'daytona' uses Daytona sandboxes, and 'fly' uses Fly.io remote machines. Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container", "daytona", "fly"]
     },
     "tool": {
       "type": "string",
@@ -73,6 +73,23 @@
       "type": "object",
       "description": "Backend-specific configuration.",
       "properties": {
+        "daytona": {
+          "type": "object",
+          "description": "Configuration for the Daytona backend.",
+          "properties": {
+            "api_url": {
+              "type": "string",
+              "description": "Daytona API URL override. If unset, DAYTONA_API_URL or the SDK default is used.",
+              "examples": ["https://app.daytona.io/api", "https://daytona.example.com/api"]
+            },
+            "target": {
+              "type": "string",
+              "description": "Daytona target/region for new sandboxes. If unset, DAYTONA_TARGET is used.",
+              "examples": ["us", "eu-west-1"]
+            }
+          },
+          "additionalProperties": false
+        },
         "fly": {
           "type": "object",
           "description": "Configuration for the Fly.io backend.",

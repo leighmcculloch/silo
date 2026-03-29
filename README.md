@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in auto-approve mode.
+Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), Daytona sandboxes, or Fly.io machines (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -83,6 +83,7 @@ brew upgrade --fetch-head leighmcculloch/silo/silo
 - **Go 1.25+**: To install silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
+- **Daytona credentials**: Required for the `daytona` backend (`DAYTONA_API_KEY` or `DAYTONA_JWT_TOKEN`, and `DAYTONA_ORGANIZATION_ID` when using JWTs)
 - **Fly.io CLI (`fly`)**: Required for the `fly` backend (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/))
 
 ## Usage
@@ -109,15 +110,16 @@ silo opencode -- --version
 
 ### Choosing a Backend
 
-Silo supports three backends and auto-detects which one to use if none specified:
+Silo supports four backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 | Docker | `--backend docker` | Uses Docker containers |
+| Daytona | `--backend daytona` | Remote sandboxes on Daytona |
 | Fly | `--backend fly` | Remote VMs on Fly.io |
 
-**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` backend must be selected explicitly.
+**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `daytona` and `fly` backends must be selected explicitly.
 
 ```bash
 # Use auto-detected backend (container if available, else docker)
@@ -128,6 +130,9 @@ silo --backend docker claude
 
 # Explicitly use Apple container backend
 silo --backend container claude
+
+# Explicitly use Daytona backend
+silo --backend daytona claude
 
 # Explicitly use Fly.io backend
 silo --backend fly claude
@@ -140,16 +145,16 @@ You can also set the backend in your configuration file.
 
 #### Backend Comparison
 
-| Feature | Docker | Apple Container | Fly |
-|---------|--------|-----------------|-----|
-| Platform | Any | macOS only | Any |
-| Isolation | Shared Linux VM | Per-container VM | Remote VM |
-| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine |
-| File mounts | Direct | Staged + symlinks | Synced (mutagen) |
-| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation |
-| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults |
-| API | Docker SDK | CLI subprocess | Fly CLI subprocess |
-| Reconnect | No | No | Yes (`silo reconnect`) |
+| Feature | Docker | Apple Container | Daytona | Fly |
+|---------|--------|-----------------|---------|-----|
+| Platform | Any | macOS only | Any | Any |
+| Isolation | Shared Linux VM | Per-container VM | Remote sandbox | Remote VM |
+| Docker Inside | Shared Engine | Per-container Engine | Snapshot-backed sandbox | Per-container Engine |
+| File mounts | Direct | Staged + symlinks | Staged sync | Synced (mutagen) |
+| Security | Dropped caps, no-new-privileges | VM isolation | Remote sandbox isolation | Remote VM isolation |
+| Resource control | Docker defaults | Explicit CPU/memory | Daytona defaults | Fly machine defaults |
+| API | Docker SDK | CLI subprocess | Daytona Go SDK | Fly CLI subprocess |
+| Reconnect | No | No | Yes (`silo reconnect`) | Yes (`silo reconnect`) |
 
 
 #### Why Apple Containers on macOS?
@@ -157,6 +162,58 @@ You can also set the backend in your configuration file.
 Docker on macOS runs all containers inside a single shared Linux VM that typically has broad access to the host filesystem (e.g., your entire home directory). The containers inside that VM share this access.
 
 Apple containers are different: each container runs in its own minimal lightweight VM with only the specific directories you've mounted. This provides stronger isolation since each VM has its own resource constraints and no shared filesystem access beyond what's explicitly configured. See [apple/container#technical-overview](https://github.com/apple/container/blob/main/docs/technical-overview.md) and [youtube](https://www.youtube.com/watch?v=JvQtvbhtXmo) for more details.
+
+#### Daytona Backend
+
+The Daytona backend runs your silo environment in remote Daytona sandboxes. It uses the Daytona Go SDK directly rather than shelling out to a CLI.
+
+**Setup:**
+
+1. Create a Daytona API key or JWT token.
+2. Export credentials:
+   ```bash
+   export DAYTONA_API_KEY=...
+   # or:
+   export DAYTONA_JWT_TOKEN=...
+   export DAYTONA_ORGANIZATION_ID=...
+   ```
+3. Optionally configure the API URL and target:
+   ```jsonc
+   // ~/.config/silo/silo.jsonc
+   {
+     "backend": "daytona",
+     "backends": {
+       "daytona": {
+         "api_url": "https://app.daytona.io/api",
+         "target": "us"
+       }
+     }
+   }
+   ```
+
+**How it works:**
+
+- **Build**: Silo turns the Dockerfile into a Daytona snapshot named with the usual content-addressed image tag.
+- **Run**: A sandbox is created from that snapshot, mount paths are uploaded into the sandbox, and an interactive PTY session starts the tool inside `tmux`.
+- **Exit**: Read-write mount paths are synced back to the host, then the sandbox is deleted if the tool exited.
+- **Reconnect**: If you detach or your connection drops, use `silo reconnect <name> --backend daytona` to reattach to the still-running sandbox.
+
+**Configuration:**
+
+| Setting | Config Key | Env Var | Default | Description |
+|---------|-----------|---------|---------|-------------|
+| API URL | `backends.daytona.api_url` | `DAYTONA_API_URL` | Daytona SDK default | Daytona API endpoint |
+| Target | `backends.daytona.target` | `DAYTONA_TARGET` | Daytona default | Daytona target/region for new sandboxes |
+
+**File sync:**
+
+Daytona does not currently use a continuous bidirectional sync layer like Fly's mutagen setup.
+
+- **Initial run**: Read-only and read-write mounts are uploaded into the sandbox before the tool starts.
+- **Reconnect**: Read-only mounts are re-uploaded, and read-write mounts are refreshed back from the sandbox before reattaching.
+- **Exit**: Read-write mounts are synced back from the sandbox to the host.
+
+This staged model preserves reconnect support, but it does not propagate local edits into a running sandbox continuously.
 
 #### Fly.io Backend
 
@@ -236,7 +293,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
+  // Backend: "docker", "container", "daytona", or "fly" (default: container if installed, else docker)
   "backend": "container",
 
   // Default tool: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", or "vibe" (if not set, interactive prompt is shown)
@@ -244,6 +301,10 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
   // Backend-specific configuration
   // "backends": {
+  //   "daytona": {
+  //     "api_url": "https://app.daytona.io/api",
+  //     "target": "us"
+  //   },
   //   "fly": {
   //     "app": "my-silo-app",  // required for fly backend
   //     "region": "syd"        // default: "syd"
@@ -634,6 +695,31 @@ silo claude
 
 # If your connection drops, reconnect
 silo reconnect myproject-1
+```
+
+### Using Daytona Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "daytona",
+  "backends": {
+    "daytona": {
+      "target": "us"
+    }
+  }
+}
+```
+
+```bash
+# First-time setup
+export DAYTONA_API_KEY=...
+
+# Run
+silo claude
+
+# If your connection drops, reconnect
+silo reconnect myproject-1 --backend daytona
 ```
 
 ### Multiple Tool Configuration

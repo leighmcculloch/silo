@@ -16,6 +16,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
+	daytonabackend "github.com/leighmcculloch/silo/backend/daytona"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
 	"github.com/leighmcculloch/silo/cli"
@@ -88,7 +89,7 @@ func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:   "silo",
-		Short: "Run AI coding tools in isolated Docker containers",
+		Short: "Run AI coding tools in isolated containers, VMs, or sandboxes",
 		Long: lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(`
   ███████╗██╗██╗      ██████╗
   ██╔════╝██║██║     ██╔═══██╗
@@ -98,7 +99,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
   ╚══════╝╚═╝╚══════╝ ╚═════╝
 `) + `
 Run AI tools (Claude Code, Cline, Codex, OpenCode, Paperclip AI, Copilot, Mistral Vibe) in isolated
-Docker containers with proper security sandboxing.
+containers, VMs, or remote sandboxes with proper security sandboxing.
 
 The container is configured with:
   • Your current directory mounted as the working directory
@@ -131,7 +132,7 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
-	rootCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
+	rootCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly")
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -157,7 +158,7 @@ Configuration is loaded from (in order, merged):
 				return runTool(cmd, toolDef, args, stdout, stderr)
 			},
 		}
-		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
+		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly")
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -248,7 +249,7 @@ Use --local or --global to skip the prompt.`,
 			return runList(cmd, args, stdout, stderr)
 		},
 	}
-	lsCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	lsCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly (default: all)")
 	lsCmd.Flags().BoolP("quiet", "q", false, "Only display container names")
 	rootCmd.AddCommand(lsCmd)
 
@@ -261,7 +262,7 @@ Use --local or --global to skip the prompt.`,
 			return runRemove(cmd, args, stderr)
 		},
 	}
-	rmCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	rmCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly (default: all)")
 	rmCmd.Flags().BoolP("force", "f", false, "Force removal of running containers")
 	rootCmd.AddCommand(rmCmd)
 
@@ -281,7 +282,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], args[1:], stderr)
 		},
 	}
-	execCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	execCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly (default: all)")
 	rootCmd.AddCommand(execCmd)
 
 	shellCmd := &cobra.Command{
@@ -296,7 +297,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
 		},
 	}
-	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly (default: all)")
 	rootCmd.AddCommand(shellCmd)
 
 	reconnectCmd := &cobra.Command{
@@ -311,7 +312,7 @@ Use --local or --global to skip the prompt.`,
 			return runReconnect(cmd, args[0], stderr)
 		},
 	}
-	reconnectCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	reconnectCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, daytona, fly (default: all)")
 	rootCmd.AddCommand(reconnectCmd)
 
 	// Hidden __build subcommand — used by background build launcher.
@@ -770,7 +771,7 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "daytona", "fly"}
 	}
 
 	for _, backendType := range backends {
@@ -831,7 +832,7 @@ func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "daytona", "fly"}
 	}
 
 	for _, backendType := range backends {
@@ -865,7 +866,7 @@ func completeContainerNames(cmd *cobra.Command, args []string, toComplete string
 	cfg := config.LoadAll(toolDefaults())
 	var names []string
 
-	for _, backendType := range []string{"docker", "container", "fly"} {
+	for _, backendType := range []string{"docker", "container", "daytona", "fly"} {
 		bc, err := createBackendByType(backendType, cfg)
 		if err != nil {
 			continue
@@ -894,7 +895,7 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "daytona", "fly"}
 	}
 
 	hasContainers := false
@@ -1063,6 +1064,8 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 		return docker.NewClient()
 	case "container":
 		return applecontainer.NewClient()
+	case "daytona":
+		return daytonabackend.NewClient(cfg.Backends.Daytona.APIURL, cfg.Backends.Daytona.Target)
 	case "fly":
 		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region)
 	default:

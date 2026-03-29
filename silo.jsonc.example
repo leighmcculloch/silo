@@ -1,11 +1,15 @@
 {
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
-  // Backend to use: "docker", "container", or "fly" (default: "container" if installed, else "docker")
+  // Backend to use: "docker", "container", "daytona", or "fly" (default: "container" if installed, else "docker")
   // "backend": "docker",
   // Default tool to run: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", or "vibe" (prompts if not set)
   // "tool": "claude",
   // Backend-specific configuration
   // "backends": {
+  //   "daytona": {
+  //     "api_url": "https://app.daytona.io/api",
+  //     "target": "us"
+  //   },
   //   "fly": {
   //     "app": "my-silo-app",  // required for fly backend (create with: fly apps create <name>)
   //     "region": "syd"        // default: "syd"

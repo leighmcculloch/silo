@@ -158,6 +158,10 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 
 	// Backends
 	w.openObject("  ", "backends")
+	w.openObject("    ", "daytona")
+	w.nullableString("      ", "api_url", cfg.Backends.Daytona.APIURL, def(src.DaytonaAPIURL, "default"), true)
+	w.nullableString("      ", "target", cfg.Backends.Daytona.Target, def(src.DaytonaTarget, "default"), false)
+	w.closeObject("    ", true)
 	w.openObject("    ", "fly")
 	w.nullableString("      ", "app", cfg.Backends.Fly.App, def(src.FlyApp, "default"), true)
 	w.stringField("      ", "region", def(cfg.Backends.Fly.Region, "syd"), def(src.FlyRegion, "default"), false)
@@ -217,6 +221,8 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 
 	// Backends
 	w.openObject("  ", "backends")
+	w.openObject("    ", "daytona")
+	w.closeObject("    ", true)
 	w.openObject("    ", "fly")
 	w.stringField("      ", "region", "syd", "", false)
 	w.closeObject("    ", false)

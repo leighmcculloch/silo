@@ -51,7 +51,8 @@ type Config struct {
 
 // BackendsConfig holds configuration specific to each backend.
 type BackendsConfig struct {
-	Fly FlyConfig `json:"fly,omitempty"`
+	Daytona DaytonaConfig `json:"daytona,omitempty"`
+	Fly     FlyConfig     `json:"fly,omitempty"`
 }
 
 // FlyConfig holds configuration for the Fly.io backend.
@@ -61,6 +62,16 @@ type FlyConfig struct {
 
 	// Region is the Fly.io region for new machines. Default: "syd".
 	Region string `json:"region,omitempty"`
+}
+
+// DaytonaConfig holds configuration for the Daytona backend.
+type DaytonaConfig struct {
+	// APIURL overrides the Daytona API URL. If empty, DAYTONA_API_URL or the
+	// SDK default is used.
+	APIURL string `json:"api_url,omitempty"`
+
+	// Target selects the Daytona target/region for new sandboxes.
+	Target string `json:"target,omitempty"`
 }
 
 // ToolConfig represents configuration for a specific AI tool
@@ -116,6 +127,8 @@ type RepoConfig struct {
 type SourceInfo struct {
 	Backend            string                       // source path for backend setting
 	Tool               string                       // source path for tool setting
+	DaytonaAPIURL      string                       // source path for backends.daytona.api_url setting
+	DaytonaTarget      string                       // source path for backends.daytona.target setting
 	FlyApp             string                       // source path for backends.fly.app setting
 	FlyRegion          string                       // source path for backends.fly.region setting
 	MountsRO           map[string]string            // value -> source path
@@ -202,6 +215,12 @@ func Merge(base, overlay Config) Config {
 	}
 
 	// Fly config: overlay takes precedence if set
+	if overlay.Backends.Daytona.APIURL != "" {
+		result.Backends.Daytona.APIURL = overlay.Backends.Daytona.APIURL
+	}
+	if overlay.Backends.Daytona.Target != "" {
+		result.Backends.Daytona.Target = overlay.Backends.Daytona.Target
+	}
 	if overlay.Backends.Fly.App != "" {
 		result.Backends.Fly.App = overlay.Backends.Fly.App
 	}
@@ -375,6 +394,12 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	}
 	if cfg.Tool != "" {
 		info.Tool = source
+	}
+	if cfg.Backends.Daytona.APIURL != "" {
+		info.DaytonaAPIURL = source
+	}
+	if cfg.Backends.Daytona.Target != "" {
+		info.DaytonaTarget = source
 	}
 	if cfg.Backends.Fly.App != "" {
 		info.FlyApp = source

@@ -27,7 +27,7 @@ func removeBackends(backendFlag string) []string {
 	if backendFlag != "" {
 		return []string{backendFlag}
 	}
-	return []string{"docker", "container", "fly"}
+	return []string{"docker", "container", "daytona", "fly"}
 }
 
 func resolveRemoveTargets(ctx context.Context, cfg config.Config, backends, args []string, stderr io.Writer) (map[string][]string, error) {

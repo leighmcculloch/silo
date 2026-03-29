@@ -18,6 +18,7 @@ import (
 
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
+	daytonabackend "github.com/leighmcculloch/silo/backend/daytona"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
 	"github.com/leighmcculloch/silo/cli"
@@ -384,13 +385,15 @@ func Tool(opts Options) error {
 			newBuildArgs["TOOL_VERSION"] = newVersion
 			logSection("New version available (%s), building in background...", newVersion)
 			_ = LaunchBackgroundBuild(BackgroundBuildOptions{
-				ImageTag:   newImageTag,
-				Dockerfile: dockerfile,
-				BuildArgs:  newBuildArgs,
-				Backend:    cfg.Backend,
-				FlyApp:     cfg.Backends.Fly.App,
-				FlyRegion:  cfg.Backends.Fly.Region,
-				Tool:       tool,
+				ImageTag:      newImageTag,
+				Dockerfile:    dockerfile,
+				BuildArgs:     newBuildArgs,
+				Backend:       cfg.Backend,
+				DaytonaAPIURL: cfg.Backends.Daytona.APIURL,
+				DaytonaTarget: cfg.Backends.Daytona.Target,
+				FlyApp:        cfg.Backends.Fly.App,
+				FlyRegion:     cfg.Backends.Fly.Region,
+				Tool:          tool,
 			})
 		}()
 	}
@@ -565,6 +568,15 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 			return nil, fmt.Errorf("failed to initialize container backend: %w", err)
 		}
 		return client, nil
+	case "daytona":
+		if verbose {
+			cli.LogTo(stderr, "Using Daytona sandboxes backend...")
+		}
+		client, err := daytonabackend.NewClient(cfg.Backends.Daytona.APIURL, cfg.Backends.Daytona.Target)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize daytona backend: %w", err)
+		}
+		return client, nil
 	case "fly":
 		if verbose {
 			cli.LogTo(stderr, "Using fly.io machines backend...")
@@ -575,7 +587,7 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 		}
 		return client, nil
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, daytona, fly)", backendType)
 	}
 }
 
