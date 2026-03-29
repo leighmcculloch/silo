@@ -151,11 +151,11 @@ func TestCollectMountsPromotesOverlappingROtoRW(t *testing.T) {
 			wantRW:  []string{"/cwd", "/data"},
 		},
 		{
-			name:    "RO parent of RW child promoted to RW",
+			name:    "RO parent of RW child stays RO",
 			roExtra: []string{"/data"},
 			rwExtra: []string{"/data/sub"},
-			wantRO:  nil,
-			wantRW:  []string{"/cwd", "/data/sub", "/data"},
+			wantRO:  []string{"/data"},
+			wantRW:  []string{"/cwd", "/data/sub"},
 		},
 		{
 			name:    "no overlap keeps both lists",

@@ -623,28 +623,24 @@ func CollectMounts(tool string, cfg config.Config, cwd string, repoMatches []Rep
 		mountsRW = append(mountsRW, expandCLIPath(m, cwd))
 	}
 
-	// Promote RO mounts to RW when they overlap with RW mounts:
-	// - If an RO path equals or is a subpath of an RW path, drop it (already writable).
-	// - If an RO path is a parent of an RW path, move it to RW.
+	// Deduplicate RO mounts that are fully covered by an RW mount.
+	// If an RO path equals or is a subpath of an RW path, drop it
+	// since it is already writable. RO parents of RW children are
+	// kept as-is so the parent stays read-only while the child
+	// remains writable.
 	filtered := mountsRO[:0]
 	for _, ro := range mountsRO {
 		roClean := filepath.Clean(ro) + string(filepath.Separator)
-		overlap := false
+		drop := false
 		for _, rw := range mountsRW {
 			rwClean := filepath.Clean(rw) + string(filepath.Separator)
 			if roClean == rwClean || strings.HasPrefix(roClean, rwClean) {
 				// RO is equal to or under an RW mount; drop it.
-				overlap = true
-				break
-			}
-			if strings.HasPrefix(rwClean, roClean) {
-				// RO is a parent of an RW mount; promote to RW.
-				overlap = true
-				mountsRW = append(mountsRW, ro)
+				drop = true
 				break
 			}
 		}
-		if !overlap {
+		if !drop {
 			filtered = append(filtered, ro)
 		}
 	}
