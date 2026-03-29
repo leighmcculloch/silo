@@ -481,12 +481,6 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 	}
 	defer restore()
 
-	if remoteCmd != "" {
-		if err := handle.SendInput([]byte(remoteCmd + "\n")); err != nil {
-			return fmt.Errorf("failed to send command to PTY: %w", err)
-		}
-	}
-
 	resizeCtx, resizeCancel := context.WithCancel(context.Background())
 	defer resizeCancel()
 	go monitorPtySize(resizeCtx, handle, fd)
@@ -501,6 +495,12 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 	// always ready to read input. Give it a brief moment so the first command
 	// isn't dropped or partially echoed.
 	time.Sleep(150 * time.Millisecond)
+
+	if remoteCmd != "" {
+		if err := handle.SendInput([]byte(remoteCmd + "\n")); err != nil {
+			return fmt.Errorf("failed to send command to PTY: %w", err)
+		}
+	}
 
 	inputDone := make(chan struct{})
 	go func() {
