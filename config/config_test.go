@@ -11,13 +11,24 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	toolDefaults := map[string]ToolConfig{
 		"claude":   {MountsRW: []string{"~/.claude.json", "~/.claude"}},
+		"cline":    {MountsRW: []string{"~/.cline", "~/.codex"}},
+		"codex":    {MountsRW: []string{"~/.codex"}},
 		"opencode": {MountsRW: []string{"~/.config/opencode"}},
 		"copilot":  {MountsRW: []string{"~/.config/.copilot"}},
+		"vibe":     {MountsRW: []string{"~/.vibe"}},
 	}
 	cfg := DefaultConfig(toolDefaults)
 
 	if _, ok := cfg.Tools["claude"]; !ok {
 		t.Error("expected claude tool config to exist")
+	}
+
+	if _, ok := cfg.Tools["cline"]; !ok {
+		t.Error("expected cline tool config to exist")
+	}
+
+	if _, ok := cfg.Tools["codex"]; !ok {
+		t.Error("expected codex tool config to exist")
 	}
 
 	if _, ok := cfg.Tools["opencode"]; !ok {
@@ -26,6 +37,10 @@ func TestDefaultConfig(t *testing.T) {
 
 	if _, ok := cfg.Tools["copilot"]; !ok {
 		t.Error("expected copilot tool config to exist")
+	}
+
+	if _, ok := cfg.Tools["vibe"]; !ok {
+		t.Error("expected vibe tool config to exist")
 	}
 }
 

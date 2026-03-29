@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/leighmcculloch/silo/main/silo.schema.json",
   // Backend to use: "docker", "container", or "fly" (default: "container" if installed, else "docker")
   // "backend": "docker",
-  // Default tool to run: "claude", "codex", "opencode", "copilot", or "vibe" (prompts if not set)
+  // Default tool to run: "claude", "cline", "codex", "opencode", "copilot", or "vibe" (prompts if not set)
   // "tool": "claude",
   // Backend-specific configuration
   // "backends": {
@@ -22,8 +22,10 @@
   // "post_build_hooks": [],
   // Shell commands to run inside the container before the tool
   // "pre_run_hooks": [],
+  // Host:container port mappings to publish from the container
+  // "ports": [],
   // Tool-specific configuration (merged with global config above)
-  // Example: "tools": { "claude": { "env": ["CLAUDE_SPECIFIC_VAR"] } }
+  // Example: "tools": { "cline": { "env": ["CLINE_SPECIFIC_VAR"] } }
   // "tools": {},
   // Repository-specific configuration (applied when git remote URL contains the key).
   // Multiple patterns can match; they are merged in order of specificity (shortest first).

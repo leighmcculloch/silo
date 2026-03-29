@@ -110,6 +110,9 @@ type RunOptions struct {
 	// PreRunHooks are shell commands to run before the main command
 	PreRunHooks []string
 
+	// Ports are host:container port mappings to publish (e.g. "3484:3484").
+	Ports []string
+
 	// CleanMountPaths are paths inside the container that should be removed
 	// before mounts are set up, to prevent image defaults from conflicting
 	// with host configs provided via mounts.

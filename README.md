@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI coding tools like Claude Code, Codex, OpenCode, and GitHub Copilot CLI in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in yolo mode.
+Silo lets you run AI coding tools like Claude Code, Cline, Codex, OpenCode, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -50,6 +50,7 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | Tool | Command | Description |
 |------|---------|-------------|
 | Claude Code | `silo claude` | Anthropic's CLI for Claude |
+| Cline CLI | `silo cline` | Cline's terminal coding agent |
 | Codex CLI | `silo codex` | OpenAI's CLI coding agent |
 | OpenCode | `silo opencode` | AI coding CLI |
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
@@ -93,6 +94,7 @@ silo
 
 # Run a specific tool
 silo claude
+silo cline
 silo codex
 silo opencode
 silo copilot
@@ -235,7 +237,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
   "backend": "container",
 
-  // Default tool: "claude", "codex", "opencode", "copilot", or "vibe" (if not set, interactive prompt is shown)
+  // Default tool: "claude", "cline", "codex", "opencode", "copilot", or "vibe" (if not set, interactive prompt is shown)
   "tool": "claude",
 
   // Backend-specific configuration
@@ -273,6 +275,11 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Shell commands to run inside the container before the tool (every run)
   "pre_run_hooks": [
     "source ~/.env_api_keys"
+  ],
+
+  // Host:container port mappings to publish
+  "ports": [
+    "8080:8080"
   ],
 
   // Tool-specific configuration (merged with global settings)
@@ -351,6 +358,7 @@ Silo automatically mounts these paths (read-write):
 | All | Current working directory |
 | All | Git worktree common directories (detected automatically) |
 | Claude | `~/.claude.json`, `~/.claude/` |
+| Cline | `~/.cline/`, `~/.claude.json`, `~/.claude/`, `~/.codex/` |
 | Codex | `~/.codex/` |
 | OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/`, `~/.local/state/opencode/` (respecting XDG env vars) |
 | Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
@@ -363,12 +371,21 @@ Additionally, some tools mount paths read-only to share configuration:
 | OpenCode | `~/.claude/` (for sharing CLAUDE.md files) |
 | Copilot | `~/.claude/` (for sharing CLAUDE.md files) |
 
+### Published Ports
+
+Some tools publish container ports to the host by default:
+
+| Tool | Published Ports |
+|------|----------------|
+| Cline | `3484:3484` (Cline browser preview) |
+
 ### Environment Variables
 
 Some environment variables are automatically set or passed through:
 
 | Tool | Auto-set Variables |
 |------|----------------------|
+| Cline | `CLINE_NO_AUTO_UPDATE=1` |
 | Codex | `OPENAI_API_KEY` (passed through from host) |
 | OpenCode | `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` |
 | Copilot | `COPILOT_GITHUB_TOKEN` (passed through from host) |
@@ -450,7 +467,7 @@ This means:
 
 ### Auto-rebuild on Tool Updates
 
-Silo automatically detects when a new version of Claude Code is available and triggers a rebuild. On each run, a background fetch checks the latest version and caches it to disk. The cached version is included in the image hash, so when a new release is published the image tag changes and a rebuild is triggered on the next run.
+Silo automatically detects when a new version of a tracked tool is available and triggers a rebuild. Today that includes Cline, Claude Code, Codex CLI, and GitHub Copilot CLI. On each run, a background fetch checks the latest version and caches it to disk. The cached version is included in the image hash, so when a new release is published the image tag changes and a rebuild is triggered on the next run.
 
 This adds zero latency — the version fetch happens asynchronously and the cached value from the previous run is used. New versions are picked up on the run after they are detected. Use `--force-build` to force a rebuild at any time.
 

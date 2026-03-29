@@ -14,7 +14,8 @@ type Config struct {
 	// Backend specifies which backend to use: "docker" (default)
 	Backend string `json:"backend,omitempty"`
 
-	// Tool specifies the default tool to run: "claude", "opencode", or "copilot"
+	// Tool specifies the default tool to run: "claude", "cline", "codex",
+	// "opencode", "copilot", or "vibe"
 	// If not set, an interactive prompt is shown
 	Tool string `json:"tool,omitempty"`
 
@@ -33,6 +34,9 @@ type Config struct {
 
 	// PostBuildHooks is a list of shell commands to run inside the container after building the image.
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
+
+	// Ports are host:container port mappings to publish from the container (e.g. "3484:3484").
+	Ports []string `json:"ports,omitempty"`
 
 	// Tools defines available AI tools with their configurations
 	Tools map[string]ToolConfig `json:"tools,omitempty"`
@@ -75,6 +79,9 @@ type ToolConfig struct {
 
 	// PostBuildHooks are shell commands to run in the Dockerfile for this tool's stage
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
+
+	// Ports are host:container port mappings to publish for this tool (e.g. "3484:3484").
+	Ports []string `json:"ports,omitempty"`
 }
 
 // RepoConfig represents configuration for a specific git repository.
@@ -100,6 +107,9 @@ type RepoConfig struct {
 
 	// PostBuildHooks are shell commands to run in the Dockerfile
 	PostBuildHooks []string `json:"post_build_hooks,omitempty"`
+
+	// Ports are host:container port mappings to publish for this repository (e.g. "3484:3484").
+	Ports []string `json:"ports,omitempty"`
 }
 
 // SourceInfo tracks the source of configuration values
@@ -113,17 +123,20 @@ type SourceInfo struct {
 	Env                map[string]string            // value -> source path
 	PreRunHooks        map[string]string            // value -> source path
 	PostBuildHooks     map[string]string            // value -> source path
+	Ports              map[string]string            // value -> source path
 	ToolMountsRO       map[string]map[string]string // tool -> value -> source
 	ToolMountsRW       map[string]map[string]string // tool -> value -> source
 	ToolEnv            map[string]map[string]string // tool -> value -> source
 	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
 	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
+	ToolPorts          map[string]map[string]string // tool -> value -> source
 	RepoTool           map[string]string            // repo -> source path
 	RepoMountsRO       map[string]map[string]string // repo -> value -> source
 	RepoMountsRW       map[string]map[string]string // repo -> value -> source
 	RepoEnv            map[string]map[string]string // repo -> value -> source
 	RepoPreRunHooks    map[string]map[string]string // repo -> value -> source
 	RepoPostBuildHooks map[string]map[string]string // repo -> value -> source
+	RepoPorts          map[string]map[string]string // repo -> value -> source
 }
 
 // ConfigPath represents a config file path with its status
@@ -146,6 +159,7 @@ func DefaultConfig(toolDefaults map[string]ToolConfig) Config {
 		Env:            []string{},
 		PreRunHooks:    []string{},
 		PostBuildHooks: []string{},
+		Ports:          []string{},
 		Tools:          tools,
 	}
 }
@@ -201,6 +215,7 @@ func Merge(base, overlay Config) Config {
 	result.Env = append(result.Env, overlay.Env...)
 	result.PreRunHooks = append(result.PreRunHooks, overlay.PreRunHooks...)
 	result.PostBuildHooks = append(result.PostBuildHooks, overlay.PostBuildHooks...)
+	result.Ports = append(result.Ports, overlay.Ports...)
 
 	// Merge tools map
 	if result.Tools == nil {
@@ -213,6 +228,7 @@ func Merge(base, overlay Config) Config {
 			existing.Env = append(existing.Env, tool.Env...)
 			existing.PreRunHooks = append(existing.PreRunHooks, tool.PreRunHooks...)
 			existing.PostBuildHooks = append(existing.PostBuildHooks, tool.PostBuildHooks...)
+			existing.Ports = append(existing.Ports, tool.Ports...)
 			result.Tools[name] = existing
 		} else {
 			result.Tools[name] = tool
@@ -230,6 +246,7 @@ func Merge(base, overlay Config) Config {
 			existing.Env = append(existing.Env, repo.Env...)
 			existing.PreRunHooks = append(existing.PreRunHooks, repo.PreRunHooks...)
 			existing.PostBuildHooks = append(existing.PostBuildHooks, repo.PostBuildHooks...)
+			existing.Ports = append(existing.Ports, repo.Ports...)
 			result.Repos[name] = existing
 		} else {
 			result.Repos[name] = repo
@@ -247,17 +264,20 @@ func NewSourceInfo() *SourceInfo {
 		Env:                make(map[string]string),
 		PreRunHooks:        make(map[string]string),
 		PostBuildHooks:     make(map[string]string),
+		Ports:              make(map[string]string),
 		ToolMountsRO:       make(map[string]map[string]string),
 		ToolMountsRW:       make(map[string]map[string]string),
 		ToolEnv:            make(map[string]map[string]string),
 		ToolPreRunHooks:    make(map[string]map[string]string),
 		ToolPostBuildHooks: make(map[string]map[string]string),
+		ToolPorts:          make(map[string]map[string]string),
 		RepoTool:           make(map[string]string),
 		RepoMountsRO:       make(map[string]map[string]string),
 		RepoMountsRW:       make(map[string]map[string]string),
 		RepoEnv:            make(map[string]map[string]string),
 		RepoPreRunHooks:    make(map[string]map[string]string),
 		RepoPostBuildHooks: make(map[string]map[string]string),
+		RepoPorts:          make(map[string]map[string]string),
 	}
 }
 
@@ -377,6 +397,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	for _, v := range cfg.PostBuildHooks {
 		info.PostBuildHooks[v] = source
 	}
+	for _, v := range cfg.Ports {
+		info.Ports[v] = source
+	}
 	for toolName, toolCfg := range cfg.Tools {
 		if info.ToolMountsRO[toolName] == nil {
 			info.ToolMountsRO[toolName] = make(map[string]string)
@@ -393,6 +416,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		if info.ToolPostBuildHooks[toolName] == nil {
 			info.ToolPostBuildHooks[toolName] = make(map[string]string)
 		}
+		if info.ToolPorts[toolName] == nil {
+			info.ToolPorts[toolName] = make(map[string]string)
+		}
 		for _, v := range toolCfg.MountsRO {
 			info.ToolMountsRO[toolName][v] = source
 		}
@@ -407,6 +433,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 		for _, v := range toolCfg.PostBuildHooks {
 			info.ToolPostBuildHooks[toolName][v] = source
+		}
+		for _, v := range toolCfg.Ports {
+			info.ToolPorts[toolName][v] = source
 		}
 	}
 	for repoName, repoCfg := range cfg.Repos {
@@ -428,6 +457,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		if info.RepoPostBuildHooks[repoName] == nil {
 			info.RepoPostBuildHooks[repoName] = make(map[string]string)
 		}
+		if info.RepoPorts[repoName] == nil {
+			info.RepoPorts[repoName] = make(map[string]string)
+		}
 		for _, v := range repoCfg.MountsRO {
 			info.RepoMountsRO[repoName][v] = source
 		}
@@ -442,6 +474,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 		}
 		for _, v := range repoCfg.PostBuildHooks {
 			info.RepoPostBuildHooks[repoName][v] = source
+		}
+		for _, v := range repoCfg.Ports {
+			info.RepoPorts[repoName][v] = source
 		}
 	}
 }

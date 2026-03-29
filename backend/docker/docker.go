@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend" // parent package
 	"github.com/moby/term"
@@ -206,6 +207,24 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		cmd = opts.Args
 	}
 
+	// Parse port mappings
+	var exposedPorts nat.PortSet
+	var portBindings nat.PortMap
+	if len(opts.Ports) > 0 {
+		exposedPorts = make(nat.PortSet)
+		portBindings = make(nat.PortMap)
+		for _, p := range opts.Ports {
+			portMapping, err := nat.ParsePortSpec(p)
+			if err != nil {
+				return fmt.Errorf("invalid port mapping %q: %w", p, err)
+			}
+			for _, pm := range portMapping {
+				exposedPorts[pm.Port] = struct{}{}
+				portBindings[pm.Port] = append(portBindings[pm.Port], pm.Binding)
+			}
+		}
+	}
+
 	// Create container configuration
 	config := &container.Config{
 		Image:        opts.Image,
@@ -219,16 +238,18 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
+		ExposedPorts: exposedPorts,
 	}
 
 	hostConfig := &container.HostConfig{
-		Mounts:      mounts,
-		Init:        boolPtr(true),
-		AutoRemove:  true,
-		Privileged:  false,
-		SecurityOpt: []string{"no-new-privileges:true"},
-		CapDrop:     []string{"ALL"},
-		IpcMode:     "private",
+		Mounts:       mounts,
+		Init:         boolPtr(true),
+		AutoRemove:   true,
+		Privileged:   false,
+		SecurityOpt:  []string{"no-new-privileges:true"},
+		CapDrop:      []string{"ALL"},
+		IpcMode:      "private",
+		PortBindings: portBindings,
 	}
 
 	// Create the container

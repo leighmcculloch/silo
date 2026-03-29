@@ -47,6 +47,7 @@ func TestAvailableTools(t *testing.T) {
 
 	expected := map[string]bool{
 		"claude":   true,
+		"cline":    true,
 		"codex":    true,
 		"opencode": true,
 		"copilot":  true,
@@ -71,6 +72,7 @@ func TestToolDescription(t *testing.T) {
 		contains string
 	}{
 		{"claude", "Claude"},
+		{"cline", "Cline"},
 		{"codex", "Codex"},
 		{"opencode", "OpenCode"},
 		{"copilot", "Copilot"},

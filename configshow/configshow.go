@@ -138,6 +138,7 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	w.array("  ", "env", cfg.Env, src.Env, true)
 	w.array("  ", "post_build_hooks", cfg.PostBuildHooks, src.PostBuildHooks, true)
 	w.array("  ", "pre_run_hooks", cfg.PreRunHooks, src.PreRunHooks, true)
+	w.array("  ", "ports", cfg.Ports, src.Ports, true)
 
 	// Tools
 	toolNames := sortedKeys(cfg.Tools)
@@ -149,7 +150,8 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 		w.array("      ", "mounts_rw", tc.MountsRW, src.ToolMountsRW[tn], true)
 		w.array("      ", "env", tc.Env, src.ToolEnv[tn], true)
 		w.array("      ", "pre_run_hooks", tc.PreRunHooks, src.ToolPreRunHooks[tn], true)
-		w.array("      ", "post_build_hooks", tc.PostBuildHooks, src.ToolPostBuildHooks[tn], false)
+		w.array("      ", "post_build_hooks", tc.PostBuildHooks, src.ToolPostBuildHooks[tn], true)
+		w.array("      ", "ports", tc.Ports, src.ToolPorts[tn], false)
 		w.closeObject("    ", ti < len(toolNames)-1)
 	}
 	w.closeObject("  ", true)
@@ -173,7 +175,8 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 		w.array("      ", "mounts_rw", rc.MountsRW, src.RepoMountsRW[rn], true)
 		w.array("      ", "env", rc.Env, src.RepoEnv[rn], true)
 		w.array("      ", "pre_run_hooks", rc.PreRunHooks, src.RepoPreRunHooks[rn], true)
-		w.array("      ", "post_build_hooks", rc.PostBuildHooks, src.RepoPostBuildHooks[rn], false)
+		w.array("      ", "post_build_hooks", rc.PostBuildHooks, src.RepoPostBuildHooks[rn], true)
+		w.array("      ", "ports", rc.Ports, src.RepoPorts[rn], false)
 		w.closeObject("    ", ri < len(repoNames)-1)
 	}
 	w.closeObject("  ", false)
@@ -194,6 +197,7 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w.array("  ", "env", cfg.Env, nil, true)
 	w.array("  ", "post_build_hooks", cfg.PostBuildHooks, nil, true)
 	w.array("  ", "pre_run_hooks", cfg.PreRunHooks, nil, true)
+	w.array("  ", "ports", cfg.Ports, nil, true)
 
 	// Tools
 	toolNames := sortedKeys(cfg.Tools)
@@ -205,7 +209,8 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 		w.array("      ", "mounts_rw", tc.MountsRW, nil, true)
 		w.array("      ", "env", tc.Env, nil, true)
 		w.array("      ", "pre_run_hooks", tc.PreRunHooks, nil, true)
-		w.array("      ", "post_build_hooks", tc.PostBuildHooks, nil, false)
+		w.array("      ", "post_build_hooks", tc.PostBuildHooks, nil, true)
+		w.array("      ", "ports", tc.Ports, nil, false)
 		w.closeObject("    ", ti < len(toolNames)-1)
 	}
 	w.closeObject("  ", true)

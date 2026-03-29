@@ -17,9 +17,9 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["claude", "codex", "opencode", "copilot", "vibe"],
+      "enum": ["claude", "cline", "codex", "opencode", "copilot", "vibe"],
       "description": "Default tool to run. If not set, an interactive prompt is shown.",
-      "examples": ["claude", "codex", "opencode", "copilot", "vibe"]
+      "examples": ["claude", "cline", "codex", "opencode", "copilot", "vibe"]
     },
     "mounts_ro": {
       "type": "array",
@@ -61,6 +61,14 @@
       "description": "Shell commands to run inside the container after building the image. These are baked into the image and cached.",
       "examples": [["apt-get update && apt-get install -y ripgrep", "npm install -g typescript"]]
     },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Host:container port mappings to publish from the container. Format: 'hostPort:containerPort' or just 'containerPort' (maps to same host port).",
+      "examples": [["3484:3484", "8080:8080"]]
+    },
     "backends": {
       "type": "object",
       "description": "Backend-specific configuration.",
@@ -87,7 +95,7 @@
     },
     "tools": {
       "type": "object",
-      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'codex', 'opencode', 'copilot', 'vibe').",
+      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'cline', 'codex', 'opencode', 'copilot', 'vibe').",
       "additionalProperties": {
         "$ref": "#/$defs/toolConfig"
       },
@@ -156,6 +164,13 @@
             "type": "string"
           },
           "description": "Shell commands to run in the Dockerfile for this tool's build stage."
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Host:container port mappings to publish for this tool."
         }
       },
       "additionalProperties": false
@@ -166,7 +181,7 @@
       "properties": {
         "tool": {
           "type": "string",
-          "description": "Tool to use for this repository (e.g., 'claude', 'opencode', 'copilot')."
+          "description": "Tool to use for this repository (e.g., 'claude', 'cline', 'opencode', 'copilot')."
         },
         "mounts_ro": {
           "type": "array",
@@ -202,6 +217,13 @@
             "type": "string"
           },
           "description": "Shell commands to run in the Dockerfile."
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Host:container port mappings to publish for this repository."
         }
       },
       "additionalProperties": false

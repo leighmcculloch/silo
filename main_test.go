@@ -145,6 +145,10 @@ func TestConfigShowCommand(t *testing.T) {
 		t.Error("expected claude tool in JSONC output")
 	}
 
+	if !strings.Contains(stdout, `"cline"`) {
+		t.Error("expected cline tool in JSONC output")
+	}
+
 	if !strings.Contains(stdout, `"opencode"`) {
 		t.Error("expected opencode tool in JSONC output")
 	}

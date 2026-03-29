@@ -225,6 +225,9 @@ func Tool(opts Options) error {
 		imageTag = structuralTag + "-" + toolVersion
 	}
 
+	// Collect port mappings
+	ports := collectPorts(tool, cfg, repoMatches)
+
 	// Run independent operations concurrently
 	var mountsRO, mountsRW []string
 	var envVars []string
@@ -410,6 +413,7 @@ func Tool(opts Options) error {
 		repoPreRun:       repoPreRunHooks,
 		matchedRepoNames: matchedRepoNames,
 		containerName:    containerName,
+		ports:            ports,
 		gitName:          gitName,
 		gitEmail:         gitEmail,
 		verbose:          opts.Verbose,
@@ -463,6 +467,7 @@ func Tool(opts Options) error {
 		Command:         command,
 		Args:            args,
 		PreRunHooks:     preRunHooks,
+		Ports:           ports,
 		CleanMountPaths: cleanMountPaths,
 	})
 
@@ -814,6 +819,7 @@ type logRunConfigOptions struct {
 	repoPreRun       []string
 	matchedRepoNames []string
 	containerName    string
+	ports            []string
 	gitName          string
 	gitEmail         string
 	verbose          bool
@@ -928,6 +934,14 @@ func logRunConfig(opts logRunConfigOptions) {
 		logSection("Pre-run hooks (repo: %s):", strings.Join(opts.matchedRepoNames, ", "))
 		for _, hook := range opts.repoPreRun {
 			logBullet("%s", hook)
+		}
+	}
+
+	// Log ports
+	if len(opts.ports) > 0 {
+		logSection("Ports:")
+		for _, p := range opts.ports {
+			logBullet("%s", p)
 		}
 	}
 
@@ -1123,6 +1137,26 @@ func expandPath(path string) string {
 		return os.Getenv("HOME")
 	}
 	return path
+}
+
+// collectPorts gathers all port mappings for a specific tool from config.
+func collectPorts(tool string, cfg config.Config, repoMatches []RepoMatch) []string {
+	var ports []string
+
+	// Add tool-specific ports
+	if toolCfg, ok := cfg.Tools[tool]; ok {
+		ports = append(ports, toolCfg.Ports...)
+	}
+
+	// Add repo-specific ports
+	for _, rm := range repoMatches {
+		ports = append(ports, rm.Config.Ports...)
+	}
+
+	// Add global config ports
+	ports = append(ports, cfg.Ports...)
+
+	return ports
 }
 
 // expandCLIPath expands ~ and resolves relative CLI mount paths against cwd.

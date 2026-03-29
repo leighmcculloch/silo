@@ -25,6 +25,7 @@ import (
 	"github.com/leighmcculloch/silo/tilde"
 	"github.com/leighmcculloch/silo/tools"
 	"github.com/leighmcculloch/silo/tools/claudecode"
+	"github.com/leighmcculloch/silo/tools/cline"
 	"github.com/leighmcculloch/silo/tools/codexcli"
 	"github.com/leighmcculloch/silo/tools/copilotcli"
 	"github.com/leighmcculloch/silo/tools/mistralvibe"
@@ -40,6 +41,7 @@ var (
 	// add it here. To remove a tool: delete from this slice.
 	supportedTools = []tools.Tool{
 		claudecode.Tool,
+		cline.Tool,
 		codexcli.Tool,
 		opencode.Tool,
 		copilotcli.Tool,
@@ -93,7 +95,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
   ███████║██║███████╗╚██████╔╝
   ╚══════╝╚═╝╚══════╝ ╚═════╝
 `) + `
-Run AI coding assistants (Claude Code, Codex, OpenCode, Copilot, Mistral Vibe) in isolated
+Run AI coding assistants (Claude Code, Cline, Codex, OpenCode, Copilot, Mistral Vibe) in isolated
 Docker containers with proper security sandboxing.
 
 The container is configured with:
@@ -111,6 +113,7 @@ Configuration is loaded from (in order, merged):
 
   # Run a specific tool
   silo claude
+  silo cline
   silo codex
   silo opencode
   silo copilot
