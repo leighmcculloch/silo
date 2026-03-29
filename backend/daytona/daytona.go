@@ -185,6 +185,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 
+	if err := c.startToolSession(ctx, sandbox, opts); err != nil {
+		_ = sandbox.Delete(context.Background())
+		return fmt.Errorf("failed to start tool session: %w", err)
+	}
+
 	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
 	connectErr := c.attachToolSession(ctx, sandbox, opts)
 
@@ -399,10 +404,13 @@ func (c *Client) runCommand(ctx context.Context, sandbox *daytonasdk.Sandbox, co
 }
 
 func (c *Client) attachToolSession(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) error {
+	return c.attachTmuxSession(ctx, sandbox)
+}
+
+func (c *Client) startToolSession(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) error {
 	fullCmd := append([]string{}, opts.Command...)
 	fullCmd = append(fullCmd, opts.Args...)
 
-	parts := []string{"export LANG=C.UTF-8 LC_ALL=C.UTF-8"}
 	var toolParts []string
 	if opts.WorkDir != "" {
 		toolParts = append(toolParts, fmt.Sprintf("cd %s", shellquote.Join(opts.WorkDir)))
@@ -414,20 +422,19 @@ func (c *Client) attachToolSession(ctx context.Context, sandbox *daytonasdk.Sand
 	}
 
 	toolCmd := strings.Join(toolParts, " && ")
-	parts = append(parts,
-		fmt.Sprintf("if tmux has-session -t %s 2>/dev/null; then tmux -u attach-session -t %s; else tmux -u new-session -s %s %s; fi",
-			tmuxSessionName,
-			tmuxSessionName,
-			tmuxSessionName,
-			shellquote.Join("bash", "-l", "-c", toolCmd),
-		),
+	startCmd := fmt.Sprintf(
+		"export LANG=C.UTF-8 LC_ALL=C.UTF-8; "+
+			"if tmux has-session -t %s 2>/dev/null; then exit 0; fi; "+
+			"tmux -u new-session -d -s %s %s",
+		tmuxSessionName,
+		tmuxSessionName,
+		shellquote.Join("bash", "-l", "-c", toolCmd),
 	)
-
-	return c.attachPTY(ctx, sandbox, strings.Join(parts, "; "))
+	return c.runCommand(ctx, sandbox, startCmd)
 }
 
 func (c *Client) attachTmuxSession(ctx context.Context, sandbox *daytonasdk.Sandbox) error {
-	cmd := fmt.Sprintf("export LANG=C.UTF-8 LC_ALL=C.UTF-8; tmux -u attach-session -t %s", tmuxSessionName)
+	cmd := fmt.Sprintf("export LANG=C.UTF-8 LC_ALL=C.UTF-8; exec tmux -u attach-session -t %s", tmuxSessionName)
 	return c.attachPTY(ctx, sandbox, cmd)
 }
 
@@ -489,6 +496,11 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 		_, _ = io.Copy(os.Stdout, handle)
 		close(outputDone)
 	}()
+
+	// Daytona marks the websocket connected before the interactive shell is
+	// always ready to read input. Give it a brief moment so the first command
+	// isn't dropped or partially echoed.
+	time.Sleep(150 * time.Millisecond)
 
 	inputDone := make(chan struct{})
 	go func() {
