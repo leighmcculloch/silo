@@ -706,11 +706,20 @@ func isDaytonaNotFound(err error) bool {
 }
 
 func prepareDockerfileForDaytona(dockerfile string, buildArgs map[string]string) string {
-	if len(buildArgs) == 0 {
-		return dockerfile
+	lines := strings.Split(dockerfile, "\n")
+	var rewritten []string
+	for _, line := range lines {
+		rewritten = append(rewritten, line)
+		if strings.HasPrefix(strings.TrimSpace(line), "FROM ") {
+			rewritten = append(rewritten, "ENV DEBIAN_FRONTEND=noninteractive")
+		}
 	}
 
-	lines := strings.Split(dockerfile, "\n")
+	if len(buildArgs) == 0 {
+		return strings.Join(rewritten, "\n")
+	}
+
+	lines = rewritten
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "ARG ") {
