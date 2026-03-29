@@ -125,3 +125,66 @@ func TestCollectMountsIncludesAdditionalCLIMounts(t *testing.T) {
 		t.Fatalf("CollectMounts() mountsRW = %v, want %v", mountsRW, wantRW)
 	}
 }
+
+func TestCollectMountsPromotesOverlappingROtoRW(t *testing.T) {
+	emptyCfg := config.Config{}
+
+	tests := []struct {
+		name    string
+		roExtra []string
+		rwExtra []string
+		wantRO  []string
+		wantRW  []string
+	}{
+		{
+			name:    "exact duplicate removed from RO",
+			roExtra: []string{"/data"},
+			rwExtra: []string{"/data"},
+			wantRO:  nil,
+			wantRW:  []string{"/cwd", "/data"},
+		},
+		{
+			name:    "RO subpath of RW parent dropped",
+			roExtra: []string{"/data/sub"},
+			rwExtra: []string{"/data"},
+			wantRO:  nil,
+			wantRW:  []string{"/cwd", "/data"},
+		},
+		{
+			name:    "RO parent of RW child promoted to RW",
+			roExtra: []string{"/data"},
+			rwExtra: []string{"/data/sub"},
+			wantRO:  nil,
+			wantRW:  []string{"/cwd", "/data/sub", "/data"},
+		},
+		{
+			name:    "no overlap keeps both lists",
+			roExtra: []string{"/readonly"},
+			rwExtra: []string{"/writable"},
+			wantRO:  []string{"/readonly"},
+			wantRW:  []string{"/cwd", "/writable"},
+		},
+		{
+			name:    "similar prefix not treated as subpath",
+			roExtra: []string{"/datastore"},
+			rwExtra: []string{"/data"},
+			wantRO:  []string{"/datastore"},
+			wantRW:  []string{"/cwd", "/data"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRO, gotRW := CollectMounts("claude", emptyCfg, "/cwd", nil, nil, tt.roExtra, tt.rwExtra)
+			if len(gotRO) == 0 {
+				gotRO = nil
+			}
+			if !reflect.DeepEqual(gotRO, tt.wantRO) {
+				t.Errorf("mountsRO = %v, want %v", gotRO, tt.wantRO)
+			}
+			if !reflect.DeepEqual(gotRW, tt.wantRW) {
+				t.Errorf("mountsRW = %v, want %v", gotRW, tt.wantRW)
+			}
+		})
+	}
+}
