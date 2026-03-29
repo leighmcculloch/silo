@@ -2,7 +2,9 @@ package claudecode
 
 import (
 	_ "embed"
+	"fmt"
 
+	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/tools"
 )
@@ -16,7 +18,16 @@ var Tool = tools.Tool{
 	Description:     "Claude Code - Anthropic's CLI for Claude",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{home + "/.local/bin/claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"}
+		claudePath := home + "/.local/bin/claude"
+		mcpPath := home + "/.claude/mcp.json"
+		script := fmt.Sprintf(
+			"if [ -f %s ]; then exec %s --mcp-config=%s --dangerously-skip-permissions; else exec %s --dangerously-skip-permissions; fi",
+			shellquote.Join(mcpPath),
+			shellquote.Join(claudePath),
+			shellquote.Join(mcpPath),
+			shellquote.Join(claudePath),
+		)
+		return []string{"bash", "-lc", script}
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{
