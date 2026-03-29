@@ -29,6 +29,7 @@ const (
 	labelSiloName     = "silo-name"
 	labelSiloSnapshot = "silo-snapshot"
 	tmuxSessionName   = "silo"
+	toolLaunchScript  = "/tmp/.silo-start-tool-session.sh"
 	listPageSize      = 100
 )
 
@@ -185,11 +186,6 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 
-	if err := c.startToolSession(ctx, sandbox, opts); err != nil {
-		_ = sandbox.Delete(context.Background())
-		return fmt.Errorf("failed to start tool session: %w", err)
-	}
-
 	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
 	connectErr := c.attachToolSession(ctx, sandbox, opts)
 
@@ -329,9 +325,10 @@ func (c *Client) createSandbox(ctx context.Context, opts backend.RunOptions) (*d
 	sandbox, err := c.client.Create(ctx, daytonatypes.SnapshotParams{
 		Snapshot: opts.Image,
 		SandboxBaseParams: daytonatypes.SandboxBaseParams{
-			Name:    opts.Name,
-			User:    user,
-			EnvVars: env,
+			Name:      opts.Name,
+			User:      user,
+			EnvVars:   env,
+			Ephemeral: true,
 			Labels: map[string]string{
 				labelSilo:         "true",
 				labelSiloName:     opts.Name,
@@ -404,10 +401,14 @@ func (c *Client) runCommand(ctx context.Context, sandbox *daytonasdk.Sandbox, co
 }
 
 func (c *Client) attachToolSession(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) error {
-	return c.attachTmuxSession(ctx, sandbox)
+	scriptPath, err := c.prepareToolLaunchScript(ctx, sandbox, opts)
+	if err != nil {
+		return err
+	}
+	return c.attachPTY(ctx, sandbox, "exec "+shellquote.Join("bash", scriptPath))
 }
 
-func (c *Client) startToolSession(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) error {
+func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) (string, error) {
 	fullCmd := append([]string{}, opts.Command...)
 	fullCmd = append(fullCmd, opts.Args...)
 
@@ -422,15 +423,27 @@ func (c *Client) startToolSession(ctx context.Context, sandbox *daytonasdk.Sandb
 	}
 
 	toolCmd := strings.Join(toolParts, " && ")
-	startCmd := fmt.Sprintf(
-		"export LANG=C.UTF-8 LC_ALL=C.UTF-8; "+
-			"if tmux has-session -t %s 2>/dev/null; then exit 0; fi; "+
-			"tmux -u new-session -d -s %s %s",
-		tmuxSessionName,
-		tmuxSessionName,
-		shellquote.Join("bash", "-l", "-c", toolCmd),
+	script := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -e",
+		"export LANG=C.UTF-8",
+		"export LC_ALL=C.UTF-8",
+		fmt.Sprintf("if tmux has-session -t %s 2>/dev/null; then", tmuxSessionName),
+		fmt.Sprintf("  exec tmux -u attach-session -t %s", tmuxSessionName),
+		"fi",
+		fmt.Sprintf("exec tmux -u new-session -s %s %s", tmuxSessionName, shellquote.Join("bash", "-l", "-c", toolCmd)),
+		"",
+	}, "\n")
+	writeCmd := fmt.Sprintf(
+		"printf %%s %s > %s && chmod 755 %s",
+		shellquote.Join(script),
+		shellquote.Join(toolLaunchScript),
+		shellquote.Join(toolLaunchScript),
 	)
-	return c.runCommand(ctx, sandbox, startCmd)
+	if err := c.runCommand(ctx, sandbox, writeCmd); err != nil {
+		return "", fmt.Errorf("failed to prepare tool launch script: %w", err)
+	}
+	return toolLaunchScript, nil
 }
 
 func (c *Client) attachTmuxSession(ctx context.Context, sandbox *daytonasdk.Sandbox) error {
