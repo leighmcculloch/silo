@@ -24,7 +24,6 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/moby/term"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -1203,7 +1202,7 @@ func makeRawTerminal(fd uintptr) (func(), error) {
 		// the terminal's replies are consumed. Flush any pending input so those
 		// replies don't leak into the caller's shell prompt as raw escape bytes.
 		time.Sleep(100 * time.Millisecond)
-		_ = unix.IoctlSetInt(int(fd), unix.TCFLSH, unix.TCIFLUSH)
+		flushTerminalInput(fd)
 		_ = term.RestoreTerminal(fd, oldState)
 		os.Stdout.WriteString("\x1b[?1000l")
 		os.Stdout.WriteString("\x1b[?1002l")
