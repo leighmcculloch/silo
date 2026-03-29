@@ -10,12 +10,13 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	toolDefaults := map[string]ToolConfig{
-		"claude":   {MountsRW: []string{"~/.claude.json", "~/.claude"}},
-		"cline":    {MountsRW: []string{"~/.cline", "~/.codex"}},
-		"codex":    {MountsRW: []string{"~/.codex"}},
-		"opencode": {MountsRW: []string{"~/.config/opencode"}},
-		"copilot":  {MountsRW: []string{"~/.config/.copilot"}},
-		"vibe":     {MountsRW: []string{"~/.vibe"}},
+		"claude":      {MountsRW: []string{"~/.claude.json", "~/.claude"}},
+		"cline":       {MountsRW: []string{"~/.cline", "~/.codex"}},
+		"codex":       {MountsRW: []string{"~/.codex"}},
+		"opencode":    {MountsRW: []string{"~/.config/opencode"}},
+		"paperclipai": {MountsRW: []string{"~/.paperclip", "~/.claude", "~/.codex"}},
+		"copilot":     {MountsRW: []string{"~/.config/.copilot"}},
+		"vibe":        {MountsRW: []string{"~/.vibe"}},
 	}
 	cfg := DefaultConfig(toolDefaults)
 
@@ -33,6 +34,10 @@ func TestDefaultConfig(t *testing.T) {
 
 	if _, ok := cfg.Tools["opencode"]; !ok {
 		t.Error("expected opencode tool config to exist")
+	}
+
+	if _, ok := cfg.Tools["paperclipai"]; !ok {
+		t.Error("expected paperclipai tool config to exist")
 	}
 
 	if _, ok := cfg.Tools["copilot"]; !ok {

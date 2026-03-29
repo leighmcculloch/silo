@@ -17,9 +17,9 @@
     },
     "tool": {
       "type": "string",
-      "enum": ["claude", "cline", "codex", "opencode", "copilot", "vibe"],
+      "enum": ["claude", "cline", "codex", "opencode", "paperclipai", "copilot", "vibe"],
       "description": "Default tool to run. If not set, an interactive prompt is shown.",
-      "examples": ["claude", "cline", "codex", "opencode", "copilot", "vibe"]
+      "examples": ["claude", "cline", "codex", "opencode", "paperclipai", "copilot", "vibe"]
     },
     "mounts_ro": {
       "type": "array",
@@ -95,7 +95,7 @@
     },
     "tools": {
       "type": "object",
-      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'cline', 'codex', 'opencode', 'copilot', 'vibe').",
+      "description": "Tool-specific configuration. Each key is a tool name (e.g., 'claude', 'cline', 'codex', 'opencode', 'paperclipai', 'copilot', 'vibe').",
       "additionalProperties": {
         "$ref": "#/$defs/toolConfig"
       },
@@ -181,7 +181,7 @@
       "properties": {
         "tool": {
           "type": "string",
-          "description": "Tool to use for this repository (e.g., 'claude', 'cline', 'opencode', 'copilot')."
+          "description": "Tool to use for this repository (e.g., 'claude', 'cline', 'opencode', 'paperclipai', 'copilot')."
         },
         "mounts_ro": {
           "type": "array",

@@ -30,7 +30,7 @@ func TestHelp(t *testing.T) {
 	}
 
 	// Check for description
-	if !strings.Contains(stdout, "Run AI coding assistants") {
+	if !strings.Contains(stdout, "Run AI tools") {
 		t.Error("expected description in help output")
 	}
 
@@ -151,6 +151,10 @@ func TestConfigShowCommand(t *testing.T) {
 
 	if !strings.Contains(stdout, `"opencode"`) {
 		t.Error("expected opencode tool in JSONC output")
+	}
+
+	if !strings.Contains(stdout, `"paperclipai"`) {
+		t.Error("expected paperclipai tool in JSONC output")
 	}
 
 	if !strings.Contains(stdout, `"copilot"`) {
@@ -347,7 +351,7 @@ func TestHelpCommand(t *testing.T) {
 	}
 
 	// Should show same as --help
-	if !strings.Contains(stdout, "Run AI coding assistants") {
+	if !strings.Contains(stdout, "Run AI tools") {
 		t.Error("expected description in help output")
 	}
 }

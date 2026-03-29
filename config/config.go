@@ -15,7 +15,7 @@ type Config struct {
 	Backend string `json:"backend,omitempty"`
 
 	// Tool specifies the default tool to run: "claude", "cline", "codex",
-	// "opencode", "copilot", or "vibe"
+	// "opencode", "paperclipai", "copilot", or "vibe"
 	// If not set, an interactive prompt is shown
 	Tool string `json:"tool,omitempty"`
 

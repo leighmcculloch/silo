@@ -46,12 +46,13 @@ func TestAvailableTools(t *testing.T) {
 	}
 
 	expected := map[string]bool{
-		"claude":   true,
-		"cline":    true,
-		"codex":    true,
-		"opencode": true,
-		"copilot":  true,
-		"vibe":     true,
+		"claude":      true,
+		"cline":       true,
+		"codex":       true,
+		"opencode":    true,
+		"paperclipai": true,
+		"copilot":     true,
+		"vibe":        true,
 	}
 
 	for _, tool := range tools {
@@ -75,6 +76,7 @@ func TestToolDescription(t *testing.T) {
 		{"cline", "Cline"},
 		{"codex", "Codex"},
 		{"opencode", "OpenCode"},
+		{"paperclipai", "Paperclip"},
 		{"copilot", "Copilot"},
 		{"vibe", "Vibe"},
 		{"unknown", "Unknown"},
