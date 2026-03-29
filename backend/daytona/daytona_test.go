@@ -69,3 +69,15 @@ func TestTrimBootstrapOutput(t *testing.T) {
 		}
 	})
 }
+
+func TestStripANSIControl(t *testing.T) {
+	input := "\x1b[?25hError:\r\n\x1b]11;?\x1b\\still here\x1b[0m"
+	got := stripANSIControl(input)
+
+	if strings.Contains(got, "\x1b") {
+		t.Fatalf("expected ANSI escapes to be removed, got %q", got)
+	}
+	if got != "Error:\nstill here" {
+		t.Fatalf("unexpected sanitized output: %q", got)
+	}
+}

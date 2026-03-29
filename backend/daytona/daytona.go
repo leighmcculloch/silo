@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/moby/term"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -42,6 +44,13 @@ type Client struct {
 	client *daytonasdk.Client
 	apiURL string
 	target string
+}
+
+var ansiControlPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`),
+	regexp.MustCompile(`\x1b\][^\a\x1b]*(?:\a|\x1b\\)`),
+	regexp.MustCompile(`\x1bP.*?\x1b\\`),
+	regexp.MustCompile(`\x1b[@-_]`),
 }
 
 // NewClient creates a new Daytona backend client.
@@ -417,7 +426,17 @@ func (c *Client) attachToolSession(ctx context.Context, sandbox *daytonasdk.Sand
 	if err != nil {
 		return err
 	}
-	return c.attachPTY(ctx, sandbox, "exec "+shellquote.Join("bash", scriptPath))
+	if err := c.startToolSession(ctx, sandbox, scriptPath); err != nil {
+		return err
+	}
+	if !c.waitForTmuxSession(ctx, sandbox, 3*time.Second) {
+		time.Sleep(200 * time.Millisecond)
+		if output := c.readToolLogTail(ctx, sandbox); output != "" {
+			return fmt.Errorf("tool session failed to start:\n%s", indentLines(output, "  "))
+		}
+		return fmt.Errorf("tool session failed to start")
+	}
+	return c.attachTmuxSession(ctx, sandbox)
 }
 
 func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasdk.Sandbox, opts backend.RunOptions) (string, error) {
@@ -449,9 +468,9 @@ func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasd
 		fmt.Sprintf("printf %%s %s > %s", shellquote.Join(tmuxConf), shellquote.Join(tmuxConfigPath)),
 		fmt.Sprintf(": > %s", shellquote.Join(toolLogPath)),
 		fmt.Sprintf("if tmux has-session -t %s 2>/dev/null; then", tmuxSessionName),
-		fmt.Sprintf("  exec tmux -u attach-session -t %s", tmuxSessionName),
+		"  exit 0",
 		"fi",
-		fmt.Sprintf("exec tmux -u -f %s new-session -s %s -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 %s \\; pipe-pane -o %s",
+		fmt.Sprintf("tmux -u -f %s new-session -d -s %s -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 %s \\; pipe-pane -o %s",
 			shellquote.Join(tmuxConfigPath),
 			tmuxSessionName,
 			shellquote.Join("bash", "-l", "-c", toolCmd),
@@ -469,6 +488,10 @@ func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasd
 		return "", fmt.Errorf("failed to prepare tool launch script: %w", err)
 	}
 	return toolLaunchScript, nil
+}
+
+func (c *Client) startToolSession(ctx context.Context, sandbox *daytonasdk.Sandbox, scriptPath string) error {
+	return c.runCommand(ctx, sandbox, "bash "+shellquote.Join(scriptPath))
 }
 
 func (c *Client) attachTmuxSession(ctx context.Context, sandbox *daytonasdk.Sandbox) error {
@@ -732,6 +755,17 @@ func (c *Client) isTmuxSessionAlive(ctx context.Context, sandbox *daytonasdk.San
 	return result.ExitCode == 0
 }
 
+func (c *Client) waitForTmuxSession(ctx context.Context, sandbox *daytonasdk.Sandbox, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if c.isTmuxSessionAlive(ctx, sandbox) {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return c.isTmuxSessionAlive(ctx, sandbox)
+}
+
 func (c *Client) readToolLogTail(ctx context.Context, sandbox *daytonasdk.Sandbox) string {
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -739,7 +773,7 @@ func (c *Client) readToolLogTail(ctx context.Context, sandbox *daytonasdk.Sandbo
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(result.Result)
+	return strings.TrimSpace(stripANSIControl(result.Result))
 }
 
 func (c *Client) printPreviewLinks(ctx context.Context, sandbox *daytonasdk.Sandbox, ports []string) {
@@ -1147,6 +1181,14 @@ func indentLines(s, prefix string) string {
 	return strings.Join(lines, "\n")
 }
 
+func stripANSIControl(s string) string {
+	for _, pattern := range ansiControlPatterns {
+		s = pattern.ReplaceAllString(s, "")
+	}
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
+}
+
 func makeRawTerminal(fd uintptr) (func(), error) {
 	if !term.IsTerminal(fd) {
 		return func() {}, nil
@@ -1157,6 +1199,11 @@ func makeRawTerminal(fd uintptr) (func(), error) {
 		return nil, fmt.Errorf("failed to set raw terminal: %w", err)
 	}
 	restore := func() {
+		// tmux probes the local terminal on startup and can exit before all of
+		// the terminal's replies are consumed. Flush any pending input so those
+		// replies don't leak into the caller's shell prompt as raw escape bytes.
+		time.Sleep(100 * time.Millisecond)
+		_ = unix.IoctlSetInt(int(fd), unix.TCFLSH, unix.TCIFLUSH)
 		_ = term.RestoreTerminal(fd, oldState)
 		os.Stdout.WriteString("\x1b[?1000l")
 		os.Stdout.WriteString("\x1b[?1002l")
