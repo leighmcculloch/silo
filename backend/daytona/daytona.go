@@ -2,6 +2,7 @@ package daytona
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -29,7 +30,10 @@ const (
 	labelSiloName     = "silo-name"
 	labelSiloSnapshot = "silo-snapshot"
 	tmuxSessionName   = "silo"
+	tmuxConfigPath    = "/tmp/.silo-tmux.conf"
 	toolLaunchScript  = "/tmp/.silo-start-tool-session.sh"
+	attachSessionPath = "/tmp/.silo-attach-session.sh"
+	toolLogPath       = "/tmp/.silo-tool.log"
 	listPageSize      = 100
 )
 
@@ -187,6 +191,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
+	attachStarted := time.Now()
 	connectErr := c.attachToolSession(ctx, sandbox, opts)
 
 	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
@@ -194,7 +199,14 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		connectErr = fmt.Errorf("failed to sync final changes: %w", syncErr)
 	}
 
-	if c.isTmuxSessionAlive(ctx, sandbox) {
+	tmuxAlive := c.isTmuxSessionAlive(ctx, sandbox)
+	if !tmuxAlive && time.Since(attachStarted) < 5*time.Second {
+		if output := c.readToolLogTail(ctx, sandbox); output != "" {
+			fmt.Fprintf(os.Stderr, "  → Tool output before exit:\n%s\n", indentLines(output, "    "))
+		}
+	}
+
+	if tmuxAlive {
 		fmt.Fprintf(os.Stderr, "  → Detached. Sandbox %s still running — use 'silo reconnect %s --backend daytona' to reattach.\n", sandbox.ID, opts.Name)
 		return nil
 	}
@@ -423,15 +435,28 @@ func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasd
 	}
 
 	toolCmd := strings.Join(toolParts, " && ")
+	tmuxConf := strings.Join([]string{
+		`set -g status off`,
+		`set -g mouse on`,
+		`set -g default-terminal "tmux-256color"`,
+		"",
+	}, "\n")
 	script := strings.Join([]string{
 		"#!/usr/bin/env bash",
 		"set -e",
 		"export LANG=C.UTF-8",
 		"export LC_ALL=C.UTF-8",
+		fmt.Sprintf("printf %%s %s > %s", shellquote.Join(tmuxConf), shellquote.Join(tmuxConfigPath)),
+		fmt.Sprintf(": > %s", shellquote.Join(toolLogPath)),
 		fmt.Sprintf("if tmux has-session -t %s 2>/dev/null; then", tmuxSessionName),
 		fmt.Sprintf("  exec tmux -u attach-session -t %s", tmuxSessionName),
 		"fi",
-		fmt.Sprintf("exec tmux -u new-session -s %s %s", tmuxSessionName, shellquote.Join("bash", "-l", "-c", toolCmd)),
+		fmt.Sprintf("exec tmux -u -f %s new-session -s %s -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 %s \\; pipe-pane -o %s",
+			shellquote.Join(tmuxConfigPath),
+			tmuxSessionName,
+			shellquote.Join("bash", "-l", "-c", toolCmd),
+			shellquote.Join("cat >> "+toolLogPath),
+		),
 		"",
 	}, "\n")
 	writeCmd := fmt.Sprintf(
@@ -447,8 +472,11 @@ func (c *Client) prepareToolLaunchScript(ctx context.Context, sandbox *daytonasd
 }
 
 func (c *Client) attachTmuxSession(ctx context.Context, sandbox *daytonasdk.Sandbox) error {
-	cmd := fmt.Sprintf("export LANG=C.UTF-8 LC_ALL=C.UTF-8; exec tmux -u attach-session -t %s", tmuxSessionName)
-	return c.attachPTY(ctx, sandbox, cmd)
+	scriptPath, err := c.prepareAttachScript(ctx, sandbox)
+	if err != nil {
+		return err
+	}
+	return c.attachPTY(ctx, sandbox, "exec "+shellquote.Join("bash", scriptPath))
 }
 
 func (c *Client) attachInteractiveCommand(ctx context.Context, sandbox *daytonasdk.Sandbox, command []string) error {
@@ -459,6 +487,27 @@ func (c *Client) attachInteractiveCommand(ctx context.Context, sandbox *daytonas
 		remoteCmd = "exec " + shellquote.Join(command...)
 	}
 	return c.attachPTY(ctx, sandbox, remoteCmd)
+}
+
+func (c *Client) prepareAttachScript(ctx context.Context, sandbox *daytonasdk.Sandbox) (string, error) {
+	script := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -e",
+		"export LANG=C.UTF-8",
+		"export LC_ALL=C.UTF-8",
+		fmt.Sprintf("exec tmux -u attach-session -t %s", tmuxSessionName),
+		"",
+	}, "\n")
+	writeCmd := fmt.Sprintf(
+		"printf %%s %s > %s && chmod 755 %s",
+		shellquote.Join(script),
+		shellquote.Join(attachSessionPath),
+		shellquote.Join(attachSessionPath),
+	)
+	if err := c.runCommand(ctx, sandbox, writeCmd); err != nil {
+		return "", fmt.Errorf("failed to prepare tmux attach script: %w", err)
+	}
+	return attachSessionPath, nil
 }
 
 func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, remoteCmd string) error {
@@ -500,7 +549,7 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 
 	outputDone := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(os.Stdout, handle)
+		_ = copyPTYOutput(os.Stdout, handle, remoteCmd)
 		close(outputDone)
 	}()
 
@@ -510,6 +559,8 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 	time.Sleep(150 * time.Millisecond)
 
 	if remoteCmd != "" {
+		_ = handle.SendInput([]byte("stty -echo\n"))
+		time.Sleep(50 * time.Millisecond)
 		if err := handle.SendInput([]byte(remoteCmd + "\n")); err != nil {
 			return fmt.Errorf("failed to send command to PTY: %w", err)
 		}
@@ -547,6 +598,130 @@ func (c *Client) attachPTY(ctx context.Context, sandbox *daytonasdk.Sandbox, rem
 	return nil
 }
 
+func copyPTYOutput(dst io.Writer, src io.Reader, remoteCmd string) error {
+	if remoteCmd == "" {
+		_, err := io.Copy(dst, src)
+		return err
+	}
+
+	type readResult struct {
+		data []byte
+		err  error
+	}
+
+	results := make(chan readResult, 1)
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := src.Read(buf)
+			chunk := append([]byte(nil), buf[:n]...)
+			results <- readResult{data: chunk, err: err}
+			if err != nil {
+				close(results)
+				return
+			}
+		}
+	}()
+
+	var (
+		initial bytes.Buffer
+		timer   *time.Timer
+		timerCh <-chan time.Time
+	)
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+
+	flushInitial := func() error {
+		if initial.Len() == 0 {
+			return nil
+		}
+		cleaned := trimBootstrapOutput(initial.Bytes(), remoteCmd)
+		initial.Reset()
+		if len(cleaned) == 0 {
+			return nil
+		}
+		_, err := dst.Write(cleaned)
+		return err
+	}
+
+	buffering := true
+	for buffering {
+		select {
+		case result, ok := <-results:
+			if !ok {
+				if err := flushInitial(); err != nil {
+					return err
+				}
+				return nil
+			}
+			if len(result.data) > 0 {
+				initial.Write(result.data)
+				if timer == nil {
+					timer = time.NewTimer(500 * time.Millisecond)
+					timerCh = timer.C
+				}
+			}
+			if result.err != nil {
+				if err := flushInitial(); err != nil {
+					return err
+				}
+				if result.err == io.EOF {
+					return nil
+				}
+				return result.err
+			}
+		case <-timerCh:
+			if err := flushInitial(); err != nil {
+				return err
+			}
+			buffering = false
+		}
+	}
+
+	for result := range results {
+		if len(result.data) > 0 {
+			if _, err := dst.Write(result.data); err != nil {
+				return err
+			}
+		}
+		if result.err != nil {
+			if result.err == io.EOF {
+				return nil
+			}
+			return result.err
+		}
+	}
+
+	return nil
+}
+
+func trimBootstrapOutput(data []byte, remoteCmd string) []byte {
+	data = trimEchoedCommand(data, []byte("stty -echo"))
+	if remoteCmd != "" {
+		data = trimEchoedCommand(data, []byte(remoteCmd))
+	}
+	return data
+}
+
+func trimEchoedCommand(data, needle []byte) []byte {
+	idx := bytes.Index(data, needle)
+	if idx == -1 {
+		return data
+	}
+
+	end := idx + len(needle)
+	for end < len(data) && data[end] != '\r' && data[end] != '\n' {
+		end++
+	}
+	for end < len(data) && (data[end] == '\r' || data[end] == '\n') {
+		end++
+	}
+	return data[end:]
+}
+
 func (c *Client) isTmuxSessionAlive(ctx context.Context, sandbox *daytonasdk.Sandbox) bool {
 	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -555,6 +730,16 @@ func (c *Client) isTmuxSessionAlive(ctx context.Context, sandbox *daytonasdk.San
 		return false
 	}
 	return result.ExitCode == 0
+}
+
+func (c *Client) readToolLogTail(ctx context.Context, sandbox *daytonasdk.Sandbox) string {
+	checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	result, err := sandbox.Process.ExecuteCommand(checkCtx, fmt.Sprintf("tail -n 80 %s 2>/dev/null || true", shellquote.Join(toolLogPath)))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(result.Result)
 }
 
 func (c *Client) printPreviewLinks(ctx context.Context, sandbox *daytonasdk.Sandbox, ports []string) {
@@ -949,6 +1134,17 @@ func currentUsername() string {
 		return u
 	}
 	return "root"
+}
+
+func indentLines(s, prefix string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }
 
 func makeRawTerminal(fd uintptr) (func(), error) {

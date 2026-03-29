@@ -30,3 +30,42 @@ func TestPrepareDockerfileForDaytona(t *testing.T) {
 		t.Fatalf("expected TOOL_VERSION build arg to be inlined, got:\n%s", got)
 	}
 }
+
+func TestTrimBootstrapOutput(t *testing.T) {
+	t.Run("strips launch script echo", func(t *testing.T) {
+		input := strings.Join([]string{
+			"abc123% stty -echo",
+			"abc123% exec bash /tmp/.silo-start-tool-session.sh",
+			"\x1b[?1049hWelcome to Claude Code",
+		}, "\r")
+
+		got := string(trimBootstrapOutput([]byte(input), "exec bash /tmp/.silo-start-tool-session.sh"))
+
+		if strings.Contains(got, "stty -echo") {
+			t.Fatalf("expected stty command to be removed, got %q", got)
+		}
+		if strings.Contains(got, "exec bash /tmp/.silo-start-tool-session.sh") {
+			t.Fatalf("expected launch command to be removed, got %q", got)
+		}
+		if !strings.Contains(got, "Welcome to Claude Code") {
+			t.Fatalf("expected tool output to remain, got %q", got)
+		}
+	})
+
+	t.Run("strips reconnect attach echo", func(t *testing.T) {
+		input := strings.Join([]string{
+			"xyz789% stty -echo",
+			"xyz789% exec bash /tmp/.silo-attach-session.sh",
+			"\x1b[?1049hreconnected",
+		}, "\r")
+
+		got := string(trimBootstrapOutput([]byte(input), "exec bash /tmp/.silo-attach-session.sh"))
+
+		if strings.Contains(got, "/tmp/.silo-attach-session.sh") {
+			t.Fatalf("expected attach command to be removed, got %q", got)
+		}
+		if !strings.Contains(got, "reconnected") {
+			t.Fatalf("expected reconnect output to remain, got %q", got)
+		}
+	})
+}
