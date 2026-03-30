@@ -164,9 +164,11 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		})
 	}
 	for _, m := range opts.MountsRW {
-		// Check if path exists before mounting (use Lstat to not follow symlinks)
+		// Auto-create missing RW directories so tools can persist state.
 		if _, err := os.Lstat(m); err != nil {
-			continue // Skip non-existent paths
+			if err := os.MkdirAll(m, 0o755); err != nil {
+				continue
+			}
 		}
 		mounts = append(mounts, mount.Mount{
 			Type:   mount.TypeBind,

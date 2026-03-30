@@ -256,12 +256,22 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}
 	for _, m := range opts.MountsRW {
-		if _, err := os.Lstat(m); err != nil {
-			continue
-		}
-		info, err := os.Stat(m)
+		info, err := os.Lstat(m)
 		if err != nil {
-			continue
+			// Auto-create missing RW directories so tools can persist state.
+			if err := os.MkdirAll(m, 0o755); err != nil {
+				continue
+			}
+			info, err = os.Lstat(m)
+			if err != nil {
+				continue
+			}
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			info, err = os.Stat(m)
+			if err != nil {
+				continue
+			}
 		}
 		if info.IsDir() {
 			args = append(args, "--mount", fmt.Sprintf("type=bind,source=%s,target=%s", m, m))
