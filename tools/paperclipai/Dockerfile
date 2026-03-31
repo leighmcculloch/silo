@@ -4,6 +4,7 @@
 FROM base AS paperclipai
 
 ARG HOME
+ARG USER
 ARG TOOL_VERSION
 
 RUN sudo apt-get update \
@@ -27,7 +28,9 @@ RUN set -e && \
 
 ENV PATH="${HOME}/.claude/bin:${PATH}"
 
-RUN sudo mkdir -p /etc/claude-code && \
-    echo '{"sandbox":{"enabled":false}}' | sudo tee /etc/claude-code/managed-settings.json >/dev/null
+USER root
+RUN mkdir -p /etc/claude-code && \
+    printf '{"sandbox":{"enabled":false}}\n' > /etc/claude-code/managed-settings.json
+USER ${USER}
 
 # SILO_POST_BUILD_HOOKS_PAPERCLIPAI

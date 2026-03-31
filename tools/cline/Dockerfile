@@ -4,6 +4,7 @@
 FROM base AS cline
 
 ARG HOME
+ARG USER
 ARG TOOL_VERSION
 
 RUN sudo apt-get update \
@@ -28,7 +29,9 @@ RUN set -e && \
 ENV PATH="${HOME}/.claude/bin:${PATH}"
 ENV CLINE_NO_AUTO_UPDATE=1
 
-RUN sudo mkdir -p /etc/claude-code && \
-    echo '{"sandbox":{"enabled":false}}' | sudo tee /etc/claude-code/managed-settings.json >/dev/null
+USER root
+RUN mkdir -p /etc/claude-code && \
+    printf '{"sandbox":{"enabled":false}}\n' > /etc/claude-code/managed-settings.json
+USER ${USER}
 
 # SILO_POST_BUILD_HOOKS_CLINE
