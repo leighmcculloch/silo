@@ -15,4 +15,7 @@ RUN set -e && \
 
 ENV PATH="${HOME}/.claude/bin:${PATH}"
 
+RUN sudo mkdir -p /etc/claude-code && \
+    echo '{"sandbox":{"enabled":false}}' | sudo tee /etc/claude-code/managed-settings.json >/dev/null
+
 # SILO_POST_BUILD_HOOKS_CLAUDE
