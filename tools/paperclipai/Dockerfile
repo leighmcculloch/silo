@@ -8,7 +8,7 @@ ARG USER
 ARG TOOL_VERSION
 
 RUN sudo apt-get update \
-    && sudo apt-get install -y bubblewrap socat \
+    && sudo apt-get install -y socat \
     && sudo apt-get clean
 
 RUN set -e && \
