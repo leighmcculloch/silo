@@ -326,6 +326,15 @@ Use --local or --global to skip the prompt.`,
 	buildCmd.Flags().String("dir", "", "Build state directory")
 	rootCmd.AddCommand(buildCmd)
 
+	upgradeCmd := &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade silo to the latest version",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpgrade(stderr)
+		},
+	}
+	rootCmd.AddCommand(upgradeCmd)
+
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate("silo version {{.Version}}\n")
 
@@ -1068,4 +1077,48 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendType)
 	}
+}
+
+func runUpgrade(stderr io.Writer) error {
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot determine executable path: %w", err)
+	}
+	self, err = filepath.EvalSymlinks(self)
+	if err != nil {
+		return fmt.Errorf("cannot resolve executable path: %w", err)
+	}
+
+	// Detect Homebrew: the resolved binary lives under a Homebrew Cellar directory.
+	if strings.Contains(self, "/Cellar/") || strings.Contains(self, "/homebrew/") {
+		args := []string{"brew", "upgrade", "--fetch-HEAD", "leighmcculloch/silo/silo"}
+		cli.LogTo(stderr, "Running: %s", strings.Join(args, " "))
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	// Detect go install: the resolved binary lives under a GOPATH or GOBIN directory.
+	gopath := os.Getenv("GOPATH")
+	if gopath == "" {
+		home, _ := os.UserHomeDir()
+		gopath = filepath.Join(home, "go")
+	}
+	gobin := os.Getenv("GOBIN")
+	if gobin == "" {
+		gobin = filepath.Join(gopath, "bin")
+	}
+	if strings.HasPrefix(self, gopath) || strings.HasPrefix(self, gobin) {
+		args := []string{"go", "install", "github.com/leighmcculloch/silo@latest"}
+		cli.LogTo(stderr, "Running: %s", strings.Join(args, " "))
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+
+	return fmt.Errorf("cannot determine install method for %s (not Homebrew or go install)", self)
 }
