@@ -79,10 +79,46 @@ func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	rootCmd.SetErr(stderr)
 
 	if err := rootCmd.Execute(); err != nil {
-		cli.LogErrorTo(stderr, "%v", err)
+		if !hasQuietArg(args) {
+			cli.LogErrorTo(stderr, "%v", err)
+		}
 		return 1
 	}
 	return 0
+}
+
+func hasQuietArg(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if arg == "--quiet" || arg == "-q" {
+			return true
+		}
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg[1:], "q") {
+			return true
+		}
+	}
+	return false
+}
+
+func quietFlag(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	if f := cmd.Flags().Lookup("quiet"); f != nil {
+		if q, err := cmd.Flags().GetBool("quiet"); err == nil && q {
+			return true
+		}
+	}
+	if root := cmd.Root(); root != nil && root != cmd {
+		if f := root.Flags().Lookup("quiet"); f != nil {
+			if q, err := root.Flags().GetBool("quiet"); err == nil && q {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
@@ -135,6 +171,7 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
+	rootCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
 	rootCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 	addMountFlags(rootCmd)
 
@@ -161,6 +198,7 @@ Configuration is loaded from (in order, merged):
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
+		toolCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
 		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
 		toolCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 		addMountFlags(toolCmd)
@@ -399,6 +437,9 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
+	// Get quiet flag
+	quiet := quietFlag(cmd)
+
 	// Get tool-version flag
 	toolVersion, _ := cmd.Flags().GetString("tool-version")
 
@@ -416,6 +457,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		ForceBuild:    forceBuild,
 		NoCache:       noCache,
 		Verbose:       verbose,
+		Quiet:         quiet,
 		ToolVersion:   toolVersion,
 		ExtraMountsRW: extraMountsRW,
 		ExtraMountsRO: extraMountsRO,
@@ -451,6 +493,9 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Get verbose flag
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
+	// Get quiet flag
+	quiet := quietFlag(cmd)
+
 	// Get entrypoint flag
 	entrypoint, _ := cmd.Flags().GetString("entrypoint")
 
@@ -472,6 +517,7 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		ForceBuild:    forceBuild,
 		NoCache:       noCache,
 		Verbose:       verbose,
+		Quiet:         quiet,
 		Entrypoint:    entrypoint,
 		ToolVersion:   toolVersion,
 		ExtraMountsRW: extraMountsRW,
@@ -1073,7 +1119,7 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 	case "container":
 		return applecontainer.NewClient()
 	case "fly":
-		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region)
+		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region, os.Stderr)
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendType)
 	}

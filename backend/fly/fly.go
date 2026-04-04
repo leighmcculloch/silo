@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -24,10 +25,11 @@ import (
 type Client struct {
 	app    string
 	region string
+	logw   io.Writer
 }
 
 // NewClient creates a new Fly.io backend client.
-func NewClient(app, region string) (*Client, error) {
+func NewClient(app, region string, logw io.Writer) (*Client, error) {
 	if _, err := exec.LookPath("fly"); err != nil {
 		return nil, fmt.Errorf("fly CLI not found (install from https://fly.io/docs/flyctl/install/): %w", err)
 	}
@@ -43,7 +45,16 @@ func NewClient(app, region string) (*Client, error) {
 	if region == "" {
 		region = "syd"
 	}
-	return &Client{app: app, region: region}, nil
+	if logw == nil {
+		logw = os.Stderr
+	}
+	return &Client{app: app, region: region, logw: logw}, nil
+}
+
+func (c *Client) logf(format string, args ...any) {
+	if c.logw != nil {
+		fmt.Fprintf(c.logw, format, args...)
+	}
 }
 
 // Close is a no-op.
@@ -204,40 +215,40 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	imageRef := fmt.Sprintf("registry.fly.io/%s:%s", c.app, opts.Image)
 
 	// 1. Create machine with sleep infinity (keeps it running for sync + reconnect)
-	fmt.Fprintf(os.Stderr, "  → Creating machine...\n")
+	c.logf("  → Creating machine...\n")
 	machineID, err := c.createMachine(ctx, imageRef, opts)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "  → Machine created: %s\n", machineID)
+	c.logf("  → Machine created: %s\n", machineID)
 
 	// 2. Wait for machine to start
-	fmt.Fprintf(os.Stderr, "  → Waiting for machine to start...\n")
+	c.logf("  → Waiting for machine to start...\n")
 	if err := c.waitForState(ctx, machineID, "started", 5*time.Minute); err != nil {
 		c.destroyMachine(ctx, machineID)
 		return err
 	}
 
 	// 3. Wait for SSH to be ready
-	fmt.Fprintf(os.Stderr, "  → Waiting for SSH...\n")
+	c.logf("  → Waiting for SSH...\n")
 	if err := c.waitForSSH(ctx, machineID, 60*time.Second); err != nil {
 		c.destroyMachine(ctx, machineID)
 		return err
 	}
 
 	// 4. Start file sync (mutagen: initial sync + continuous bidirectional)
-	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
+	c.logf("  → Syncing files...\n")
 	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW, opts.CleanMountPaths)
 	if err != nil {
 		c.destroyMachine(ctx, machineID)
 		return fmt.Errorf("file sync failed: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "  → Files synced\n")
+	c.logf("  → Files synced\n")
 
 	// 5. Run pre-run hooks (skip mount wait since files are already synced)
 	hooks := filterMountWait(opts.PreRunHooks)
 	if len(hooks) > 0 {
-		fmt.Fprintf(os.Stderr, "  → Running pre-run hooks...\n")
+		c.logf("  → Running pre-run hooks...\n")
 		hookScript := strings.Join(hooks, " && ")
 		if err := c.sshExec(ctx, machineID, hookScript); err != nil {
 			stopSync()
@@ -247,7 +258,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// 6. Connect interactively with the tool command (via tmux)
-	fmt.Fprintf(os.Stderr, "  → Connecting...\n")
+	c.logf("  → Connecting...\n")
 	connectErr := c.connectInteractive(ctx, machineID, opts)
 
 	// 7. Check if the tmux session is still running (user detached vs tool exited).
@@ -256,16 +267,16 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	tmuxAlive := c.isTmuxSessionAlive(ctx, machineID)
 
 	// 8. Stop continuous sync (flushes final changes)
-	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
+	c.logf("  → Syncing final changes...\n")
 	stopSync()
 
 	if tmuxAlive {
-		fmt.Fprintf(os.Stderr, "  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, opts.Name)
+		c.logf("  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, opts.Name)
 		return nil
 	}
 
 	// Tool exited, destroy the machine
-	fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
+	c.logf("  → Destroying machine...\n")
 	destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	c.destroyMachine(destroyCtx, machineID)
@@ -297,15 +308,15 @@ func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOpt
 	}
 
 	// Re-sync files (don't clean mount paths — tool is already running)
-	fmt.Fprintf(os.Stderr, "  → Syncing files...\n")
+	c.logf("  → Syncing files...\n")
 	stopSync, err := c.startMutagenSync(ctx, machineID, opts.MountsRO, opts.MountsRW, nil)
 	if err != nil {
 		return fmt.Errorf("file sync failed: %w", err)
 	}
-	fmt.Fprintf(os.Stderr, "  → Files synced\n")
+	c.logf("  → Files synced\n")
 
 	// Reattach to the tmux session
-	fmt.Fprintf(os.Stderr, "  → Reconnecting...\n")
+	c.logf("  → Reconnecting...\n")
 	user := currentUsername()
 	if user == "" {
 		user = "root"
@@ -317,16 +328,16 @@ func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOpt
 	tmuxAlive := c.isTmuxSessionAlive(ctx, machineID)
 
 	// Stop sync (flush final changes)
-	fmt.Fprintf(os.Stderr, "  → Syncing final changes...\n")
+	c.logf("  → Syncing final changes...\n")
 	stopSync()
 
 	if tmuxAlive {
-		fmt.Fprintf(os.Stderr, "  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, name)
+		c.logf("  → Detached. Machine %s still running — use 'silo reconnect %s --backend fly' to reattach.\n", machineID, name)
 		return nil
 	}
 
 	// Tool exited, destroy the machine
-	fmt.Fprintf(os.Stderr, "  → Destroying machine...\n")
+	c.logf("  → Destroying machine...\n")
 	destroyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	c.destroyMachine(destroyCtx, machineID)
@@ -759,7 +770,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		return nil, fmt.Errorf("mutagen is required for the fly backend (install from https://mutagen.io): %w", err)
 	}
 
-	progress := newSyncProgress(os.Stderr)
+	progress := newSyncProgress(c.logw)
 
 	// Create SSH tunnel for mutagen (fly proxy + issued certs + ControlMaster)
 	progress.setPhase("Establishing SSH tunnel...")
@@ -896,7 +907,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 				}
 				localPath = target
 			} else {
-				fmt.Fprintf(os.Stderr, "    mutagen: warning: cannot resolve %s: %v\n", m.path, err)
+				c.logf("    mutagen: warning: cannot resolve %s: %v\n", m.path, err)
 			}
 		}
 

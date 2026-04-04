@@ -116,6 +116,31 @@ func TestToolMountFlags(t *testing.T) {
 	}
 }
 
+func TestQuietFlags(t *testing.T) {
+	rootCmd := newRootCmd(io.Discard, io.Discard)
+
+	rootQuiet := rootCmd.Flags().Lookup("quiet")
+	if rootQuiet == nil {
+		t.Fatal("expected --quiet flag on root command")
+	}
+	if rootQuiet.Shorthand != "q" {
+		t.Fatalf("expected root --quiet shorthand to be -q, got %q", rootQuiet.Shorthand)
+	}
+
+	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
+	if err != nil {
+		t.Fatalf("failed to find claude command: %v", err)
+	}
+
+	toolQuiet := claudeCmd.Flags().Lookup("quiet")
+	if toolQuiet == nil {
+		t.Fatal("expected --quiet flag on claude command")
+	}
+	if toolQuiet.Shorthand != "q" {
+		t.Fatalf("expected claude --quiet shorthand to be -q, got %q", toolQuiet.Shorthand)
+	}
+}
+
 func TestConfigShowCommand(t *testing.T) {
 	exitCode, stdout, _ := testcli.Main(t, []string{"config", "show"}, nil, mainFunc)
 
@@ -322,6 +347,19 @@ func TestInvalidTool(t *testing.T) {
 
 	if !strings.Contains(stderr, "unknown command") {
 		t.Errorf("expected 'unknown command' error, got: %s", stderr)
+	}
+}
+
+func TestQuietSuppressesTopLevelErrors(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	exitCode := runMain([]string{"--quiet", "invalid-tool"}, nil, &stdout, &stderr)
+
+	if exitCode == 0 {
+		t.Fatal("expected failure for invalid tool")
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr output with --quiet, got: %s", stderr.String())
 	}
 }
 

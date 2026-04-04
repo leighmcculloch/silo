@@ -37,6 +37,7 @@ type Options struct {
 	ForceBuild    bool
 	NoCache       bool
 	Verbose       bool
+	Quiet         bool
 	Entrypoint    string   // run a custom command instead of the tool
 	ToolVersion   string   // pin a specific tool version (overrides cached version)
 	ExtraMountsRO []string // additional read-only mounts from CLI flags
@@ -50,6 +51,11 @@ func Tool(opts Options) error {
 	tool := opts.ToolDef.Name
 	cfg := opts.Config
 	stderr := opts.Stderr
+	logStderr := stderr
+	if opts.Quiet {
+		logStderr = io.Discard
+	}
+	verbose := opts.Verbose && !opts.Quiet
 
 	// Create log file
 	logDir := filepath.Join(config.XDGStateHomeDir(), "silo", "logs")
@@ -80,8 +86,8 @@ func Tool(opts Options) error {
 
 	// Create progress bar (only used when not verbose)
 	var progress *cli.Progress
-	if !opts.Verbose {
-		progress = cli.NewProgress(stderr, progressSections)
+	if !opts.Verbose && !opts.Quiet {
+		progress = cli.NewProgress(logStderr, progressSections)
 		progress.Start()
 	}
 
@@ -98,8 +104,8 @@ func Tool(opts Options) error {
 
 	// Helper to log only in verbose mode
 	logSection := func(format string, args ...any) {
-		if opts.Verbose {
-			cli.LogTo(stderr, format, args...)
+		if verbose {
+			cli.LogTo(logStderr, format, args...)
 		}
 		if logFile != nil {
 			fmt.Fprintf(logFile, "==> "+format+"\n", args...)
@@ -118,7 +124,7 @@ func Tool(opts Options) error {
 	if progress != nil {
 		progress.SetSection("Backend")
 	}
-	backendClient, err := CreateBackend(cfg, stderr, opts.Verbose)
+	backendClient, err := CreateBackend(cfg, logStderr, verbose)
 	if err != nil {
 		if progress != nil {
 			progress.Complete()
@@ -295,8 +301,8 @@ func Tool(opts Options) error {
 			toolPostBuildHooks: toolPostBuildHooks,
 			repoPostBuildHooks: repoPostBuildHooks,
 			matchedRepoNames:   matchedRepoNames,
-			stderr:             stderr,
-			verbose:            opts.Verbose,
+			stderr:             logStderr,
+			verbose:            verbose,
 			progress:           progress,
 			logFile:            logFile,
 		})
@@ -316,8 +322,8 @@ func Tool(opts Options) error {
 			toolPostBuildHooks: toolPostBuildHooks,
 			repoPostBuildHooks: repoPostBuildHooks,
 			matchedRepoNames:   matchedRepoNames,
-			stderr:             stderr,
-			verbose:            opts.Verbose,
+			stderr:             logStderr,
+			verbose:            verbose,
 			progress:           progress,
 			logFile:            logFile,
 		}); err != nil {
@@ -403,7 +409,7 @@ func Tool(opts Options) error {
 		progress.SetSection("Git identity")
 	}
 	logRunConfig(logRunConfigOptions{
-		stderr:           stderr,
+		stderr:           logStderr,
 		tool:             tool,
 		mountsRO:         mountsRO,
 		mountsRW:         mountsRW,
@@ -416,7 +422,7 @@ func Tool(opts Options) error {
 		ports:            ports,
 		gitName:          gitName,
 		gitEmail:         gitEmail,
-		verbose:          opts.Verbose,
+		verbose:          verbose,
 		progress:         progress,
 		logFile:          logFile,
 	})
@@ -435,7 +441,9 @@ func Tool(opts Options) error {
 	}
 
 	// Always print the container name so users know what to pass to reconnect/shell/rm.
-	cli.LogTo(stderr, "Container: %s", containerName)
+	if !opts.Quiet {
+		cli.LogTo(logStderr, "Container: %s", containerName)
+	}
 
 	// Run the container/VM
 	command := opts.ToolDef.Command(home)
@@ -569,7 +577,7 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 		if verbose {
 			cli.LogTo(stderr, "Using fly.io machines backend...")
 		}
-		client, err := flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region)
+		client, err := flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region, stderr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize fly backend: %w", err)
 		}
