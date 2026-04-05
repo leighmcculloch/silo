@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend" // parent package
@@ -149,6 +150,15 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 // Run runs a container with the given options
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
+
 	// Convert mounts
 	var mounts []mount.Mount
 	for _, m := range opts.MountsRO {
@@ -228,16 +238,17 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	}
 
 	// Create container configuration
+	attachStdin := !opts.NoTTY || opts.Stdin != nil
 	config := &container.Config{
 		Image:        opts.Image,
 		WorkingDir:   opts.WorkDir,
 		Env:          opts.Env,
 		Entrypoint:   entrypoint,
 		Cmd:          cmd,
-		Tty:          true,
-		OpenStdin:    true,
-		StdinOnce:    true,
-		AttachStdin:  true,
+		Tty:          !opts.NoTTY,
+		OpenStdin:    attachStdin,
+		StdinOnce:    attachStdin,
+		AttachStdin:  attachStdin,
 		AttachStdout: true,
 		AttachStderr: true,
 		ExposedPorts: exposedPorts,
@@ -263,7 +274,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	// Attach to the container
 	attachResp, err := c.cli.ContainerAttach(ctx, resp.ID, container.AttachOptions{
 		Stream: true,
-		Stdin:  true,
+		Stdin:  attachStdin,
 		Stdout: true,
 		Stderr: true,
 	})
@@ -280,20 +291,22 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
-	// Set terminal to raw mode and handle resizing
-	fd := os.Stdin.Fd()
-	if term.IsTerminal(fd) {
-		oldState, err := term.MakeRaw(fd)
-		if err != nil {
-			return fmt.Errorf("failed to set raw terminal: %w", err)
+	if !opts.NoTTY {
+		// Set terminal to raw mode and handle resizing
+		fd := os.Stdin.Fd()
+		if term.IsTerminal(fd) {
+			oldState, err := term.MakeRaw(fd)
+			if err != nil {
+				return fmt.Errorf("failed to set raw terminal: %w", err)
+			}
+			defer term.RestoreTerminal(fd, oldState)
+
+			// Set initial terminal size
+			c.resizeContainerTTY(ctx, resp.ID, fd)
+
+			// Handle terminal resize signals
+			go c.monitorTTYSize(ctx, resp.ID, fd)
 		}
-		defer term.RestoreTerminal(fd, oldState)
-
-		// Set initial terminal size
-		c.resizeContainerTTY(ctx, resp.ID, fd)
-
-		// Handle terminal resize signals
-		go c.monitorTTYSize(ctx, resp.ID, fd)
 	}
 
 	// Forward SIGINT/SIGTERM to stop the container
@@ -308,55 +321,65 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 		}
 	}()
 
-	// Copy stdin to container, intercepting triple Ctrl-C to kill
-	// Use a context to stop the goroutine when the container exits
-	stdinCtx, stdinCancel := context.WithCancel(ctx)
-	defer stdinCancel()
-	go func() {
-		var firstCtrlC time.Time
-		var ctrlCCount int
-		buf := make([]byte, 256)
-		for {
-			// Check if we should stop
-			select {
-			case <-stdinCtx.Done():
-				return
-			default:
-			}
+	if opts.NoTTY {
+		if opts.Stdin != nil {
+			go func() {
+				_, _ = io.Copy(attachResp.Conn, opts.Stdin)
+				_ = attachResp.CloseWrite()
+			}()
+		}
+		_, _ = stdcopy.StdCopy(stdout, stderr, attachResp.Reader)
+	} else {
+		// Copy stdin to container, intercepting triple Ctrl-C to kill
+		// Use a context to stop the goroutine when the container exits
+		stdinCtx, stdinCancel := context.WithCancel(ctx)
+		defer stdinCancel()
+		go func() {
+			var firstCtrlC time.Time
+			var ctrlCCount int
+			buf := make([]byte, 256)
+			for {
+				// Check if we should stop
+				select {
+				case <-stdinCtx.Done():
+					return
+				default:
+				}
 
-			n, err := os.Stdin.Read(buf)
-			if n > 0 {
-				// Check for Ctrl-C (0x03)
-				for i := 0; i < n; i++ {
-					if buf[i] == 0x03 {
-						now := time.Now()
-						if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
-							ctrlCCount++
-							if ctrlCCount >= 3 {
-								// Triple Ctrl-C - kill container
-								c.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
-								return
+				n, err := os.Stdin.Read(buf)
+				if n > 0 {
+					// Check for Ctrl-C (0x03)
+					for i := 0; i < n; i++ {
+						if buf[i] == 0x03 {
+							now := time.Now()
+							if ctrlCCount > 0 && now.Sub(firstCtrlC) < time.Second {
+								ctrlCCount++
+								if ctrlCCount >= 3 {
+									// Triple Ctrl-C - kill container
+									c.cli.ContainerKill(ctx, resp.ID, "SIGKILL")
+									return
+								}
+							} else {
+								firstCtrlC = now
+								ctrlCCount = 1
 							}
-						} else {
-							firstCtrlC = now
-							ctrlCCount = 1
 						}
 					}
+					attachResp.Conn.Write(buf[:n])
 				}
-				attachResp.Conn.Write(buf[:n])
+				if err != nil {
+					break
+				}
 			}
-			if err != nil {
-				break
-			}
-		}
-		attachResp.CloseWrite()
-	}()
+			attachResp.CloseWrite()
+		}()
 
-	// Copy container output to stdout
-	io.Copy(os.Stdout, attachResp.Reader)
+		// Copy container output to stdout
+		_, _ = io.Copy(stdout, attachResp.Reader)
 
-	// Container output is done, cancel stdin copying
-	stdinCancel()
+		// Container output is done, cancel stdin copying
+		stdinCancel()
+	}
 
 	// Wait for the container to finish
 	select {

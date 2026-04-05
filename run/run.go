@@ -38,10 +38,12 @@ type Options struct {
 	NoCache       bool
 	Verbose       bool
 	Quiet         bool
+	NoTTY         bool
 	Entrypoint    string   // run a custom command instead of the tool
 	ToolVersion   string   // pin a specific tool version (overrides cached version)
 	ExtraMountsRO []string // additional read-only mounts from CLI flags
 	ExtraMountsRW []string // additional read-write mounts from CLI flags
+	Stdin         io.Reader
 	Stdout        io.Writer
 	Stderr        io.Writer
 }
@@ -51,11 +53,16 @@ func Tool(opts Options) error {
 	tool := opts.ToolDef.Name
 	cfg := opts.Config
 	stderr := opts.Stderr
+	suppressUI := opts.Quiet || opts.NoTTY
 	logStderr := stderr
-	if opts.Quiet {
+	if suppressUI {
 		logStderr = io.Discard
 	}
-	verbose := opts.Verbose && !opts.Quiet
+	verbose := opts.Verbose && !suppressUI
+
+	if opts.NoTTY && cfg.Backend == "fly" {
+		return fmt.Errorf("--no-tty is not supported with the fly backend")
+	}
 
 	// Create log file
 	logDir := filepath.Join(config.XDGStateHomeDir(), "silo", "logs")
@@ -86,7 +93,7 @@ func Tool(opts Options) error {
 
 	// Create progress bar (only used when not verbose)
 	var progress *cli.Progress
-	if !opts.Verbose && !opts.Quiet {
+	if !opts.Verbose && !suppressUI {
 		progress = cli.NewProgress(logStderr, progressSections)
 		progress.Start()
 	}
@@ -441,7 +448,7 @@ func Tool(opts Options) error {
 	}
 
 	// Always print the container name so users know what to pass to reconnect/shell/rm.
-	if !opts.Quiet {
+	if !suppressUI {
 		cli.LogTo(logStderr, "Container: %s", containerName)
 	}
 
@@ -477,6 +484,10 @@ func Tool(opts Options) error {
 		PreRunHooks:     preRunHooks,
 		Ports:           ports,
 		CleanMountPaths: cleanMountPaths,
+		NoTTY:           opts.NoTTY,
+		Stdin:           opts.Stdin,
+		Stdout:          opts.Stdout,
+		Stderr:          opts.Stderr,
 	})
 
 	if err != nil {

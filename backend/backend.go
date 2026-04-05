@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"io"
 )
 
 // Backend defines the interface for container/VM backends
@@ -117,4 +118,12 @@ type RunOptions struct {
 	// before mounts are set up, to prevent image defaults from conflicting
 	// with host configs provided via mounts.
 	CleanMountPaths []string
+
+	// NoTTY disables terminal allocation and interactive terminal handling.
+	NoTTY bool
+
+	// Stdin, Stdout, and Stderr are the streams used for the tool process.
+	Stdin  io.Reader
+	Stdout io.Writer
+	Stderr io.Writer
 }

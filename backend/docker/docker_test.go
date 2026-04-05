@@ -35,6 +35,7 @@ func TestRunOptions(t *testing.T) {
 		MountsRW: []string{"/host/rw:/container/rw"},
 		Env:      []string{"KEY=value"},
 		Args:     []string{"arg1", "arg2"},
+		NoTTY:    true,
 	}
 
 	if opts.Image != "test-image" {
@@ -57,5 +58,8 @@ func TestRunOptions(t *testing.T) {
 	}
 	if len(opts.Args) != 2 {
 		t.Error("unexpected args")
+	}
+	if !opts.NoTTY {
+		t.Error("unexpected no_tty")
 	}
 }

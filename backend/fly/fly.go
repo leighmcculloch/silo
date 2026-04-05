@@ -212,6 +212,10 @@ func (c *Client) cleanupDeployMachines(ctx context.Context) {
 
 // Run creates a Fly machine, syncs files, and connects interactively.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
+	if opts.NoTTY {
+		return fmt.Errorf("--no-tty is not supported with the fly backend")
+	}
+
 	imageRef := fmt.Sprintf("registry.fly.io/%s:%s", c.app, opts.Image)
 
 	// 1. Create machine with sleep infinity (keeps it running for sync + reconnect)

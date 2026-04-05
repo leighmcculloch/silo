@@ -178,6 +178,15 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 
 // Run runs a container using the container CLI.
 func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
+	stdout := opts.Stdout
+	if stdout == nil {
+		stdout = io.Discard
+	}
+	stderr := opts.Stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
+
 	// Append Docker daemon startup hook so mount-wait and other hooks run first.
 	// dockerd is already backgrounded (& in the hook) so it doesn't block.
 	opts.PreRunHooks = append(opts.PreRunHooks, dockerStartHook)
@@ -212,7 +221,9 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 	args := []string{"run",
 		"--rm",
 		"-i",
-		"-t",
+	}
+	if !opts.NoTTY {
+		args = append(args, "-t")
 	}
 	args = append(args, resourceArgs()...)
 
@@ -364,6 +375,36 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	cmd := exec.Command("container", args...)
 
+	if opts.NoTTY {
+		cmd.Stdin = opts.Stdin
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		defer signal.Stop(sigCh)
+
+		go func() {
+			select {
+			case <-sigCh:
+			case <-ctx.Done():
+			}
+			if opts.Name != "" {
+				exec.Command("container", "rm", "-f", opts.Name).Run()
+			}
+		}()
+
+		waitErr := cmd.Run()
+		if waitErr != nil {
+			if exitErr, ok := waitErr.(*exec.ExitError); ok {
+				return fmt.Errorf("container exited with status %d", exitErr.ExitCode())
+			}
+			return fmt.Errorf("container error: %w", waitErr)
+		}
+
+		return nil
+	}
+
 	// Save terminal state and ensure it's restored on exit
 	fd := int(os.Stdin.Fd())
 	oldState, _ := unix.IoctlGetTermios(fd, unix.TIOCGETA)
@@ -431,7 +472,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	// Copy container output to stdout
 	go func() {
-		io.Copy(os.Stdout, ptmx)
+		io.Copy(stdout, ptmx)
 	}()
 
 	// Copy stdin to container, intercepting triple Ctrl-C to kill

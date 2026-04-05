@@ -102,18 +102,18 @@ func hasQuietArg(args []string) bool {
 	return false
 }
 
-func quietFlag(cmd *cobra.Command) bool {
+func boolFlag(cmd *cobra.Command, name string) bool {
 	if cmd == nil {
 		return false
 	}
-	if f := cmd.Flags().Lookup("quiet"); f != nil {
-		if q, err := cmd.Flags().GetBool("quiet"); err == nil && q {
+	if f := cmd.Flags().Lookup(name); f != nil {
+		if q, err := cmd.Flags().GetBool(name); err == nil && q {
 			return true
 		}
 	}
 	if root := cmd.Root(); root != nil && root != cmd {
-		if f := root.Flags().Lookup("quiet"); f != nil {
-			if q, err := root.Flags().GetBool("quiet"); err == nil && q {
+		if f := root.Flags().Lookup(name); f != nil {
+			if q, err := root.Flags().GetBool(name); err == nil && q {
 				return true
 			}
 		}
@@ -172,6 +172,7 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 	rootCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
+	rootCmd.Flags().Bool("no-tty", false, "Run without allocating a TTY; suitable for scripts and JSON output")
 	rootCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 	addMountFlags(rootCmd)
 
@@ -199,6 +200,7 @@ Configuration is loaded from (in order, merged):
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
 		toolCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
+		toolCmd.Flags().Bool("no-tty", false, "Run without allocating a TTY; suitable for scripts and JSON output")
 		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
 		toolCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
 		addMountFlags(toolCmd)
@@ -382,6 +384,7 @@ Use --local or --global to skip the prompt.`,
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
+	noTTY := boolFlag(cmd, "no-tty")
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
@@ -402,6 +405,9 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	}
 	// Interactive selection as last resort
 	if tool == "" {
+		if noTTY {
+			return fmt.Errorf("--no-tty requires an explicit tool or configured default tool")
+		}
 		tool, err = selectTool()
 		if err != nil {
 			return err
@@ -438,7 +444,10 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	// Get quiet flag
-	quiet := quietFlag(cmd)
+	quiet := boolFlag(cmd, "quiet")
+
+	// Get no-tty flag
+	noTTY = boolFlag(cmd, "no-tty")
 
 	// Get tool-version flag
 	toolVersion, _ := cmd.Flags().GetString("tool-version")
@@ -458,9 +467,11 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 		NoCache:       noCache,
 		Verbose:       verbose,
 		Quiet:         quiet,
+		NoTTY:         noTTY,
 		ToolVersion:   toolVersion,
 		ExtraMountsRW: extraMountsRW,
 		ExtraMountsRO: extraMountsRO,
+		Stdin:         cmd.InOrStdin(),
 		Stdout:        stdout,
 		Stderr:        stderr,
 	})
@@ -494,7 +505,10 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	// Get quiet flag
-	quiet := quietFlag(cmd)
+	quiet := boolFlag(cmd, "quiet")
+
+	// Get no-tty flag
+	noTTY := boolFlag(cmd, "no-tty")
 
 	// Get entrypoint flag
 	entrypoint, _ := cmd.Flags().GetString("entrypoint")
@@ -518,10 +532,12 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		NoCache:       noCache,
 		Verbose:       verbose,
 		Quiet:         quiet,
+		NoTTY:         noTTY,
 		Entrypoint:    entrypoint,
 		ToolVersion:   toolVersion,
 		ExtraMountsRW: extraMountsRW,
 		ExtraMountsRO: extraMountsRO,
+		Stdin:         cmd.InOrStdin(),
 		Stdout:        stdout,
 		Stderr:        stderr,
 	})

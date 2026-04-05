@@ -141,6 +141,25 @@ func TestQuietFlags(t *testing.T) {
 	}
 }
 
+func TestNoTTYFlags(t *testing.T) {
+	rootCmd := newRootCmd(io.Discard, io.Discard)
+
+	rootNoTTY := rootCmd.Flags().Lookup("no-tty")
+	if rootNoTTY == nil {
+		t.Fatal("expected --no-tty flag on root command")
+	}
+
+	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
+	if err != nil {
+		t.Fatalf("failed to find claude command: %v", err)
+	}
+
+	toolNoTTY := claudeCmd.Flags().Lookup("no-tty")
+	if toolNoTTY == nil {
+		t.Fatal("expected --no-tty flag on claude command")
+	}
+}
+
 func TestConfigShowCommand(t *testing.T) {
 	exitCode, stdout, _ := testcli.Main(t, []string{"config", "show"}, nil, mainFunc)
 
