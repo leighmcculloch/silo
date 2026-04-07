@@ -14,6 +14,8 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
+	"github.com/mattn/go-isatty"
+
 	"github.com/leighmcculloch/silo/backend"
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
@@ -79,7 +81,7 @@ func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	rootCmd.SetErr(stderr)
 
 	if err := rootCmd.Execute(); err != nil {
-		if !hasQuietArg(args) {
+		if !hasQuietArg(args) && isStdoutTTY(stderr) {
 			cli.LogErrorTo(stderr, "%v", err)
 		}
 		return 1
@@ -98,6 +100,13 @@ func hasQuietArg(args []string) bool {
 		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg[1:], "q") {
 			return true
 		}
+	}
+	return false
+}
+
+func isStdoutTTY(stdout io.Writer) bool {
+	if f, ok := stdout.(*os.File); ok {
+		return isatty.IsTerminal(f.Fd())
 	}
 	return false
 }
@@ -384,7 +393,7 @@ Use --local or --global to skip the prompt.`,
 func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error {
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
-	noTTY := boolFlag(cmd, "no-tty")
+	noTTY := boolFlag(cmd, "no-tty") || !isStdoutTTY(stdout)
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
@@ -449,6 +458,12 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Get no-tty flag
 	noTTY = boolFlag(cmd, "no-tty")
 
+	// Auto-detect non-interactive environment
+	if !noTTY && !isStdoutTTY(stdout) {
+		noTTY = true
+		quiet = true
+	}
+
 	// Get tool-version flag
 	toolVersion, _ := cmd.Flags().GetString("tool-version")
 
@@ -509,6 +524,12 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 
 	// Get no-tty flag
 	noTTY := boolFlag(cmd, "no-tty")
+
+	// Auto-detect non-interactive environment
+	if !noTTY && !isStdoutTTY(stdout) {
+		noTTY = true
+		quiet = true
+	}
 
 	// Get entrypoint flag
 	entrypoint, _ := cmd.Flags().GetString("entrypoint")
