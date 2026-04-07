@@ -20,6 +20,7 @@ import (
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
+	freestylebackend "github.com/leighmcculloch/silo/backend/freestyle"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/git"
@@ -593,8 +594,17 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 			return nil, fmt.Errorf("failed to initialize fly backend: %w", err)
 		}
 		return client, nil
+	case "freestyle":
+		if verbose {
+			cli.LogTo(stderr, "Using freestyle.sh VMs backend...")
+		}
+		client, err := freestylebackend.NewClient(cfg.Backends.Freestyle.Token, stderr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize freestyle backend: %w", err)
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly, freestyle)", backendType)
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
+	freestylebackend "github.com/leighmcculloch/silo/backend/freestyle"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
@@ -841,7 +842,7 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "freestyle"}
 	}
 
 	for _, backendType := range backends {
@@ -902,7 +903,7 @@ func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "freestyle"}
 	}
 
 	for _, backendType := range backends {
@@ -965,7 +966,7 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "freestyle"}
 	}
 
 	hasContainers := false
@@ -1136,6 +1137,8 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 		return applecontainer.NewClient()
 	case "fly":
 		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region, os.Stderr)
+	case "freestyle":
+		return freestylebackend.NewClient(cfg.Backends.Freestyle.Token, os.Stderr)
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendType)
 	}

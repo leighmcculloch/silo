@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in auto-approve mode.
+Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or Freestyle.sh VMs (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -84,6 +84,7 @@ brew upgrade --fetch-head leighmcculloch/silo/silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
 - **Fly.io CLI (`fly`)**: Required for the `fly` backend (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/))
+- **Freestyle.sh API token**: Required for the `freestyle` backend (get one at [dash.freestyle.sh](https://dash.freestyle.sh))
 
 ## Usage
 
@@ -109,15 +110,16 @@ silo opencode -- --version
 
 ### Choosing a Backend
 
-Silo supports three backends and auto-detects which one to use if none specified:
+Silo supports four backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 | Docker | `--backend docker` | Uses Docker containers |
 | Fly | `--backend fly` | Remote VMs on Fly.io |
+| Freestyle | `--backend freestyle` | Remote VMs on Freestyle.sh |
 
-**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` backend must be selected explicitly.
+**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` and `freestyle` backends must be selected explicitly.
 
 ```bash
 # Use auto-detected backend (container if available, else docker)
@@ -132,6 +134,9 @@ silo --backend container claude
 # Explicitly use Fly.io backend
 silo --backend fly claude
 
+# Explicitly use Freestyle.sh backend
+silo --backend freestyle claude
+
 # Force rebuild of the container image (ignore cache)
 silo --force-build claude
 ```
@@ -140,16 +145,16 @@ You can also set the backend in your configuration file.
 
 #### Backend Comparison
 
-| Feature | Docker | Apple Container | Fly |
-|---------|--------|-----------------|-----|
-| Platform | Any | macOS only | Any |
-| Isolation | Shared Linux VM | Per-container VM | Remote VM |
-| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine |
-| File mounts | Direct | Staged + symlinks | Synced (mutagen) |
-| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation |
-| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults |
-| API | Docker SDK | CLI subprocess | Fly CLI subprocess |
-| Reconnect | No | No | Yes (`silo reconnect`) |
+| Feature | Docker | Apple Container | Fly | Freestyle |
+|---------|--------|-----------------|-----|-----------|
+| Platform | Any | macOS only | Any | Any |
+| Isolation | Shared Linux VM | Per-container VM | Remote VM | Remote VM |
+| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine | N/A |
+| File mounts | Direct | Staged + symlinks | Synced (mutagen) | Synced (mutagen) |
+| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation | Remote VM isolation |
+| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults | Freestyle defaults |
+| API | Docker SDK | CLI subprocess | Fly CLI subprocess | REST API + SSH |
+| Reconnect | No | No | Yes (`silo reconnect`) | Yes (`silo reconnect`) |
 
 
 #### Why Apple Containers on macOS?
@@ -203,6 +208,42 @@ Since Fly machines don't support bind mounts, files are continuously synced usin
 
 Mutagen syncs only deltas, so it's efficient even for large directories. If your connection drops, the remote machine keeps working with the files it had. When you reconnect, mutagen picks up where it left off, syncing only what changed on either side.
 
+#### Freestyle.sh Backend
+
+The Freestyle backend runs your silo environment on [Freestyle.sh](https://freestyle.sh) VMs. VMs start in under 2 seconds and support live forking, so rebuilds reuse a template VM.
+
+**Setup:**
+
+1. Get an API token at [dash.freestyle.sh](https://dash.freestyle.sh)
+2. Install [mutagen](https://mutagen.io) for file sync: `brew install mutagen-io/mutagen/mutagen`
+3. Set your token:
+   ```bash
+   export FREESTYLE_TOKEN=<your-token>
+   ```
+   Or configure it in silo.jsonc:
+   ```jsonc
+   // ~/.config/silo/silo.jsonc
+   {
+     "backend": "freestyle",
+     "backends": {
+       "freestyle": { "token": "<your-token>" }
+     }
+   }
+   ```
+
+**How it works:**
+
+- **Build**: A Freestyle VM is created and Dockerfile commands are executed to set up the environment. The VM is stopped and kept as a template.
+- **Run**: The template VM is forked to create a working copy, files are synced using [mutagen](https://mutagen.io), then an interactive SSH session connects you to the tool.
+- **Exit**: Final changes are flushed back, then the work VM is destroyed. The template VM is preserved for future runs.
+- **Reconnect**: If your connection drops, use `silo reconnect <name>` to reconnect to the still-running VM.
+
+**Configuration:**
+
+| Setting | Config Key | Env Var | Default | Description |
+|---------|-----------|---------|---------|-------------|
+| Token | `backends.freestyle.token` | `FREESTYLE_TOKEN` | *(required)* | API token for Freestyle.sh |
+
 Requires `mutagen` installed locally (`brew install mutagen-io/mutagen/mutagen`).
 
 ## Configuration
@@ -236,7 +277,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
+  // Backend: "docker", "container", "fly", or "freestyle" (default: container if installed, else docker)
   "backend": "container",
 
   // Default tool: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", or "vibe" (if not set, interactive prompt is shown)
@@ -247,6 +288,9 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   //   "fly": {
   //     "app": "my-silo-app",  // required for fly backend
   //     "region": "syd"        // default: "syd"
+  //   },
+  //   "freestyle": {
+  //     "token": ""            // optional: uses FREESTYLE_TOKEN env var if not set
   //   }
   // },
 
@@ -490,16 +534,18 @@ Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp
 - **Triple Ctrl-C**: Press Ctrl-C three times quickly to force-kill a stuck container
 - **Clean exit**: Terminal state is restored on exit
 
-### Reconnecting (Fly Backend)
+### Reconnecting (Fly/Freestyle Backend)
 
-If your SSH connection drops while using the Fly backend, the machine keeps running. You can reconnect to it:
+If your SSH connection drops while using the Fly or Freestyle backend, the machine keeps running. You can reconnect to it:
 
 ```bash
 # List running machines to find the name
 silo ls --backend fly
+silo ls --backend freestyle
 
 # Reconnect to a running machine
 silo --backend fly reconnect myproject-1
+silo --backend freestyle reconnect myproject-1
 ```
 
 On a normal exit, files are synced back and the machine is destroyed automatically. When reconnecting, the machine is not destroyed on disconnect — use `silo rm` to clean up manually if needed.
@@ -516,6 +562,7 @@ silo ls
 silo ls --backend docker
 silo ls --backend container
 silo ls --backend fly
+silo ls --backend freestyle
 
 # Quiet mode (just container names)
 silo ls -q
@@ -541,6 +588,7 @@ silo rm $(silo ls -q)
 silo rm --backend docker myproject-1
 silo rm --backend container myproject-2
 silo rm --backend fly myproject-3
+silo rm --backend freestyle myproject-4
 ```
 
 ## Examples
@@ -634,6 +682,24 @@ silo claude
 
 # If your connection drops, reconnect
 silo reconnect myproject-1
+```
+
+### Using Freestyle.sh Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "freestyle",
+  "backends": {
+    "freestyle": { "token": "<your-token>" }
+  }
+}
+```
+
+Or use the environment variable:
+```bash
+export FREESTYLE_TOKEN=<your-token>
+silo --backend freestyle claude
 ```
 
 ### Multiple Tool Configuration

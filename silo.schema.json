@@ -11,9 +11,9 @@
     },
     "backend": {
       "type": "string",
-      "enum": ["docker", "container", "fly"],
-      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines. Default: 'container' if installed, else 'docker'",
-      "examples": ["docker", "container", "fly"]
+      "enum": ["docker", "container", "fly", "freestyle"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines, 'freestyle' uses Freestyle.sh VMs. Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container", "fly", "freestyle"]
     },
     "tool": {
       "type": "string",
@@ -86,6 +86,17 @@
               "type": "string",
               "description": "Fly.io region for new machines. Default: 'syd'. See https://fly.io/docs/reference/regions/ for available regions.",
               "examples": ["syd", "sjc", "iad", "lhr"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "freestyle": {
+          "type": "object",
+          "description": "Configuration for the Freestyle backend.",
+          "properties": {
+            "token": {
+              "type": "string",
+              "description": "Freestyle API token. If not set, FREESTYLE_TOKEN env var is used. Get a token at https://dash.freestyle.sh."
             }
           },
           "additionalProperties": false
