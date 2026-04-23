@@ -395,6 +395,12 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	cfg := config.LoadAll(toolDefaults())
 	noTTY := boolFlag(cmd, "no-tty") || !isStdoutTTY(stdout)
 
+	// Get tool-specific args (everything after --)
+	var toolArgs []string
+	if cmd.ArgsLenAtDash() > -1 {
+		toolArgs = args[cmd.ArgsLenAtDash():]
+	}
+
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
 
@@ -476,6 +482,7 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	// Run the tool
 	return run.Tool(run.Options{
 		ToolDef:       *toolDef,
+		ToolArgs:      toolArgs,
 		Config:        cfg,
 		Dockerfile:    Dockerfile(*toolDef),
 		ForceBuild:    forceBuild,
