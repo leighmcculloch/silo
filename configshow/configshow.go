@@ -161,6 +161,9 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	w.openObject("    ", "fly")
 	w.nullableString("      ", "app", cfg.Backends.Fly.App, def(src.FlyApp, "default"), true)
 	w.stringField("      ", "region", def(cfg.Backends.Fly.Region, "syd"), def(src.FlyRegion, "default"), false)
+	w.closeObject("    ", true)
+	w.openObject("    ", "namespace")
+	w.stringField("      ", "size", def(cfg.Backends.Namespace.Size, "m"), def(src.NamespaceSize, "default"), false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
@@ -219,6 +222,9 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w.openObject("  ", "backends")
 	w.openObject("    ", "fly")
 	w.stringField("      ", "region", "syd", "", false)
+	w.closeObject("    ", true)
+	w.openObject("    ", "namespace")
+	w.stringField("      ", "size", "m", "", false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 

@@ -19,6 +19,7 @@ import (
 	"github.com/creack/pty"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
+	"github.com/leighmcculloch/silo/backend/internal/syncprogress"
 )
 
 // Client implements backend.Backend using Fly.io Machines.
@@ -774,13 +775,13 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		return nil, fmt.Errorf("mutagen is required for the fly backend (install from https://mutagen.io): %w", err)
 	}
 
-	progress := newSyncProgress(c.logw)
+	progress := syncprogress.New(c.logw)
 
 	// Create SSH tunnel for mutagen (fly proxy + issued certs + ControlMaster)
-	progress.setPhase("Establishing SSH tunnel...")
+	progress.SetPhase("Establishing SSH tunnel...")
 	sshDir, sshCleanup, err := c.flySshDir(ctx, machineID)
 	if err != nil {
-		progress.finish()
+		progress.Finish()
 		return nil, err
 	}
 
@@ -800,12 +801,12 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		"MUTAGEN_DATA_DIRECTORY="+mutagenDataDir,
 	)
 
-	progress.setPhase("Starting sync daemon...")
+	progress.SetPhase("Starting sync daemon...")
 
 	startCmd := exec.CommandContext(ctx, mutagenPath, "daemon", "start")
 	startCmd.Env = mutagenEnv
 	if err := startCmd.Run(); err != nil {
-		progress.finish()
+		progress.Finish()
 		os.RemoveAll(mutagenDataDir)
 		sshCleanup()
 		return nil, fmt.Errorf("failed to start mutagen daemon: %w", err)
@@ -823,7 +824,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		mounts = append(mounts, mount{path: p, mode: "two-way-resolved"})
 	}
 
-	progress.setPhase("Preparing remote paths...")
+	progress.SetPhase("Preparing remote paths...")
 	{
 		var scriptParts []string
 
@@ -866,7 +867,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		}
 
 		if err := c.sshExecAs(ctx, machineID, "root", strings.Join(scriptParts, " && ")); err != nil {
-			progress.finish()
+			progress.Finish()
 			os.RemoveAll(mutagenDataDir)
 			sshCleanup()
 			return nil, fmt.Errorf("failed to prepare remote directories: %w", err)
@@ -927,7 +928,7 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 		idx int
 		err error
 	}
-	progress.setProgress("Creating sync sessions...", 0, len(sessions), "")
+	progress.SetProgress("Creating sync sessions...", 0, len(sessions), "")
 	results := make(chan createResult, len(sessions))
 	for i, s := range sessions {
 		sessionNames = append(sessionNames, s.name)
@@ -949,16 +950,16 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 	for range sessions {
 		r := <-results
 		if r.err != nil {
-			progress.finish()
+			progress.Finish()
 			cleanupSessions()
 			return nil, r.err
 		}
 		createdCount++
-		progress.setProgress("Creating sync sessions...", createdCount, len(sessions), "")
+		progress.SetProgress("Creating sync sessions...", createdCount, len(sessions), "")
 	}
 
 	// Flush all sessions in parallel to wait for initial sync.
-	progress.setProgress("Syncing files...", 0, len(sessions), "")
+	progress.SetProgress("Syncing files...", 0, len(sessions), "")
 
 	flushResults := make(chan createResult, len(sessions))
 	for i, s := range sessions {
@@ -989,9 +990,9 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			syncedCount++
 			detail := ""
 			if r.idx < len(sessions) {
-				detail = tildePath(sessions[r.idx].mount.path)
+				detail = syncprogress.TildePath(sessions[r.idx].mount.path)
 			}
-			progress.setProgress("Syncing files...", syncedCount, len(sessions), detail)
+			progress.SetProgress("Syncing files...", syncedCount, len(sessions), detail)
 		}
 		close(flushDone)
 	}()
@@ -1022,9 +1023,9 @@ func (c *Client) startMutagenSync(ctx context.Context, machineID string, mountsR
 			detail := status
 			// Show transfer progress if available
 			if len(parts) == 3 && parts[2] != "" {
-				detail = status + " " + formatTransferSize(parts[2])
+				detail = status + " " + syncprogress.FormatTransferSize(parts[2])
 			}
-			progress.setProgress("Syncing files...", syncedCount, len(sessions), detail)
+			progress.SetProgress("Syncing files...", syncedCount, len(sessions), detail)
 			return
 		}
 	}
@@ -1042,12 +1043,12 @@ pollLoop:
 	}
 
 	if flushErr != nil {
-		progress.finish()
+		progress.Finish()
 		cleanupSessions()
 		return nil, flushErr
 	}
 
-	progress.finish()
+	progress.Finish()
 
 	return func() {
 		// Flush final changes before terminating

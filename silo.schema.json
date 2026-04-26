@@ -11,9 +11,9 @@
     },
     "backend": {
       "type": "string",
-      "enum": ["docker", "container", "fly"],
-      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines. Default: 'container' if installed, else 'docker'",
-      "examples": ["docker", "container", "fly"]
+      "enum": ["docker", "container", "fly", "namespace"],
+      "description": "Backend to use for running containers. 'docker' uses Docker, 'container' uses Apple's lightweight VMs, 'fly' uses Fly.io remote machines, 'namespace' uses Namespace devboxes (https://namespace.so/devbox). Default: 'container' if installed, else 'docker'",
+      "examples": ["docker", "container", "fly", "namespace"]
     },
     "tool": {
       "type": "string",
@@ -86,6 +86,19 @@
               "type": "string",
               "description": "Fly.io region for new machines. Default: 'syd'. See https://fly.io/docs/reference/regions/ for available regions.",
               "examples": ["syd", "sjc", "iad", "lhr"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "namespace": {
+          "type": "object",
+          "description": "Configuration for the Namespace devbox backend (https://namespace.so/devbox).",
+          "properties": {
+            "size": {
+              "type": "string",
+              "enum": ["s", "m", "l", "xl"],
+              "description": "Namespace devbox machine size. Default: 'm'.",
+              "examples": ["s", "m", "l", "xl"]
             }
           },
           "additionalProperties": false

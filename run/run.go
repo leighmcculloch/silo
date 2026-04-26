@@ -20,6 +20,7 @@ import (
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
+	namespacebackend "github.com/leighmcculloch/silo/backend/namespace"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/git"
@@ -60,8 +61,8 @@ func Tool(opts Options) error {
 	}
 	verbose := opts.Verbose && !suppressUI
 
-	if opts.NoTTY && cfg.Backend == "fly" {
-		return fmt.Errorf("--no-tty is not supported with the fly backend")
+	if opts.NoTTY && (cfg.Backend == "fly" || cfg.Backend == "namespace") {
+		return fmt.Errorf("--no-tty is not supported with the %s backend", cfg.Backend)
 	}
 
 	// Create log file
@@ -397,13 +398,14 @@ func Tool(opts Options) error {
 			newBuildArgs["TOOL_VERSION"] = newVersion
 			logSection("New version available (%s), building in background...", newVersion)
 			_ = LaunchBackgroundBuild(BackgroundBuildOptions{
-				ImageTag:   newImageTag,
-				Dockerfile: dockerfile,
-				BuildArgs:  newBuildArgs,
-				Backend:    cfg.Backend,
-				FlyApp:     cfg.Backends.Fly.App,
-				FlyRegion:  cfg.Backends.Fly.Region,
-				Tool:       tool,
+				ImageTag:      newImageTag,
+				Dockerfile:    dockerfile,
+				BuildArgs:     newBuildArgs,
+				Backend:       cfg.Backend,
+				FlyApp:        cfg.Backends.Fly.App,
+				FlyRegion:     cfg.Backends.Fly.Region,
+				NamespaceSize: cfg.Backends.Namespace.Size,
+				Tool:          tool,
 			})
 		}()
 	}
@@ -593,8 +595,17 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 			return nil, fmt.Errorf("failed to initialize fly backend: %w", err)
 		}
 		return client, nil
+	case "namespace":
+		if verbose {
+			cli.LogTo(stderr, "Using namespace devbox backend...")
+		}
+		client, err := namespacebackend.NewClient(cfg.Backends.Namespace.Size, stderr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize namespace backend: %w", err)
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly)", backendType)
+		return nil, fmt.Errorf("unknown backend: %s (valid: docker, container, fly, namespace)", backendType)
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	applecontainer "github.com/leighmcculloch/silo/backend/container"
 	"github.com/leighmcculloch/silo/backend/docker"
 	flybackend "github.com/leighmcculloch/silo/backend/fly"
+	namespacebackend "github.com/leighmcculloch/silo/backend/namespace"
 	"github.com/leighmcculloch/silo/cli"
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/configshow"
@@ -176,7 +177,7 @@ Configuration is loaded from (in order, merged):
 		},
 	}
 
-	rootCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
+	rootCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace")
 	rootCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 	rootCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 	rootCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -204,7 +205,7 @@ Configuration is loaded from (in order, merged):
 				return runTool(cmd, toolDef, args, stdout, stderr)
 			},
 		}
-		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly")
+		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace")
 		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
 		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
 		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
@@ -297,7 +298,7 @@ Use --local or --global to skip the prompt.`,
 			return runList(cmd, args, stdout, stderr)
 		},
 	}
-	lsCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	lsCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
 	lsCmd.Flags().BoolP("quiet", "q", false, "Only display container names")
 	rootCmd.AddCommand(lsCmd)
 
@@ -310,7 +311,7 @@ Use --local or --global to skip the prompt.`,
 			return runRemove(cmd, args, stderr)
 		},
 	}
-	rmCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	rmCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
 	rmCmd.Flags().BoolP("force", "f", false, "Force removal of running containers")
 	rootCmd.AddCommand(rmCmd)
 
@@ -330,7 +331,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], args[1:], stderr)
 		},
 	}
-	execCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	execCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
 	rootCmd.AddCommand(execCmd)
 
 	shellCmd := &cobra.Command{
@@ -345,7 +346,7 @@ Use --local or --global to skip the prompt.`,
 			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
 		},
 	}
-	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
 	rootCmd.AddCommand(shellCmd)
 
 	reconnectCmd := &cobra.Command{
@@ -360,7 +361,7 @@ Use --local or --global to skip the prompt.`,
 			return runReconnect(cmd, args[0], stderr)
 		},
 	}
-	reconnectCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly (default: all)")
+	reconnectCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
 	rootCmd.AddCommand(reconnectCmd)
 
 	// Hidden __build subcommand — used by background build launcher.
@@ -869,7 +870,7 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "namespace"}
 	}
 
 	for _, backendType := range backends {
@@ -930,7 +931,7 @@ func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "namespace"}
 	}
 
 	for _, backendType := range backends {
@@ -964,7 +965,7 @@ func completeContainerNames(cmd *cobra.Command, args []string, toComplete string
 	cfg := config.LoadAll(toolDefaults())
 	var names []string
 
-	for _, backendType := range []string{"docker", "container", "fly"} {
+	for _, backendType := range []string{"docker", "container", "fly", "namespace"} {
 		bc, err := createBackendByType(backendType, cfg)
 		if err != nil {
 			continue
@@ -993,7 +994,7 @@ func runList(cmd *cobra.Command, _ []string, stdout, stderr io.Writer) error {
 	if backendFlag != "" {
 		backends = []string{backendFlag}
 	} else {
-		backends = []string{"docker", "container", "fly"}
+		backends = []string{"docker", "container", "fly", "namespace"}
 	}
 
 	hasContainers := false
@@ -1164,6 +1165,8 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 		return applecontainer.NewClient()
 	case "fly":
 		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region, os.Stderr)
+	case "namespace":
+		return namespacebackend.NewClient(cfg.Backends.Namespace.Size, os.Stderr)
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendType)
 	}

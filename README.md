@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), or Fly.io machines (remote VMs). The coding tools are configured to run in auto-approve mode.
+Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or [Namespace devboxes](https://namespace.so/devbox) (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -84,6 +84,7 @@ brew upgrade --fetch-head leighmcculloch/silo/silo
 - **Docker or any compatible container runtime**: Required for the `docker` backend
 - **Apple Container**: Required for the `container` backend (see [apple/container](https://github.com/apple/container))
 - **Fly.io CLI (`fly`)**: Required for the `fly` backend (see [fly.io/docs/flyctl/install](https://fly.io/docs/flyctl/install/))
+- **Namespace devbox CLI (`devbox`)**: Required for the `namespace` backend (see [Namespace Devboxes](https://namespace.so/devbox))
 
 ## Usage
 
@@ -109,15 +110,16 @@ silo opencode -- --version
 
 ### Choosing a Backend
 
-Silo supports three backends and auto-detects which one to use if none specified:
+Silo supports four backends and auto-detects which one to use if none specified:
 
 | Backend | Flag | Description |
 |---------|------|-------------|
 | Container | `--backend container` | Apple lightweight VMs (macOS only) |
 | Docker | `--backend docker` | Uses Docker containers |
 | Fly | `--backend fly` | Remote VMs on Fly.io |
+| Namespace | `--backend namespace` | Remote VMs on [Namespace Devboxes](https://namespace.so/devbox) |
 
-**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` backend must be selected explicitly.
+**Default behavior**: If the `container` command is installed, Silo uses the container backend. Otherwise, it falls back to Docker. The `fly` and `namespace` backends must be selected explicitly.
 
 ```bash
 # Use auto-detected backend (container if available, else docker)
@@ -132,6 +134,9 @@ silo --backend container claude
 # Explicitly use Fly.io backend
 silo --backend fly claude
 
+# Explicitly use Namespace devbox backend
+silo --backend namespace claude
+
 # Force rebuild of the container image (ignore cache)
 silo --force-build claude
 ```
@@ -140,16 +145,16 @@ You can also set the backend in your configuration file.
 
 #### Backend Comparison
 
-| Feature | Docker | Apple Container | Fly |
-|---------|--------|-----------------|-----|
-| Platform | Any | macOS only | Any |
-| Isolation | Shared Linux VM | Per-container VM | Remote VM |
-| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine |
-| File mounts | Direct | Staged + symlinks | Synced (mutagen) |
-| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation |
-| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults |
-| API | Docker SDK | CLI subprocess | Fly CLI subprocess |
-| Reconnect | No | No | Yes (`silo reconnect`) |
+| Feature | Docker | Apple Container | Fly | Namespace |
+|---------|--------|-----------------|-----|-----------|
+| Platform | Any | macOS only | Any | Any |
+| Isolation | Shared Linux VM | Per-container VM | Remote VM | Remote VM |
+| Docker Inside | Shared Engine | Per-container Engine | Per-container Engine | Per-devbox Engine |
+| File mounts | Direct | Staged + symlinks | Synced (mutagen) | Synced (mutagen) |
+| Security | Dropped caps, no-new-privileges | VM isolation | Remote VM isolation | Remote VM isolation |
+| Resource control | Docker defaults | Explicit CPU/memory | Fly machine defaults | Devbox size (s/m/l/xl) |
+| API | Docker SDK | CLI subprocess | Fly CLI subprocess | `devbox` CLI subprocess |
+| Reconnect | No | No | Yes (`silo reconnect`) | Yes (`silo reconnect`) |
 
 
 #### Why Apple Containers on macOS?
@@ -205,6 +210,51 @@ Mutagen syncs only deltas, so it's efficient even for large directories. If your
 
 Requires `mutagen` installed locally (`brew install mutagen-io/mutagen/mutagen`).
 
+#### Namespace Devbox Backend
+
+The Namespace backend runs your silo environment on remote [Namespace Devboxes](https://namespace.so/devbox). Namespace offers several products; silo specifically uses Namespace **Devboxes** — ephemeral remote development VMs.
+
+**Setup:**
+
+1. Install the Namespace devbox CLI: `curl -fsSL https://get.namespace.so/devbox/install.sh | bash`
+2. Install [mutagen](https://mutagen.io) for file sync: `brew install mutagen-io/mutagen/mutagen`
+3. Authenticate: `devbox auth login`
+4. Configure silo to use the namespace backend:
+   ```jsonc
+   // ~/.config/silo/silo.jsonc
+   {
+     "backend": "namespace",
+     "backends": {
+       "namespace": { "size": "m" }
+     }
+   }
+   ```
+
+**How it works:**
+
+- **Build**: A base image is built remotely with `devbox image build` from silo's Dockerfile and registered in your Namespace workspace under the repository `silo/<tag>`
+- **Run**: A devbox is created from the image with `devbox create --image silo/<tag>`, files are continuously synced using [mutagen](https://mutagen.io), then an interactive SSH session connects you to the tool
+- **Exit**: Final changes are flushed back, then the devbox is expired (destroyed) automatically
+- **Reconnect**: If your connection drops, use `silo reconnect <name>` to reconnect to the still-running devbox
+
+**Configuration:**
+
+| Setting | Config Key | Default | Description |
+|---------|-----------|---------|-------------|
+| Size | `backends.namespace.size` | `m` | Devbox machine size: `s`, `m`, `l`, or `xl` |
+
+The site (region) is auto-selected to be closest to you — there is no region option.
+
+**File sync:**
+
+Like the Fly backend, files are continuously synced using [mutagen](https://mutagen.io):
+- **Read-only mounts** use one-way sync (local → remote)
+- **Read-write mounts** use bidirectional sync (changes on either side are propagated)
+
+Mutagen connects via the SSH config that `devbox configure-ssh` writes into your `~/.ssh/config` (silo runs `devbox configure-ssh` automatically the first time it needs SSH).
+
+Requires `mutagen` installed locally (`brew install mutagen-io/mutagen/mutagen`).
+
 ## Configuration
 
 Silo uses a hierarchical configuration system. Settings are merged from multiple files, with later files overriding earlier ones.
@@ -236,7 +286,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
 
 ```jsonc
 {
-  // Backend: "docker", "container", or "fly" (default: container if installed, else docker)
+  // Backend: "docker", "container", "fly", or "namespace" (default: container if installed, else docker)
   "backend": "container",
 
   // Default tool: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", or "vibe" (if not set, interactive prompt is shown)
@@ -247,6 +297,9 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   //   "fly": {
   //     "app": "my-silo-app",  // required for fly backend
   //     "region": "syd"        // default: "syd"
+  //   },
+  //   "namespace": {
+  //     "size": "m"            // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
   //   }
   // },
 
@@ -490,19 +543,21 @@ Example: If you're in `~/Code/myapp`, containers will be named `myapp-1`, `myapp
 - **Triple Ctrl-C**: Press Ctrl-C three times quickly to force-kill a stuck container
 - **Clean exit**: Terminal state is restored on exit
 
-### Reconnecting (Fly Backend)
+### Reconnecting (Fly and Namespace Backends)
 
-If your SSH connection drops while using the Fly backend, the machine keeps running. You can reconnect to it:
+If your SSH connection drops while using the Fly or Namespace backend, the remote machine/devbox keeps running. You can reconnect to it:
 
 ```bash
-# List running machines to find the name
+# List running remotes to find the name
 silo ls --backend fly
+silo ls --backend namespace
 
-# Reconnect to a running machine
+# Reconnect to a running remote
 silo --backend fly reconnect myproject-1
+silo --backend namespace reconnect myproject-1
 ```
 
-On a normal exit, files are synced back and the machine is destroyed automatically. When reconnecting, the machine is not destroyed on disconnect — use `silo rm` to clean up manually if needed.
+On a normal exit, files are synced back and the remote is destroyed automatically. When reconnecting, the remote is not destroyed on disconnect — use `silo rm` to clean up manually if needed.
 
 ### Listing Containers
 
@@ -516,6 +571,7 @@ silo ls
 silo ls --backend docker
 silo ls --backend container
 silo ls --backend fly
+silo ls --backend namespace
 
 # Quiet mode (just container names)
 silo ls -q
@@ -541,6 +597,7 @@ silo rm $(silo ls -q)
 silo rm --backend docker myproject-1
 silo rm --backend container myproject-2
 silo rm --backend fly myproject-3
+silo rm --backend namespace myproject-4
 ```
 
 ## Examples
@@ -628,6 +685,30 @@ silo --backend container claude
 # First-time setup
 fly auth login
 fly apps create my-silo-app
+
+# Run
+silo claude
+
+# If your connection drops, reconnect
+silo reconnect myproject-1
+```
+
+### Using Namespace Devbox Backend
+
+```jsonc
+// ~/.config/silo/silo.jsonc
+{
+  "backend": "namespace",
+  "backends": {
+    "namespace": { "size": "m" }
+  }
+}
+```
+
+```bash
+# First-time setup
+curl -fsSL https://get.namespace.so/devbox/install.sh | bash
+devbox auth login
 
 # Run
 silo claude

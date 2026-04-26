@@ -15,25 +15,27 @@ import (
 // BackgroundBuildOptions contains the parameters needed to launch a
 // detached background build process.
 type BackgroundBuildOptions struct {
-	ImageTag   string
-	Dockerfile string
-	BuildArgs  map[string]string
-	Backend    string
-	Tool       string
-	FlyApp     string
-	FlyRegion  string
+	ImageTag      string
+	Dockerfile    string
+	BuildArgs     map[string]string
+	Backend       string
+	Tool          string
+	FlyApp        string
+	FlyRegion     string
+	NamespaceSize string
 }
 
 // buildManifest is the JSON structure written to the build state directory.
 // The __build command reads this single file to get all build parameters.
 type buildManifest struct {
-	ImageTag   string            `json:"image_tag"`
-	Tool       string            `json:"tool"`
-	Backend    string            `json:"backend,omitempty"`
-	FlyApp     string            `json:"fly_app,omitempty"`
-	FlyRegion  string            `json:"fly_region,omitempty"`
-	BuildArgs  map[string]string `json:"build_args"`
-	Dockerfile string            `json:"dockerfile"`
+	ImageTag      string            `json:"image_tag"`
+	Tool          string            `json:"tool"`
+	Backend       string            `json:"backend,omitempty"`
+	FlyApp        string            `json:"fly_app,omitempty"`
+	FlyRegion     string            `json:"fly_region,omitempty"`
+	NamespaceSize string            `json:"namespace_size,omitempty"`
+	BuildArgs     map[string]string `json:"build_args"`
+	Dockerfile    string            `json:"dockerfile"`
 }
 
 // ReadBuildManifest reads the build manifest from a state directory.
@@ -56,6 +58,9 @@ func ReadBuildManifest(dir string) (imageTag string, cfg config.Config, tool, do
 				App:    m.FlyApp,
 				Region: m.FlyRegion,
 			},
+			Namespace: config.NamespaceConfig{
+				Size: m.NamespaceSize,
+			},
 		},
 	}
 	return m.ImageTag, c, m.Tool, m.Dockerfile, m.BuildArgs, nil
@@ -72,13 +77,14 @@ func LaunchBackgroundBuild(opts BackgroundBuildOptions) error {
 
 	// Write all build parameters to a single manifest file.
 	manifest := buildManifest{
-		ImageTag:   opts.ImageTag,
-		Tool:       opts.Tool,
-		Backend:    opts.Backend,
-		FlyApp:     opts.FlyApp,
-		FlyRegion:  opts.FlyRegion,
-		BuildArgs:  opts.BuildArgs,
-		Dockerfile: opts.Dockerfile,
+		ImageTag:      opts.ImageTag,
+		Tool:          opts.Tool,
+		Backend:       opts.Backend,
+		FlyApp:        opts.FlyApp,
+		FlyRegion:     opts.FlyRegion,
+		NamespaceSize: opts.NamespaceSize,
+		BuildArgs:     opts.BuildArgs,
+		Dockerfile:    opts.Dockerfile,
 	}
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {

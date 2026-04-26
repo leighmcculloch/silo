@@ -1,4 +1,6 @@
-package fly
+// Package syncprogress renders a single-line updating progress display
+// for file sync operations across remote backends.
+package syncprogress
 
 import (
 	"fmt"
@@ -11,9 +13,9 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-// syncProgress renders a single-line updating progress display for file sync.
+// Progress renders a single-line updating progress display for file sync.
 // On TTY: updates in place with \r. On non-TTY: prints each phase on a new line.
-type syncProgress struct {
+type Progress struct {
 	mu       sync.Mutex
 	w        io.Writer
 	isTTY    bool
@@ -25,16 +27,16 @@ type syncProgress struct {
 	detail  string // extra detail (e.g. path being synced)
 }
 
-func newSyncProgress(w io.Writer) *syncProgress {
+func New(w io.Writer) *Progress {
 	isTTY := false
 	if f, ok := w.(interface{ Fd() uintptr }); ok {
 		isTTY = isatty.IsTerminal(f.Fd())
 	}
-	return &syncProgress{w: w, isTTY: isTTY}
+	return &Progress{w: w, isTTY: isTTY}
 }
 
-// setPhase updates the phase with no counter.
-func (p *syncProgress) setPhase(phase string) {
+// SetPhase updates the phase with no counter.
+func (p *Progress) SetPhase(phase string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.phase = phase
@@ -44,8 +46,8 @@ func (p *syncProgress) setPhase(phase string) {
 	p.render()
 }
 
-// setProgress updates the phase with a counter and optional detail.
-func (p *syncProgress) setProgress(phase string, current, total int, detail string) {
+// SetProgress updates the phase with a counter and optional detail.
+func (p *Progress) SetProgress(phase string, current, total int, detail string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.phase = phase
@@ -55,8 +57,8 @@ func (p *syncProgress) setProgress(phase string, current, total int, detail stri
 	p.render()
 }
 
-// finish clears the progress line on TTY.
-func (p *syncProgress) finish() {
+// Finish clears the progress line on TTY.
+func (p *Progress) Finish() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.isTTY && p.rendered {
@@ -65,7 +67,7 @@ func (p *syncProgress) finish() {
 	}
 }
 
-func (p *syncProgress) render() {
+func (p *Progress) render() {
 	if p.isTTY {
 		// Update in place
 		if p.rendered {
@@ -103,13 +105,10 @@ func (p *syncProgress) render() {
 	}
 }
 
-func (p *syncProgress) renderBar() string {
+func (p *Progress) renderBar() string {
 	barWidth := 15
 	progress := float64(p.current) / float64(p.total)
-	filled := int(progress * float64(barWidth))
-	if filled > barWidth {
-		filled = barWidth
-	}
+	filled := min(int(progress*float64(barWidth)), barWidth)
 
 	filledStr := strings.Repeat("█", filled)
 	emptyStr := strings.Repeat("░", barWidth-filled)
@@ -120,8 +119,8 @@ func (p *syncProgress) renderBar() string {
 	return fmt.Sprintf("[%s%s]", filledStyle.Render(filledStr), emptyStyle.Render(emptyStr))
 }
 
-// tildePath shortens a home-dir prefixed path to ~/...
-func tildePath(path string) string {
+// TildePath shortens a home-dir prefixed path to ~/...
+func TildePath(path string) string {
 	home, _ := os.UserHomeDir()
 	if home != "" && strings.HasPrefix(path, home) {
 		return "~" + path[len(home):]
@@ -129,9 +128,9 @@ func tildePath(path string) string {
 	return path
 }
 
-// formatTransferSize formats a "received/total" byte string from mutagen
+// FormatTransferSize formats a "received/total" byte string from mutagen
 // template output into a human-readable size like "(12.3 MB / 45.6 MB)".
-func formatTransferSize(raw string) string {
+func FormatTransferSize(raw string) string {
 	parts := strings.SplitN(raw, "/", 2)
 	if len(parts) != 2 {
 		return ""
