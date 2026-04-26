@@ -99,6 +99,11 @@
               "enum": ["s", "m", "l", "xl"],
               "description": "Namespace devbox machine size. Default: 'm'.",
               "examples": ["s", "m", "l", "xl"]
+            },
+            "site": {
+              "type": "string",
+              "description": "Namespace site to optimize built images for and run devboxes in. Default: 'sjc1'. Common sites: 'sjc1' (Bay Area), 'iad' (North Virginia), 'ord' (Illinois), 'zrh' (Switzerland).",
+              "examples": ["sjc1", "iad", "ord", "zrh"]
             }
           },
           "additionalProperties": false

@@ -69,6 +69,12 @@ type NamespaceConfig struct {
 	// Size is the Namespace devbox machine size: "s", "m", "l", or "xl".
 	// Default: "m".
 	Size string `json:"size,omitempty"`
+
+	// Site is the Namespace site to optimize built images for and to run
+	// devboxes in (e.g. "sjc1", "iad", "ord", "zrh"). Image optimization
+	// requires a specific site (it cannot be auto-detected non-interactively).
+	// Default: "sjc1".
+	Site string `json:"site,omitempty"`
 }
 
 // ToolConfig represents configuration for a specific AI tool
@@ -127,6 +133,7 @@ type SourceInfo struct {
 	FlyApp             string                       // source path for backends.fly.app setting
 	FlyRegion          string                       // source path for backends.fly.region setting
 	NamespaceSize      string                       // source path for backends.namespace.size setting
+	NamespaceSite      string                       // source path for backends.namespace.site setting
 	MountsRO           map[string]string            // value -> source path
 	MountsRW           map[string]string            // value -> source path
 	Env                map[string]string            // value -> source path
@@ -221,6 +228,9 @@ func Merge(base, overlay Config) Config {
 	// Namespace config: overlay takes precedence if set
 	if overlay.Backends.Namespace.Size != "" {
 		result.Backends.Namespace.Size = overlay.Backends.Namespace.Size
+	}
+	if overlay.Backends.Namespace.Site != "" {
+		result.Backends.Namespace.Site = overlay.Backends.Namespace.Site
 	}
 
 	// Append arrays
@@ -398,6 +408,9 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	}
 	if cfg.Backends.Namespace.Size != "" {
 		info.NamespaceSize = source
+	}
+	if cfg.Backends.Namespace.Site != "" {
+		info.NamespaceSite = source
 	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source

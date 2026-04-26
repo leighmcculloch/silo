@@ -11,7 +11,8 @@
   //     "region": "syd"        // default: "syd"
   //   },
   //   "namespace": {
-  //     "size": "m"            // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
+  //     "size": "m",           // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
+  //     "site": "sjc1"         // namespace site (default: "sjc1"). Other: "iad", "ord", "zrh"
   //   }
   // },
   // Read-only directories or files to mount into the container

@@ -23,6 +23,7 @@ type BackgroundBuildOptions struct {
 	FlyApp        string
 	FlyRegion     string
 	NamespaceSize string
+	NamespaceSite string
 }
 
 // buildManifest is the JSON structure written to the build state directory.
@@ -34,6 +35,7 @@ type buildManifest struct {
 	FlyApp        string            `json:"fly_app,omitempty"`
 	FlyRegion     string            `json:"fly_region,omitempty"`
 	NamespaceSize string            `json:"namespace_size,omitempty"`
+	NamespaceSite string            `json:"namespace_site,omitempty"`
 	BuildArgs     map[string]string `json:"build_args"`
 	Dockerfile    string            `json:"dockerfile"`
 }
@@ -60,6 +62,7 @@ func ReadBuildManifest(dir string) (imageTag string, cfg config.Config, tool, do
 			},
 			Namespace: config.NamespaceConfig{
 				Size: m.NamespaceSize,
+				Site: m.NamespaceSite,
 			},
 		},
 	}
@@ -83,6 +86,7 @@ func LaunchBackgroundBuild(opts BackgroundBuildOptions) error {
 		FlyApp:        opts.FlyApp,
 		FlyRegion:     opts.FlyRegion,
 		NamespaceSize: opts.NamespaceSize,
+		NamespaceSite: opts.NamespaceSite,
 		BuildArgs:     opts.BuildArgs,
 		Dockerfile:    opts.Dockerfile,
 	}

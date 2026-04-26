@@ -242,8 +242,9 @@ The Namespace backend runs your silo environment on remote [Namespace Devboxes](
 | Setting | Config Key | Default | Description |
 |---------|-----------|---------|-------------|
 | Size | `backends.namespace.size` | `m` | Devbox machine size: `s`, `m`, `l`, or `xl` |
+| Site | `backends.namespace.site` | `sjc1` | Namespace site to optimize images for and run devboxes in (e.g. `sjc1`, `iad`, `ord`, `zrh`) |
 
-The site (region) is auto-selected to be closest to you — there is no region option.
+Image optimization requires an explicit site (it cannot be auto-detected non-interactively). Devboxes themselves boot at the closest site to that optimized image. To pick the lowest-latency site for you, run `devbox site-latency` interactively once.
 
 **File sync:**
 
@@ -299,7 +300,8 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   //     "region": "syd"        // default: "syd"
   //   },
   //   "namespace": {
-  //     "size": "m"            // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
+  //     "size": "m",           // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
+  //     "site": "sjc1"         // namespace site (default: "sjc1"). Other: "iad", "ord", "zrh"
   //   }
   // },
 

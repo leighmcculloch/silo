@@ -405,6 +405,7 @@ func Tool(opts Options) error {
 				FlyApp:        cfg.Backends.Fly.App,
 				FlyRegion:     cfg.Backends.Fly.Region,
 				NamespaceSize: cfg.Backends.Namespace.Size,
+				NamespaceSite: cfg.Backends.Namespace.Site,
 				Tool:          tool,
 			})
 		}()
@@ -599,7 +600,7 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 		if verbose {
 			cli.LogTo(stderr, "Using namespace devbox backend...")
 		}
-		client, err := namespacebackend.NewClient(cfg.Backends.Namespace.Size, stderr)
+		client, err := namespacebackend.NewClient(cfg.Backends.Namespace.Size, cfg.Backends.Namespace.Site, stderr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize namespace backend: %w", err)
 		}

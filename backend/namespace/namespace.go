@@ -38,21 +38,25 @@ const (
 // Client implements backend.Backend using Namespace devboxes.
 type Client struct {
 	size string
+	site string
 	logw io.Writer
 }
 
 // NewClient creates a new Namespace backend client.
-func NewClient(size string, logw io.Writer) (*Client, error) {
+func NewClient(size, site string, logw io.Writer) (*Client, error) {
 	if _, err := exec.LookPath("devbox"); err != nil {
 		return nil, fmt.Errorf("devbox CLI not found (install with: curl -fsSL https://get.namespace.so/devbox/install.sh | bash): %w", err)
 	}
 	if size == "" {
 		size = "m"
 	}
+	if site == "" {
+		site = "sjc1"
+	}
 	if logw == nil {
 		logw = os.Stderr
 	}
-	return &Client{size: size, logw: logw}, nil
+	return &Client{size: size, site: site, logw: logw}, nil
 }
 
 func (c *Client) logf(format string, args ...any) {
@@ -146,11 +150,15 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 		home = "/root"
 	}
 
+	// `--optimize=true` (the default) triggers an interactive site-selection
+	// prompt during build, which corrupts silo's pty. We optimize as a
+	// separate step below, passing --site explicitly.
 	args := []string{"image", "build", tmpDir,
 		"--name", repo,
 		"--user", username,
 		"--workspace_dir", home,
 		"--shell", "/bin/bash",
+		"--optimize=false",
 	}
 
 	cmd := exec.CommandContext(ctx, "devbox", args...)
@@ -203,6 +211,19 @@ func (c *Client) Build(ctx context.Context, opts backend.BuildOptions) (string, 
 			return "", fmt.Errorf("devbox image build failed: %w\n%s", err, detail.String())
 		}
 		return "", fmt.Errorf("devbox image build failed: %w", err)
+	}
+
+	// Optimize the image for the target site so devbox create can boot it
+	// quickly. Without this step, `devbox create` fails with "destroyed
+	// while waiting for readiness". `devbox image build --optimize=true`
+	// would do this implicitly, but it requires interactive site selection.
+	if opts.OnProgress != nil {
+		opts.OnProgress(fmt.Sprintf("Optimizing image for site %s...\n", c.site))
+	}
+	optCmd := exec.CommandContext(ctx, "devbox", "image", "optimize",
+		"--name", repo, "--site", c.site)
+	if out, err := optCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("devbox image optimize (--site %s) failed: %w\n%s", c.site, err, strings.TrimSpace(string(out)))
 	}
 
 	return tag, nil

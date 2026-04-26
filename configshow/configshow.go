@@ -163,7 +163,8 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	w.stringField("      ", "region", def(cfg.Backends.Fly.Region, "syd"), def(src.FlyRegion, "default"), false)
 	w.closeObject("    ", true)
 	w.openObject("    ", "namespace")
-	w.stringField("      ", "size", def(cfg.Backends.Namespace.Size, "m"), def(src.NamespaceSize, "default"), false)
+	w.stringField("      ", "size", def(cfg.Backends.Namespace.Size, "m"), def(src.NamespaceSize, "default"), true)
+	w.stringField("      ", "site", def(cfg.Backends.Namespace.Site, "sjc1"), def(src.NamespaceSite, "default"), false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
@@ -224,7 +225,8 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w.stringField("      ", "region", "syd", "", false)
 	w.closeObject("    ", true)
 	w.openObject("    ", "namespace")
-	w.stringField("      ", "size", "m", "", false)
+	w.stringField("      ", "size", "m", "", true)
+	w.stringField("      ", "site", "sjc1", "", false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
