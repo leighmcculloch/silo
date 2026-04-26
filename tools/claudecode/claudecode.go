@@ -24,6 +24,9 @@ var Tool = tools.Tool{
 				"~/.claude.json",
 				"~/.claude",
 			},
+			Env: []string{
+				"ENABLE_CLAUDEAI_MCP_SERVERS=false",
+			},
 		}
 	},
 	LatestVersion: tools.FetchURLVersion("https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest"),
