@@ -600,7 +600,7 @@ func CreateBackend(cfg config.Config, stderr io.Writer, verbose bool) (backend.B
 		if verbose {
 			cli.LogTo(stderr, "Using namespace devbox backend...")
 		}
-		client, err := namespacebackend.NewClient(cfg.Backends.Namespace.Size, cfg.Backends.Namespace.Site, stderr)
+		client, err := namespacebackend.NewClient(cfg.Backends.Namespace.Size, cfg.Backends.Namespace.Site, cfg.Backends.Namespace.IdleTimeout, cfg.Backends.Namespace.VolumeSizeGB, stderr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize namespace backend: %w", err)
 		}

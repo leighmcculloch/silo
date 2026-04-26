@@ -45,6 +45,15 @@ func (w *writer) nullableString(indent, name, value, source string, comma bool) 
 	}
 }
 
+// nullableInt writes a JSON integer field that is null when value is zero.
+func (w *writer) nullableInt(indent, name string, value int, source string, comma bool) {
+	if value > 0 {
+		fmt.Fprintf(w.w, "%s%s: %d%s\n", indent, w.key(name), value, w.suffix(source, comma))
+	} else {
+		fmt.Fprintf(w.w, "%s%s: null%s\n", indent, w.key(name), w.suffix(source, comma))
+	}
+}
+
 // array writes a JSON array field with optional per-element source comments.
 func (w *writer) array(indent, name string, values []string, sources map[string]string, comma bool) {
 	fmt.Fprintf(w.w, "%s%s: [\n", indent, w.key(name))
@@ -164,7 +173,9 @@ func Show(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error {
 	w.closeObject("    ", true)
 	w.openObject("    ", "namespace")
 	w.stringField("      ", "size", def(cfg.Backends.Namespace.Size, "m"), def(src.NamespaceSize, "default"), true)
-	w.stringField("      ", "site", def(cfg.Backends.Namespace.Site, "sjc1"), def(src.NamespaceSite, "default"), false)
+	w.stringField("      ", "site", def(cfg.Backends.Namespace.Site, "sjc1"), def(src.NamespaceSite, "default"), true)
+	w.stringField("      ", "idle_timeout", def(cfg.Backends.Namespace.IdleTimeout, "15m"), def(src.NamespaceIdleTimeout, "default"), true)
+	w.nullableInt("      ", "volume_size_gb", cfg.Backends.Namespace.VolumeSizeGB, def(src.NamespaceVolumeSizeGB, "default"), false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 
@@ -226,7 +237,9 @@ func Default(stdout io.Writer, toolDefaults map[string]config.ToolConfig) error 
 	w.closeObject("    ", true)
 	w.openObject("    ", "namespace")
 	w.stringField("      ", "size", "m", "", true)
-	w.stringField("      ", "site", "sjc1", "", false)
+	w.stringField("      ", "site", "sjc1", "", true)
+	w.stringField("      ", "idle_timeout", "15m", "", true)
+	w.nullableInt("      ", "volume_size_gb", 0, "", false)
 	w.closeObject("    ", false)
 	w.closeObject("  ", true)
 

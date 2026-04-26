@@ -1169,7 +1169,7 @@ func createBackendByType(backendType string, cfg config.Config) (backend.Backend
 	case "fly":
 		return flybackend.NewClient(cfg.Backends.Fly.App, cfg.Backends.Fly.Region, os.Stderr)
 	case "namespace":
-		return namespacebackend.NewClient(cfg.Backends.Namespace.Size, cfg.Backends.Namespace.Site, os.Stderr)
+		return namespacebackend.NewClient(cfg.Backends.Namespace.Size, cfg.Backends.Namespace.Site, cfg.Backends.Namespace.IdleTimeout, cfg.Backends.Namespace.VolumeSizeGB, os.Stderr)
 	default:
 		return nil, fmt.Errorf("unknown backend: %s", backendType)
 	}

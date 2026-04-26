@@ -37,13 +37,16 @@ const (
 
 // Client implements backend.Backend using Namespace devboxes.
 type Client struct {
-	size string
-	site string
-	logw io.Writer
+	size         string
+	site         string
+	idleTimeout  string
+	volumeSizeGB int
+	logw         io.Writer
 }
 
-// NewClient creates a new Namespace backend client.
-func NewClient(size, site string, logw io.Writer) (*Client, error) {
+// NewClient creates a new Namespace backend client. volumeSizeGB of 0 means
+// use the devbox default persistent volume size.
+func NewClient(size, site, idleTimeout string, volumeSizeGB int, logw io.Writer) (*Client, error) {
 	if _, err := exec.LookPath("devbox"); err != nil {
 		return nil, fmt.Errorf("devbox CLI not found (install with: curl -fsSL https://get.namespace.so/devbox/install.sh | bash): %w", err)
 	}
@@ -53,10 +56,13 @@ func NewClient(size, site string, logw io.Writer) (*Client, error) {
 	if site == "" {
 		site = "sjc1"
 	}
+	if idleTimeout == "" {
+		idleTimeout = "15m"
+	}
 	if logw == nil {
 		logw = os.Stderr
 	}
-	return &Client{size: size, site: site, logw: logw}, nil
+	return &Client{size: size, site: site, idleTimeout: idleTimeout, volumeSizeGB: volumeSizeGB, logw: logw}, nil
 }
 
 func (c *Client) logf(format string, args ...any) {
@@ -522,6 +528,10 @@ func (c *Client) createDevbox(ctx context.Context, name, imageRepo string) (stri
 		"--persistent=false",
 		"--activate=true",
 		"--closest=true",
+		"--auto_stop_idle_timeout=" + c.idleTimeout,
+	}
+	if c.volumeSizeGB > 0 {
+		args = append(args, fmt.Sprintf("--volume_size_gb=%d", c.volumeSizeGB))
 	}
 
 	cmd := exec.CommandContext(ctx, "devbox", args...)

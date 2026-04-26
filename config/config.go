@@ -75,6 +75,15 @@ type NamespaceConfig struct {
 	// requires a specific site (it cannot be auto-detected non-interactively).
 	// Default: "sjc1".
 	Site string `json:"site,omitempty"`
+
+	// IdleTimeout is how long a devbox can be idle before it is automatically
+	// stopped. Accepted values: "15m", "30m", "1h", "2h", "4h", "6h", "8h",
+	// "12h". Default: "15m".
+	IdleTimeout string `json:"idle_timeout,omitempty"`
+
+	// VolumeSizeGB overrides the default persistent volume size, in GiB.
+	// When zero, the devbox default is used.
+	VolumeSizeGB int `json:"volume_size_gb,omitempty"`
 }
 
 // ToolConfig represents configuration for a specific AI tool
@@ -128,31 +137,33 @@ type RepoConfig struct {
 
 // SourceInfo tracks the source of configuration values
 type SourceInfo struct {
-	Backend            string                       // source path for backend setting
-	Tool               string                       // source path for tool setting
-	FlyApp             string                       // source path for backends.fly.app setting
-	FlyRegion          string                       // source path for backends.fly.region setting
-	NamespaceSize      string                       // source path for backends.namespace.size setting
-	NamespaceSite      string                       // source path for backends.namespace.site setting
-	MountsRO           map[string]string            // value -> source path
-	MountsRW           map[string]string            // value -> source path
-	Env                map[string]string            // value -> source path
-	PreRunHooks        map[string]string            // value -> source path
-	PostBuildHooks     map[string]string            // value -> source path
-	Ports              map[string]string            // value -> source path
-	ToolMountsRO       map[string]map[string]string // tool -> value -> source
-	ToolMountsRW       map[string]map[string]string // tool -> value -> source
-	ToolEnv            map[string]map[string]string // tool -> value -> source
-	ToolPreRunHooks    map[string]map[string]string // tool -> value -> source
-	ToolPostBuildHooks map[string]map[string]string // tool -> value -> source
-	ToolPorts          map[string]map[string]string // tool -> value -> source
-	RepoTool           map[string]string            // repo -> source path
-	RepoMountsRO       map[string]map[string]string // repo -> value -> source
-	RepoMountsRW       map[string]map[string]string // repo -> value -> source
-	RepoEnv            map[string]map[string]string // repo -> value -> source
-	RepoPreRunHooks    map[string]map[string]string // repo -> value -> source
-	RepoPostBuildHooks map[string]map[string]string // repo -> value -> source
-	RepoPorts          map[string]map[string]string // repo -> value -> source
+	Backend               string                       // source path for backend setting
+	Tool                  string                       // source path for tool setting
+	FlyApp                string                       // source path for backends.fly.app setting
+	FlyRegion             string                       // source path for backends.fly.region setting
+	NamespaceSize         string                       // source path for backends.namespace.size setting
+	NamespaceSite         string                       // source path for backends.namespace.site setting
+	NamespaceIdleTimeout  string                       // source path for backends.namespace.idle_timeout setting
+	NamespaceVolumeSizeGB string                       // source path for backends.namespace.volume_size_gb setting
+	MountsRO              map[string]string            // value -> source path
+	MountsRW              map[string]string            // value -> source path
+	Env                   map[string]string            // value -> source path
+	PreRunHooks           map[string]string            // value -> source path
+	PostBuildHooks        map[string]string            // value -> source path
+	Ports                 map[string]string            // value -> source path
+	ToolMountsRO          map[string]map[string]string // tool -> value -> source
+	ToolMountsRW          map[string]map[string]string // tool -> value -> source
+	ToolEnv               map[string]map[string]string // tool -> value -> source
+	ToolPreRunHooks       map[string]map[string]string // tool -> value -> source
+	ToolPostBuildHooks    map[string]map[string]string // tool -> value -> source
+	ToolPorts             map[string]map[string]string // tool -> value -> source
+	RepoTool              map[string]string            // repo -> source path
+	RepoMountsRO          map[string]map[string]string // repo -> value -> source
+	RepoMountsRW          map[string]map[string]string // repo -> value -> source
+	RepoEnv               map[string]map[string]string // repo -> value -> source
+	RepoPreRunHooks       map[string]map[string]string // repo -> value -> source
+	RepoPostBuildHooks    map[string]map[string]string // repo -> value -> source
+	RepoPorts             map[string]map[string]string // repo -> value -> source
 }
 
 // ConfigPath represents a config file path with its status
@@ -231,6 +242,12 @@ func Merge(base, overlay Config) Config {
 	}
 	if overlay.Backends.Namespace.Site != "" {
 		result.Backends.Namespace.Site = overlay.Backends.Namespace.Site
+	}
+	if overlay.Backends.Namespace.IdleTimeout != "" {
+		result.Backends.Namespace.IdleTimeout = overlay.Backends.Namespace.IdleTimeout
+	}
+	if overlay.Backends.Namespace.VolumeSizeGB != 0 {
+		result.Backends.Namespace.VolumeSizeGB = overlay.Backends.Namespace.VolumeSizeGB
 	}
 
 	// Append arrays
@@ -411,6 +428,12 @@ func trackConfigSources(cfg Config, source string, info *SourceInfo) {
 	}
 	if cfg.Backends.Namespace.Site != "" {
 		info.NamespaceSite = source
+	}
+	if cfg.Backends.Namespace.IdleTimeout != "" {
+		info.NamespaceIdleTimeout = source
+	}
+	if cfg.Backends.Namespace.VolumeSizeGB != 0 {
+		info.NamespaceVolumeSizeGB = source
 	}
 	for _, v := range cfg.MountsRO {
 		info.MountsRO[v] = source

@@ -245,6 +245,8 @@ The Namespace backend runs your silo environment on remote [Namespace Devboxes](
 |---------|-----------|---------|-------------|
 | Size | `backends.namespace.size` | `m` | Devbox machine size: `s`, `m`, `l`, or `xl` |
 | Site | `backends.namespace.site` | `sjc1` | Namespace site to optimize images for and run devboxes in (e.g. `sjc1`, `iad`, `ord`, `zrh`) |
+| Idle timeout | `backends.namespace.idle_timeout` | `15m` | How long a devbox can be idle before it is automatically stopped: `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, or `12h` |
+| Volume size | `backends.namespace.volume_size_gb` | *(devbox default)* | Persistent volume size in GiB |
 
 Image optimization requires an explicit site (it cannot be auto-detected non-interactively). Devboxes themselves boot at the closest site to that optimized image. To pick the lowest-latency site for you, run `devbox site-latency` interactively once.
 
@@ -302,8 +304,10 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   //     "region": "syd"        // default: "syd"
   //   },
   //   "namespace": {
-  //     "size": "m",           // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
-  //     "site": "sjc1"         // namespace site (default: "sjc1"). Other: "iad", "ord", "zrh"
+  //     "size": "m",            // namespace devbox size: "s", "m", "l", or "xl" (default: "m")
+  //     "site": "sjc1",         // namespace site (default: "sjc1"). Other: "iad", "ord", "zrh"
+  //     "idle_timeout": "15m",  // stop devbox after this much idle time: "15m", "30m", "1h", "2h", "4h", "6h", "8h", or "12h" (default: "15m")
+  //     "volume_size_gb": 100   // persistent volume size in GiB; omit to use the devbox default
   //   }
   // },
 

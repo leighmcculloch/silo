@@ -104,6 +104,18 @@
               "type": "string",
               "description": "Namespace site to optimize built images for and run devboxes in. Default: 'sjc1'. Common sites: 'sjc1' (Bay Area), 'iad' (North Virginia), 'ord' (Illinois), 'zrh' (Switzerland).",
               "examples": ["sjc1", "iad", "ord", "zrh"]
+            },
+            "idle_timeout": {
+              "type": "string",
+              "enum": ["15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h"],
+              "description": "How long the devbox can be idle before it is automatically stopped. Default: '15m'.",
+              "examples": ["15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h"]
+            },
+            "volume_size_gb": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Override the default persistent volume size, in GiB. When omitted, the devbox default is used.",
+              "examples": [50, 100, 300]
             }
           },
           "additionalProperties": false
