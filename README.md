@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, and Mistral Vibe in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or [Namespace devboxes](https://namespace.so/devbox) (remote VMs). The coding tools are configured to run in auto-approve mode.
+Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, Mistral Vibe, and Kilo Code in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or [Namespace devboxes](https://namespace.so/devbox) (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -56,6 +56,7 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | Paperclip AI | `silo paperclipai` | Multi-agent orchestration CLI |
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 | Mistral Vibe | `silo vibe` | Mistral's CLI coding assistant |
+| Kilo Code CLI | `silo kilo` | Kilo's terminal coding agent |
 
 ## Installation
 
@@ -102,6 +103,7 @@ silo opencode
 silo paperclipai
 silo copilot
 silo vibe
+silo kilo
 
 # Pass arguments to the tool (after --)
 silo claude -- --help
@@ -290,7 +292,7 @@ Silo uses JSONC (JSON with Comments). All fields are optional.
   // Backend: "docker", "container", "fly", or "namespace" (default: container if installed, else docker)
   "backend": "container",
 
-  // Default tool: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", or "vibe" (if not set, interactive prompt is shown)
+  // Default tool: "claude", "cline", "codex", "opencode", "paperclipai", "copilot", "vibe", or "kilo" (if not set, interactive prompt is shown)
   "tool": "claude",
 
   // Backend-specific configuration
@@ -421,6 +423,7 @@ Silo automatically mounts these paths (read-write):
 | Paperclip AI | `~/.paperclip/`, `~/.claude.json`, `~/.claude/`, `~/.codex/` |
 | Copilot | `~/.config/.copilot/` (respecting XDG env vars) |
 | Vibe | `~/.vibe/` |
+| Kilo | `~/.config/kilo/` |
 
 Additionally, some tools mount paths read-only to share configuration:
 
@@ -526,7 +529,7 @@ This means:
 
 ### Auto-rebuild on Tool Updates
 
-Silo automatically detects when a new version of a tracked tool is available and triggers a rebuild. Today that includes Cline, Claude Code, Codex CLI, Paperclip AI, and GitHub Copilot CLI. On each run, a background fetch checks the latest version and caches it to disk. The cached version is included in the image hash, so when a new release is published the image tag changes and a rebuild is triggered on the next run.
+Silo automatically detects when a new version of a tracked tool is available and triggers a rebuild. Today that includes Cline, Claude Code, Codex CLI, Paperclip AI, GitHub Copilot CLI, and Kilo Code CLI. On each run, a background fetch checks the latest version and caches it to disk. The cached version is included in the image hash, so when a new release is published the image tag changes and a rebuild is triggered on the next run.
 
 This adds zero latency — the version fetch happens asynchronously and the cached value from the previous run is used. New versions are picked up on the run after they are detected. Use `--force-build` to force a rebuild at any time.
 

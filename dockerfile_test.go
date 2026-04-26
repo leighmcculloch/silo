@@ -53,6 +53,7 @@ func TestAvailableTools(t *testing.T) {
 		"paperclipai": true,
 		"copilot":     true,
 		"vibe":        true,
+		"kilo":        true,
 	}
 
 	for _, tool := range tools {
@@ -79,6 +80,7 @@ func TestToolDescription(t *testing.T) {
 		{"paperclipai", "Paperclip"},
 		{"copilot", "Copilot"},
 		{"vibe", "Vibe"},
+		{"kilo", "Kilo"},
 		{"unknown", "Unknown"},
 	}
 
