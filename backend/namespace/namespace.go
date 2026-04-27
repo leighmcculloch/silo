@@ -631,10 +631,16 @@ func (c *Client) connectInteractive(ctx context.Context, name string, opts backe
 		innerCmd = strings.Join(parts, " && ")
 	}
 
-	tmuxConf := `set -g status off
+	tmuxConf := fmt.Sprintf(`set -g status on
+set -g status-position bottom
+set -g status-left " %s "
+set -g status-left-length 80
+set -g status-right ""
+set -g window-status-format ""
+set -g window-status-current-format ""
 set -g mouse on
 set -g default-terminal "tmux-256color"
-`
+`, opts.Name)
 	_ = c.sshExec(ctx, name, fmt.Sprintf("printf %%s %s > /tmp/.silo-tmux.conf",
 		shellquote.Join(tmuxConf)))
 

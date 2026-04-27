@@ -1105,11 +1105,18 @@ func (c *Client) connectInteractive(ctx context.Context, machineID string, opts 
 		user = "root"
 	}
 
-	// Write tmux config: hide status bar (single window), enable mouse, UTF-8.
-	tmuxConf := `set -g status off
+	// Write tmux config: pin the silo container name to the bottom status
+	// line so it's visible at a glance, enable mouse, UTF-8.
+	tmuxConf := fmt.Sprintf(`set -g status on
+set -g status-position bottom
+set -g status-left " %s "
+set -g status-left-length 80
+set -g status-right ""
+set -g window-status-format ""
+set -g window-status-current-format ""
 set -g mouse on
 set -g default-terminal "tmux-256color"
-`
+`, opts.Name)
 	_ = c.sshExec(ctx, machineID, fmt.Sprintf("printf %%s %s > /tmp/.silo-tmux.conf",
 		shellquote.Join(tmuxConf)))
 
