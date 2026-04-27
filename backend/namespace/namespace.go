@@ -262,7 +262,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 
 	// 3. Start file sync (mutagen: initial sync + continuous bidirectional).
 	c.logf("  → Syncing files...\n")
-	stopSync, err := c.startMutagenSync(ctx, devboxName, opts.MountsRO, opts.MountsRW, opts.CleanMountPaths)
+	stopSync, err := c.startMutagenSync(ctx, devboxName, opts.MountsRO, opts.MountsRW, opts.CleanMountPaths, true)
 	if err != nil {
 		_ = c.expireDevbox(context.Background(), devboxName)
 		return fmt.Errorf("file sync failed: %w", err)
@@ -323,7 +323,7 @@ func (c *Client) Reconnect(ctx context.Context, name string, opts backend.RunOpt
 	}
 
 	c.logf("  → Syncing files...\n")
-	stopSync, err := c.startMutagenSync(ctx, devboxName, opts.MountsRO, opts.MountsRW, nil)
+	stopSync, err := c.startMutagenSync(ctx, devboxName, opts.MountsRO, opts.MountsRW, nil, false)
 	if err != nil {
 		return fmt.Errorf("file sync failed: %w", err)
 	}
@@ -696,7 +696,16 @@ func (c *Client) isTmuxSessionAlive(ctx context.Context, name string) bool {
 // startMutagenSync starts continuous file sync using mutagen over the SSH
 // config that `devbox configure-ssh` writes into the user's ~/.ssh/config.
 // RO mounts use one-way-replica (local→remote), RW mounts use two-way-resolved.
-func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mountsRO, mountsRW, cleanPaths []string) (cleanup func(), err error) {
+//
+// initialSync controls behaviour for the very first sync of a freshly
+// created devbox: when true, the function git-clones eligible mounts onto
+// the devbox to pre-populate them, then runs a one-way-replica sync to
+// reconcile against local before switching RW mounts to two-way-resolved.
+// On reconnect (initialSync=false), the devbox already holds in-flight
+// work from the previous session, so we skip seeding and create sessions
+// directly in their target mode — using one-way-replica here would wipe
+// the agent's work-in-progress to match local.
+func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mountsRO, mountsRW, cleanPaths []string, initialSync bool) (cleanup func(), err error) {
 	if len(mountsRO) == 0 && len(mountsRW) == 0 {
 		return func() {}, nil
 	}
@@ -778,7 +787,20 @@ func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mounts
 		mounts = append(mounts, mount{path: p, mode: "two-way-resolved"})
 	}
 
-	progress.SetPhase("Preparing remote paths...")
+	var seeds []gitSeed
+	if initialSync {
+		mountPaths := make([]string, 0, len(mounts))
+		for _, m := range mounts {
+			mountPaths = append(mountPaths, m.path)
+		}
+		seeds = collectGitSeeds(mountPaths)
+	}
+
+	phase := "Preparing remote paths..."
+	if len(seeds) > 0 {
+		phase = fmt.Sprintf("Preparing remote paths and seeding %d git repo(s)...", len(seeds))
+	}
+	progress.SetPhase(phase)
 	{
 		var scriptParts []string
 
@@ -799,6 +821,15 @@ func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mounts
 			mkdirPaths = append(mkdirPaths, shellquote.Join(p))
 		}
 		scriptParts = append(scriptParts, fmt.Sprintf("mkdir -p %s", strings.Join(mkdirPaths, " ")))
+
+		// Best-effort: clone each git-backed mount over HTTPS so the bulk of
+		// files arrive over the devbox's upstream link rather than the user's.
+		// Mutagen still runs after, reconciling unpushed commits + dirty tree.
+		// GIT_TERMINAL_PROMPT=0 prevents hangs on private/auth-required repos
+		// (which then just fall back to a full mutagen sync).
+		for _, s := range seeds {
+			scriptParts = append(scriptParts, gitSeedCommand(s))
+		}
 
 		script := strings.Join(scriptParts, " && ")
 		if err := c.sshExec(ctx, devboxName, script); err != nil {
@@ -857,6 +888,14 @@ func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mounts
 	// session to install/probe the agent; running these in parallel races
 	// the SSH ControlMaster setup and a parallel session can fail before
 	// the master socket is fully established.
+	//
+	// On initial sync, all sessions start in one-way-replica so local is
+	// fully authoritative — clone-seeded files that local doesn't have get
+	// deleted on the devbox rather than propagated back into the local
+	// checkout. After the initial flush, RW mounts are recreated in
+	// two-way-resolved (see "Phase 2" below). On reconnect, sessions are
+	// created directly in their target mode so we don't wipe in-flight
+	// work the agent left on the devbox.
 	type createResult struct {
 		idx int
 		err error
@@ -864,12 +903,14 @@ func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mounts
 	progress.SetProgress("Creating sync sessions...", 0, len(sessions), "")
 	for i, s := range sessions {
 		sessionNames = append(sessionNames, s.name)
-		cmd := exec.CommandContext(ctx, mutagenPath, "sync", "create",
-			"--name", s.name,
-			"--sync-mode", s.mount.mode,
-			"--ignore-vcs",
-			s.localPath, sshHost+":"+s.mount.path,
-		)
+		mode := s.mount.mode
+		if initialSync {
+			mode = "one-way-replica"
+		}
+		args := []string{"sync", "create", "--name", s.name, "--sync-mode", mode}
+		args = append(args, mutagenIgnoreArgs()...)
+		args = append(args, s.localPath, sshHost+":"+s.mount.path)
+		cmd := exec.CommandContext(ctx, mutagenPath, args...)
 		cmd.Env = mutagenEnv
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -962,6 +1003,46 @@ pollLoop:
 		progress.Finish()
 		cleanupSessions()
 		return nil, flushErr
+	}
+
+	// Phase 2: switch RW mounts from one-way-replica to two-way-resolved for
+	// ongoing bidirectional sync. Beta already mirrors alpha after the flush
+	// above, so terminate + recreate is fast (no file transfer). Only runs
+	// on initial sync — on reconnect, sessions were already created in their
+	// target mode.
+	hasRW := false
+	if initialSync {
+		for _, s := range sessions {
+			if s.mount.mode == "two-way-resolved" {
+				hasRW = true
+				break
+			}
+		}
+	}
+	if hasRW {
+		progress.SetPhase("Enabling bidirectional sync...")
+		for _, s := range sessions {
+			if s.mount.mode != "two-way-resolved" {
+				continue
+			}
+			termCmd := exec.CommandContext(ctx, mutagenPath, "sync", "terminate", s.name)
+			termCmd.Env = mutagenEnv
+			if out, err := termCmd.CombinedOutput(); err != nil {
+				progress.Finish()
+				cleanupSessions()
+				return nil, fmt.Errorf("mutagen sync terminate (%s) failed: %w\n%s", s.name, err, strings.TrimSpace(string(out)))
+			}
+			args := []string{"sync", "create", "--name", s.name, "--sync-mode", "two-way-resolved"}
+			args = append(args, mutagenIgnoreArgs()...)
+			args = append(args, s.localPath, sshHost+":"+s.mount.path)
+			cmd := exec.CommandContext(ctx, mutagenPath, args...)
+			cmd.Env = mutagenEnv
+			if out, err := cmd.CombinedOutput(); err != nil {
+				progress.Finish()
+				cleanupSessions()
+				return nil, fmt.Errorf("mutagen sync recreate (%s) failed: %w\n%s", s.mount.path, err, strings.TrimSpace(string(out)))
+			}
+		}
 	}
 
 	progress.Finish()
@@ -1209,6 +1290,135 @@ func currentUsername() string {
 		return u.Username
 	}
 	return "root"
+}
+
+// mutagenDefaultIgnores are patterns mutagen should never sync — typically
+// large language-toolchain build/dependency directories that are gitignored
+// and can be regenerated on the devbox cheaper than transferring them.
+var mutagenDefaultIgnores = []string{
+	"target/",
+}
+
+// mutagenIgnoreArgs returns the per-session `-i <pattern>` flags that
+// `mutagen sync create` should be invoked with.
+func mutagenIgnoreArgs() []string {
+	args := make([]string, 0, len(mutagenDefaultIgnores)*2)
+	for _, p := range mutagenDefaultIgnores {
+		args = append(args, "-i", p)
+	}
+	return args
+}
+
+// gitSeed describes a git-backed mount that can be cloned on the devbox
+// before mutagen runs, to shift the bulk transfer onto the devbox's
+// upstream connection.
+type gitSeed struct {
+	remotePath string // path on the devbox where the repo should land
+	cloneURL   string // HTTPS clone URL
+	branch     string // local branch name; empty if detached or unavailable
+}
+
+// collectGitSeeds inspects each mount path locally and returns seeds for
+// those that are git working-tree roots with an HTTPS-resolvable origin.
+// Subdirectory mounts (mount path != worktree root) are skipped.
+func collectGitSeeds(paths []string) []gitSeed {
+	var seeds []gitSeed
+	for _, p := range paths {
+		seed, ok := gitSeedInfo(p)
+		if !ok {
+			continue
+		}
+		seeds = append(seeds, seed)
+	}
+	return seeds
+}
+
+func gitSeedInfo(path string) (gitSeed, bool) {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return gitSeed{}, false
+	}
+
+	toplevelOut, err := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return gitSeed{}, false
+	}
+	toplevel := strings.TrimSpace(string(toplevelOut))
+	absPath, _ := filepath.Abs(path)
+	if resolved, err := filepath.EvalSymlinks(absPath); err == nil {
+		absPath = resolved
+	}
+	if resolved, err := filepath.EvalSymlinks(toplevel); err == nil {
+		toplevel = resolved
+	}
+	if toplevel != absPath {
+		return gitSeed{}, false
+	}
+
+	urlOut, err := exec.Command("git", "-C", path, "config", "--get", "remote.origin.url").Output()
+	if err != nil {
+		return gitSeed{}, false
+	}
+	cloneURL := toHTTPSCloneURL(strings.TrimSpace(string(urlOut)))
+	if cloneURL == "" {
+		return gitSeed{}, false
+	}
+
+	var branch string
+	if branchOut, err := exec.Command("git", "-C", path, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		b := strings.TrimSpace(string(branchOut))
+		if b != "HEAD" {
+			branch = b
+		}
+	}
+
+	return gitSeed{remotePath: path, cloneURL: cloneURL, branch: branch}, true
+}
+
+// toHTTPSCloneURL converts common git remote URL forms to HTTPS so the
+// devbox can clone without needing SSH credentials. Returns "" if the URL
+// is in a form we can't safely convert.
+func toHTTPSCloneURL(remoteURL string) string {
+	s := strings.TrimSpace(remoteURL)
+	if s == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") {
+		return s
+	}
+	// scp-like syntax: git@host:path
+	if rest, ok := strings.CutPrefix(s, "git@"); ok {
+		if host, path, found := strings.Cut(rest, ":"); found && host != "" {
+			return "https://" + host + "/" + path
+		}
+	}
+	// ssh://[user@]host[:port]/path
+	if rest, ok := strings.CutPrefix(s, "ssh://"); ok {
+		if at := strings.Index(rest, "@"); at >= 0 {
+			rest = rest[at+1:]
+		}
+		return "https://" + rest
+	}
+	return ""
+}
+
+// gitSeedCommand returns a shell command that attempts a fast clone of the
+// given seed onto the devbox. Failures are swallowed so the overall script
+// continues and mutagen can do a full sync as fallback. Tries the local
+// branch first (so mutagen has the smallest diff), then falls back to the
+// remote default branch.
+func gitSeedCommand(s gitSeed) string {
+	url := shellquote.Join(s.cloneURL)
+	dst := shellquote.Join(s.remotePath)
+	const env = "GIT_TERMINAL_PROMPT=0"
+	if s.branch != "" {
+		br := shellquote.Join(s.branch)
+		return fmt.Sprintf(
+			"(%s git clone --branch %s %s %s 2>/dev/null || %s git clone %s %s 2>/dev/null || true)",
+			env, br, url, dst, env, url, dst,
+		)
+	}
+	return fmt.Sprintf("(%s git clone %s %s 2>/dev/null || true)", env, url, dst)
 }
 
 var _ backend.Backend = (*Client)(nil)
