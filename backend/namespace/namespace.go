@@ -867,6 +867,7 @@ func (c *Client) startMutagenSync(ctx context.Context, devboxName string, mounts
 		cmd := exec.CommandContext(ctx, mutagenPath, "sync", "create",
 			"--name", s.name,
 			"--sync-mode", s.mount.mode,
+			"--ignore-vcs",
 			s.localPath, sshHost+":"+s.mount.path,
 		)
 		cmd.Env = mutagenEnv
