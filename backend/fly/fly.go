@@ -20,6 +20,7 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/backend/internal/syncprogress"
+	"github.com/leighmcculloch/silo/backend/internal/termreset"
 )
 
 // Client implements backend.Backend using Fly.io Machines.
@@ -1146,6 +1147,11 @@ func (c *Client) isTmuxSessionAlive(ctx context.Context, machineID string) bool 
 
 // flySSHInteractive runs an interactive fly ssh session with the given command.
 func (c *Client) flySSHInteractive(ctx context.Context, machineID, user, remoteCmd string) error {
+	// Reset the terminal on exit so an abrupt SSH disconnect (which prevents
+	// the remote tool from sending its own cleanup sequences) doesn't leave
+	// mouse mode on, the cursor hidden, etc.
+	defer termreset.Reset(os.Stdout)
+
 	args := []string{"ssh", "console",
 		"--app", c.app,
 		"--machine", machineID,

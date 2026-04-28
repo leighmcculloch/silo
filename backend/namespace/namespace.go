@@ -25,6 +25,7 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend"
 	"github.com/leighmcculloch/silo/backend/internal/syncprogress"
+	"github.com/leighmcculloch/silo/backend/internal/termreset"
 )
 
 // All silo-managed devbox names and image repository names use this prefix.
@@ -600,6 +601,11 @@ func (c *Client) sshExec(ctx context.Context, name, script string) error {
 
 // devboxSSHInteractive runs an interactive `devbox ssh` session.
 func (c *Client) devboxSSHInteractive(ctx context.Context, name, remoteCmd string) error {
+	// Reset the terminal on exit so an abrupt SSH disconnect (which prevents
+	// the remote tool from sending its own cleanup sequences) doesn't leave
+	// mouse mode on, the cursor hidden, etc.
+	defer termreset.Reset(os.Stdout)
+
 	wrapped := "bash -c " + shellquote.Join(remoteCmd)
 	args := []string{"ssh", name, "-t", "--", wrapped}
 	cmd := exec.CommandContext(ctx, "devbox", args...)

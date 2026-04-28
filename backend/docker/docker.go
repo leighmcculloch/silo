@@ -23,6 +23,7 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/kballard/go-shellquote"
 	"github.com/leighmcculloch/silo/backend" // parent package
+	"github.com/leighmcculloch/silo/backend/internal/termreset"
 	"github.com/moby/term"
 )
 
@@ -300,6 +301,7 @@ func (c *Client) Run(ctx context.Context, opts backend.RunOptions) error {
 				return fmt.Errorf("failed to set raw terminal: %w", err)
 			}
 			defer term.RestoreTerminal(fd, oldState)
+			defer termreset.Reset(os.Stdout)
 
 			// Set initial terminal size
 			c.resizeContainerTTY(ctx, resp.ID, fd)
@@ -585,6 +587,7 @@ func (c *Client) Exec(ctx context.Context, name string, command []string) error 
 			return fmt.Errorf("failed to set raw terminal: %w", err)
 		}
 		defer term.RestoreTerminal(fd, oldState)
+		defer termreset.Reset(os.Stdout)
 
 		// Set initial terminal size
 		c.resizeExecTTY(ctx, execResp.ID, fd)
