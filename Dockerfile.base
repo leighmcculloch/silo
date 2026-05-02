@@ -7,8 +7,8 @@ ARG USER
 ARG UID
 ARG HOME
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system dependencies (single consolidated run)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     build-essential \
     pkg-config \
@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
     zsh \
     rsync \
     tmux \
+    sudo \
+    socat \
+    bubblewrap \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE (for container backend which runs in a VM)
@@ -31,14 +34,11 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
     $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
-    && apt-get install -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin \
+    && apt-get install -y --no-install-recommends docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-# Create user with matching UID and macOS-style home path, add to docker group
-RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash -G docker ${USER}
-
-# Allow user passwordless sudo for specific commands
-RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
+# Create user with matching UID and macOS-style home path, add to docker group, configure sudo
+RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash -G docker ${USER} \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/${USER} \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt" >> /etc/sudoers.d/${USER} \
     && chmod 0440 /etc/sudoers.d/${USER}

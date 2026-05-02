@@ -7,10 +7,6 @@ ARG HOME
 ARG USER
 ARG TOOL_VERSION
 
-RUN sudo apt-get update \
-    && sudo apt-get install -y socat \
-    && sudo apt-get clean
-
 RUN set -e && \
     curl -fsSL --connect-timeout 15 -o /tmp/install.sh https://claude.ai/install.sh && \
     test -s /tmp/install.sh && \
