@@ -2,6 +2,7 @@ package claudecode
 
 import (
 	_ "embed"
+	"os"
 
 	"github.com/leighmcculloch/silo/config"
 	"github.com/leighmcculloch/silo/tools"
@@ -16,7 +17,12 @@ var Tool = tools.Tool{
 	Description:     "Claude Code - Anthropic's CLI for Claude",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{home + "/.local/bin/claude", "--mcp-config=" + home + "/.claude/mcp.json", "--dangerously-skip-permissions"}
+		mcpConfig := home + "/.claude/mcp.json"
+		cmd := []string{home + "/.local/bin/claude"}
+		if _, err := os.Stat(mcpConfig); err == nil {
+			cmd = append(cmd, "--mcp-config="+mcpConfig)
+		}
+		return append(cmd, "--dangerously-skip-permissions")
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{
