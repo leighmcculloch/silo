@@ -93,8 +93,12 @@ func runMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func hasQuietArg(args []string) bool {
+	// Silo flags appear before the tool subcommand name; tool args appear
+	// after. Stop scanning once we hit a tool name so a tool's own -q is not
+	// misread as silo's --quiet.
+	toolNames := AvailableTools(supportedTools)
 	for _, arg := range args {
-		if arg == "--" {
+		if slices.Contains(toolNames, arg) {
 			break
 		}
 		if arg == "--quiet" || arg == "-q" {
@@ -171,8 +175,13 @@ Configuration is loaded from (in order, merged):
   silo vibe
   silo kilo
 
-  # Pass arguments to the tool
-  silo claude -- --help`,
+  # Silo flags go before the tool name; tool args go after
+  silo --backend docker claude --continue
+  silo claude --help
+
+  # --continue and --resume are passed through to the tool
+  silo --continue
+  silo --resume <session-id>`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -187,6 +196,9 @@ Configuration is loaded from (in order, merged):
 	rootCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
 	rootCmd.Flags().Bool("no-tty", false, "Run without allocating a TTY; suitable for scripts and JSON output")
 	rootCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
+	rootCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
+	rootCmd.Flags().Bool("continue", false, "Pass --continue through to the tool")
+	rootCmd.Flags().String("resume", "", "Pass --resume <id> through to the tool")
 	addMountFlags(rootCmd)
 
 	// Define command groups (order here determines display order in --help)
@@ -196,27 +208,21 @@ Configuration is loaded from (in order, merged):
 		&cobra.Group{ID: "config", Title: "Configuration:"},
 	)
 
-	// Register each tool as a subcommand
+	// Register each tool as a subcommand. Flag parsing is disabled so that
+	// every arg after the tool name is forwarded to the tool unchanged. Silo
+	// flags must be passed before the tool name (parsed by rootCmd).
 	for _, t := range supportedTools {
 		toolDef := t // capture loop variable
 		toolCmd := &cobra.Command{
-			Use:     toolDef.Name + " [-- args...]",
-			Short:   toolDef.Description,
-			GroupID: "tools",
-			Args:    cobra.ArbitraryArgs,
+			Use:                toolDef.Name + " [args...]",
+			Short:              toolDef.Description,
+			GroupID:            "tools",
+			Args:               cobra.ArbitraryArgs,
+			DisableFlagParsing: true,
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return runTool(cmd, toolDef, args, stdout, stderr)
 			},
 		}
-		toolCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace")
-		toolCmd.Flags().Bool("force-build", false, "Force rebuild of container image")
-		toolCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build)")
-		toolCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar")
-		toolCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs and render only tool output")
-		toolCmd.Flags().Bool("no-tty", false, "Run without allocating a TTY; suitable for scripts and JSON output")
-		toolCmd.Flags().String("entrypoint", "", "Run a custom command instead of the tool (e.g. /bin/bash)")
-		toolCmd.Flags().String("tool-version", "", "Pin a specific tool version (forces synchronous build)")
-		addMountFlags(toolCmd)
 		rootCmd.AddCommand(toolCmd)
 	}
 
@@ -399,11 +405,9 @@ func runSilo(cmd *cobra.Command, args []string, stdout, stderr io.Writer) error 
 	cfg := config.LoadAll(toolDefaults())
 	noTTY := boolFlag(cmd, "no-tty") || !isStdoutTTY(stdout)
 
-	// Get tool-specific args (everything after --)
-	var toolArgs []string
-	if cmd.ArgsLenAtDash() > -1 {
-		toolArgs = args[cmd.ArgsLenAtDash():]
-	}
+	// Tool args come only from the pass-through flags --continue and --resume
+	// when invoking silo without an explicit tool subcommand.
+	toolArgs := passThroughToolArgs(cmd)
 
 	// Get cwd for repo matching
 	cwd, _ := os.Getwd()
@@ -507,34 +511,34 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	// Load configuration
 	cfg := config.LoadAll(toolDefaults())
 
-	// Get tool-specific args (everything after --)
-	var toolArgs []string
-	if cmd.ArgsLenAtDash() > -1 {
-		toolArgs = args[cmd.ArgsLenAtDash():]
-	}
+	// Silo flags live on the root command; the tool subcommand has flag
+	// parsing disabled so every arg here is a tool arg. Pass-through flags
+	// (--continue, --resume) are prepended.
+	root := cmd.Root()
+	toolArgs := append(passThroughToolArgs(root), args...)
 
 	// Override backend from flag
-	if b, _ := cmd.Flags().GetString("backend"); b != "" {
+	if b, _ := root.Flags().GetString("backend"); b != "" {
 		cfg.Backend = b
 	}
 
 	// Get force-build flag
-	forceBuild, _ := cmd.Flags().GetBool("force-build")
+	forceBuild, _ := root.Flags().GetBool("force-build")
 
 	// Get no-cache flag (implies force-build)
-	noCache, _ := cmd.Flags().GetBool("no-cache")
+	noCache, _ := root.Flags().GetBool("no-cache")
 	if noCache {
 		forceBuild = true
 	}
 
 	// Get verbose flag
-	verbose, _ := cmd.Flags().GetBool("verbose")
+	verbose, _ := root.Flags().GetBool("verbose")
 
 	// Get quiet flag
-	quiet := boolFlag(cmd, "quiet")
+	quiet, _ := root.Flags().GetBool("quiet")
 
 	// Get no-tty flag
-	noTTY := boolFlag(cmd, "no-tty")
+	noTTY, _ := root.Flags().GetBool("no-tty")
 
 	// Auto-detect non-interactive environment
 	if !noTTY && !isStdoutTTY(stdout) {
@@ -543,13 +547,13 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 	}
 
 	// Get entrypoint flag
-	entrypoint, _ := cmd.Flags().GetString("entrypoint")
+	entrypoint, _ := root.Flags().GetString("entrypoint")
 
 	// Get tool-version flag
-	toolVersion, _ := cmd.Flags().GetString("tool-version")
+	toolVersion, _ := root.Flags().GetString("tool-version")
 
 	// Get additional mount flags
-	extraMountsRW, extraMountsRO, err := extraMountsFromFlags(cmd)
+	extraMountsRW, extraMountsRO, err := extraMountsFromFlags(root)
 	if err != nil {
 		return err
 	}
@@ -573,6 +577,20 @@ func runTool(cmd *cobra.Command, toolDef tools.Tool, args []string, stdout, stde
 		Stdout:        stdout,
 		Stderr:        stderr,
 	})
+}
+
+// passThroughToolArgs returns args derived from silo's pass-through flags
+// (--continue, --resume) that should be forwarded to the underlying tool.
+func passThroughToolArgs(cmd *cobra.Command) []string {
+	root := cmd.Root()
+	var args []string
+	if c, _ := root.Flags().GetBool("continue"); c {
+		args = append(args, "--continue")
+	}
+	if r, _ := root.Flags().GetString("resume"); r != "" {
+		args = append(args, "--resume", r)
+	}
+	return args
 }
 
 func addMountFlags(cmd *cobra.Command) {

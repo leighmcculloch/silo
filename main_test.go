@@ -75,27 +75,23 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestToolMountFlags(t *testing.T) {
+func TestRootMountFlags(t *testing.T) {
 	rootCmd := newRootCmd(io.Discard, io.Discard)
-	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
-	if err != nil {
-		t.Fatalf("failed to find claude command: %v", err)
-	}
 
-	mountFlag := claudeCmd.Flags().Lookup("mount")
+	mountFlag := rootCmd.Flags().Lookup("mount")
 	if mountFlag == nil {
-		t.Fatal("expected --mount flag on claude command")
+		t.Fatal("expected --mount flag on root command")
 	}
 	if mountFlag.Shorthand != "m" {
 		t.Fatalf("expected --mount shorthand to be -m, got %q", mountFlag.Shorthand)
 	}
 
-	mountROFlag := claudeCmd.Flags().Lookup("mountro")
+	mountROFlag := rootCmd.Flags().Lookup("mountro")
 	if mountROFlag == nil {
-		t.Fatal("expected --mountro flag on claude command")
+		t.Fatal("expected --mountro flag on root command")
 	}
 
-	if err := claudeCmd.Flags().Parse([]string{
+	if err := rootCmd.Flags().Parse([]string{
 		"--mount", "/tmp/rw-a",
 		"-m", "/tmp/rw-b",
 		"--mountro", "/tmp/ro-a",
@@ -103,7 +99,7 @@ func TestToolMountFlags(t *testing.T) {
 		t.Fatalf("failed to parse mount flags: %v", err)
 	}
 
-	mountsRW, mountsRO, err := extraMountsFromFlags(claudeCmd)
+	mountsRW, mountsRO, err := extraMountsFromFlags(rootCmd)
 	if err != nil {
 		t.Fatalf("failed to read mount flags: %v", err)
 	}
@@ -113,6 +109,19 @@ func TestToolMountFlags(t *testing.T) {
 	}
 	if len(mountsRO) != 1 || mountsRO[0] != "/tmp/ro-a" {
 		t.Fatalf("expected ro mounts [/tmp/ro-a], got %v", mountsRO)
+	}
+
+	// Tool subcommands have flag parsing disabled — they should not own these
+	// flags themselves.
+	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
+	if err != nil {
+		t.Fatalf("failed to find claude command: %v", err)
+	}
+	if claudeCmd.Flags().Lookup("mount") != nil {
+		t.Error("did not expect --mount flag on claude command")
+	}
+	if !claudeCmd.DisableFlagParsing {
+		t.Error("expected DisableFlagParsing on claude command")
 	}
 }
 
@@ -127,17 +136,14 @@ func TestQuietFlags(t *testing.T) {
 		t.Fatalf("expected root --quiet shorthand to be -q, got %q", rootQuiet.Shorthand)
 	}
 
+	// Silo flags only live on the root command — tool subcommands forward
+	// everything after the tool name to the tool unchanged.
 	claudeCmd, _, err := rootCmd.Find([]string{"claude"})
 	if err != nil {
 		t.Fatalf("failed to find claude command: %v", err)
 	}
-
-	toolQuiet := claudeCmd.Flags().Lookup("quiet")
-	if toolQuiet == nil {
-		t.Fatal("expected --quiet flag on claude command")
-	}
-	if toolQuiet.Shorthand != "q" {
-		t.Fatalf("expected claude --quiet shorthand to be -q, got %q", toolQuiet.Shorthand)
+	if claudeCmd.Flags().Lookup("quiet") != nil {
+		t.Error("did not expect --quiet flag on claude command")
 	}
 }
 
@@ -153,10 +159,34 @@ func TestNoTTYFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to find claude command: %v", err)
 	}
+	if claudeCmd.Flags().Lookup("no-tty") != nil {
+		t.Error("did not expect --no-tty flag on claude command")
+	}
+}
 
-	toolNoTTY := claudeCmd.Flags().Lookup("no-tty")
-	if toolNoTTY == nil {
-		t.Fatal("expected --no-tty flag on claude command")
+func TestPassThroughFlags(t *testing.T) {
+	rootCmd := newRootCmd(io.Discard, io.Discard)
+
+	if rootCmd.Flags().Lookup("continue") == nil {
+		t.Fatal("expected --continue flag on root command")
+	}
+	if rootCmd.Flags().Lookup("resume") == nil {
+		t.Fatal("expected --resume flag on root command")
+	}
+
+	if err := rootCmd.Flags().Parse([]string{"--continue", "--resume", "abc"}); err != nil {
+		t.Fatalf("failed to parse pass-through flags: %v", err)
+	}
+
+	got := passThroughToolArgs(rootCmd)
+	want := []string{"--continue", "--resume", "abc"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %v, got %v", want, got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, got)
+		}
 	}
 }
 

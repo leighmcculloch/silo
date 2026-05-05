@@ -105,9 +105,15 @@ silo copilot
 silo vibe
 silo kilo
 
-# Pass arguments to the tool (after --)
-silo claude -- --help
-silo opencode -- --version
+# Pass arguments to the tool (silo flags before tool name, tool args after)
+silo claude --help
+silo opencode --version
+silo --backend docker claude --continue
+
+# --continue and --resume are top-level pass-through flags so you can use
+# them without naming a tool (the configured/default tool is used)
+silo --continue
+silo --resume <session-id>
 ```
 
 ### Choosing a Backend
