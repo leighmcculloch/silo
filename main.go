@@ -35,6 +35,7 @@ import (
 	"github.com/leighmcculloch/silo/tools/mistralvibe"
 	"github.com/leighmcculloch/silo/tools/opencode"
 	"github.com/leighmcculloch/silo/tools/paperclipai"
+	"github.com/leighmcculloch/silo/tools/pi"
 	"github.com/spf13/cobra"
 )
 
@@ -53,6 +54,7 @@ var (
 		copilotcli.Tool,
 		mistralvibe.Tool,
 		kilocode.Tool,
+		pi.Tool,
 	}
 )
 
@@ -145,7 +147,7 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
   ███████║██║███████╗╚██████╔╝
   ╚══════╝╚═╝╚══════╝ ╚═════╝
 `) + `
-Run AI tools (Claude Code, Cline, Codex, OpenCode, Paperclip AI, Copilot, Mistral Vibe, Kilo Code) in isolated
+Run AI tools (Claude Code, Cline, Codex, OpenCode, Paperclip AI, Copilot, Mistral Vibe, Kilo Code, Pi Coding Agent) in isolated
 Docker containers with proper security sandboxing.
 
 The container is configured with:
@@ -170,6 +172,7 @@ Configuration is loaded from (in order, merged):
   silo copilot
   silo vibe
   silo kilo
+  silo pi
 
   # Pass arguments to the tool
   silo claude -- --help`,

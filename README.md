@@ -11,7 +11,7 @@ Run AI coding assistants in containers/vms.
 ╚══════╝╚═╝╚══════╝ ╚═════╝
 ```
 
-Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, Mistral Vibe, and Kilo Code in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or [Namespace devboxes](https://namespace.so/devbox) (remote VMs). The coding tools are configured to run in auto-approve mode.
+Silo lets you run AI tools like Claude Code, Cline, Codex, OpenCode, Paperclip AI, GitHub Copilot CLI, Mistral Vibe, Kilo Code, and Pi Coding Agent in isolated Docker containers, Apple containers (lightweight VMs), Fly.io machines (remote VMs), or [Namespace devboxes](https://namespace.so/devbox) (remote VMs). The coding tools are configured to run in auto-approve mode.
 
 > [!WARNING]
 > Built using AI. No isolation is perfect. Use at your own risk.
@@ -57,6 +57,7 @@ Silo resolves this by running AI tools in isolated containers/vms with:
 | GitHub Copilot CLI | `silo copilot` | GitHub's Copilot CLI |
 | Mistral Vibe | `silo vibe` | Mistral's CLI coding assistant |
 | Kilo Code CLI | `silo kilo` | Kilo's terminal coding agent |
+| Pi Coding Agent | `silo pi` | Pi's coding assistant |
 
 ## Installation
 
@@ -104,6 +105,7 @@ silo paperclipai
 silo copilot
 silo vibe
 silo kilo
+silo pi
 
 # Pass arguments to the tool (after --)
 silo claude -- --help
