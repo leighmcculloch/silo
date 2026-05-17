@@ -36,6 +36,7 @@ import (
 	"github.com/leighmcculloch/silo/tools/opencode"
 	"github.com/leighmcculloch/silo/tools/paperclipai"
 	"github.com/leighmcculloch/silo/tools/pi"
+	"github.com/leighmcculloch/silo/tools/shell"
 	"github.com/spf13/cobra"
 )
 
@@ -347,18 +348,38 @@ Use --local or --global to skip the prompt.`,
 	rootCmd.AddCommand(execCmd)
 
 	shellCmd := &cobra.Command{
-		Use:               "shell [container]",
-		Short:             "Open a shell in a running silo container",
-		GroupID:           "container",
-		Long:              `Open an interactive /bin/bash shell inside a running silo container.`,
-		Example:           `  silo shell silo-myproject-1`,
-		Args:              cobra.ExactArgs(1),
+		Use:     "shell [container]",
+		Short:   "Open a shell in a new or running silo container",
+		GroupID: "container",
+		Long: `Open an interactive /bin/bash shell in a silo container.
+
+Without arguments, starts a new silo container with no tool installed
+(base image only, with post-build and pre-run hooks applied) and opens
+a bash shell inside it.
+
+With a container name, opens a /bin/bash shell inside that running
+container.`,
+		Example: `  # Start a new container and open a shell
+  silo shell
+
+  # Open a shell in a running container
+  silo shell silo-myproject-1`,
+		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: completeContainerNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return runShell(cmd, stdout, stderr)
+			}
 			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
 		},
 	}
 	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
+	shellCmd.Flags().Bool("force-build", false, "Force rebuild of container image (new container mode)")
+	shellCmd.Flags().Bool("no-cache", false, "Disable build cache (implies --force-build) (new container mode)")
+	shellCmd.Flags().BoolP("verbose", "v", false, "Show detailed output instead of progress bar (new container mode)")
+	shellCmd.Flags().BoolP("quiet", "q", false, "Suppress silo logs (new container mode)")
+	shellCmd.Flags().Bool("no-tty", false, "Run without allocating a TTY (new container mode)")
+	addMountFlags(shellCmd)
 	rootCmd.AddCommand(shellCmd)
 
 	reconnectCmd := &cobra.Command{
@@ -918,6 +939,51 @@ func runExec(cmd *cobra.Command, name string, command []string, stderr io.Writer
 	}
 
 	return fmt.Errorf("container %s not found", name)
+}
+
+// runShell starts a new silo container using the shell "tool" (base image
+// only, no tool installed) and opens an interactive bash shell inside it.
+func runShell(cmd *cobra.Command, stdout, stderr io.Writer) error {
+	cfg := config.LoadAll(toolDefaults())
+
+	if b, _ := cmd.Flags().GetString("backend"); b != "" {
+		cfg.Backend = b
+	}
+
+	forceBuild, _ := cmd.Flags().GetBool("force-build")
+	noCache, _ := cmd.Flags().GetBool("no-cache")
+	if noCache {
+		forceBuild = true
+	}
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	quiet, _ := cmd.Flags().GetBool("quiet")
+	noTTY, _ := cmd.Flags().GetBool("no-tty")
+
+	if !noTTY && !isStdoutTTY(stdout) {
+		noTTY = true
+		quiet = true
+	}
+
+	extraMountsRW, extraMountsRO, err := extraMountsFromFlags(cmd)
+	if err != nil {
+		return err
+	}
+
+	return run.Tool(run.Options{
+		ToolDef:       shell.Tool,
+		Config:        cfg,
+		Dockerfile:    Dockerfile(shell.Tool),
+		ForceBuild:    forceBuild,
+		NoCache:       noCache,
+		Verbose:       verbose,
+		Quiet:         quiet,
+		NoTTY:         noTTY,
+		ExtraMountsRW: extraMountsRW,
+		ExtraMountsRO: extraMountsRO,
+		Stdin:         cmd.InOrStdin(),
+		Stdout:        stdout,
+		Stderr:        stderr,
+	})
 }
 
 func runReconnect(cmd *cobra.Command, name string, stderr io.Writer) error {
