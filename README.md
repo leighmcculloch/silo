@@ -576,6 +576,28 @@ silo --backend namespace reconnect myproject-1
 
 On a normal exit, files are synced back and the remote is destroyed automatically. When reconnecting, the remote is not destroyed on disconnect — use `silo rm` to clean up manually if needed.
 
+### Shell Access
+
+Open an interactive shell in a silo container:
+
+```bash
+# Start a new container with no tool installed (base image only)
+# and open a shell inside it. Post-build and pre-run hooks still run.
+silo shell
+
+# Open a shell in a running container
+silo shell silo-myproject-1
+```
+
+When run without arguments, `silo shell` creates a fresh container from
+the base image — useful for ad hoc experimentation or sandboxed shell
+sessions without launching an AI tool.
+
+The shell launched is the user's login shell as recorded in
+`/etc/passwd` (bash by default; bash and zsh are both pre-installed in
+the base image). A post-build hook that runs `chsh -s /bin/zsh` will
+switch `silo shell` to zsh.
+
 ### Listing Containers
 
 See all silo-created containers:
