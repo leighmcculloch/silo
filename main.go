@@ -370,7 +370,7 @@ container.`,
 			if len(args) == 0 {
 				return runShell(cmd, stdout, stderr)
 			}
-			return runExec(cmd, args[0], []string{"/bin/bash"}, stderr)
+			return runExec(cmd, args[0], shell.DefaultShellCommand(), stderr)
 		},
 	}
 	shellCmd.Flags().StringP("backend", "b", "", "Backend to use: docker, container, fly, namespace (default: all)")
