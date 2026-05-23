@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install Docker CE (for container backend which runs in a VM)
 RUN install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+    && curl -fSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
     && chmod a+r /etc/apt/keyrings/docker.asc \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
     $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" > /etc/apt/sources.list.d/docker.list \
@@ -54,21 +54,21 @@ ENV GOROOT="${HOME}/.local/go"
 ENV PATH="${HOME}/.local/go/bin:${HOME}/go/bin:${PATH}"
 RUN mkdir -p ${HOME}/.local \
     && ARCH=$(dpkg --print-architecture) \
-    && GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//') \
-    && curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz \
+    && GO_VERSION=$(curl -fSL https://go.dev/VERSION?m=text | head -1 | sed 's/^go//') \
+    && curl -fSL "https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz \
     && go install golang.org/x/tools/gopls@latest
 
 # Install Node.js and npm
 ENV PATH="${HOME}/.local/node/bin:${PATH}"
 RUN ARCH=$(dpkg --print-architecture) \
     && case "${ARCH}" in amd64) NODE_ARCH=x64 ;; arm64) NODE_ARCH=arm64 ;; *) NODE_ARCH="${ARCH}" ;; esac \
-    && NODE_VERSION=$(curl -fsSL https://nodejs.org/dist/index.json | jq -r '.[0].version | ltrimstr("v")') \
-    && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
+    && NODE_VERSION=$(curl -fSL https://nodejs.org/dist/index.json | jq -r '.[0].version | ltrimstr("v")') \
+    && curl -fSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz" | tar -C ${HOME}/.local -xJ \
     && mv ${HOME}/.local/node-v${NODE_VERSION}-linux-${NODE_ARCH} ${HOME}/.local/node
 
 # Install Rust (stable + nightly) with wasm32v1-none target and rust-analyzer
 ENV PATH="${HOME}/.cargo/bin:${PATH}"
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+RUN curl --proto '=https' --tlsv1.2 -Sf https://sh.rustup.rs | sh -s -- -y \
     && . ${HOME}/.cargo/env \
     && rustup toolchain install stable \
     && rustup target add wasm32v1-none --toolchain stable \
@@ -76,15 +76,15 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
 
 # Install GitHub CLI
 RUN ARCH=$(dpkg --print-architecture) \
-    && GH_VERSION=$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
+    && GH_VERSION=$(curl -fSL https://api.github.com/repos/cli/cli/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${ARCH}.tar.gz" | tar -C ${HOME}/.local -xz --strip-components=1
 
 # Install mutagen agent (for fly backend file sync)
 # Mutagen expects its agent at ~/.mutagen/agents/<version>/mutagen-agent.
 # The release tarball contains mutagen-agents.tar.gz which has platform-specific agent binaries.
 RUN ARCH=$(dpkg --print-architecture) \
-    && MUTAGEN_VERSION=$(curl -fsSL https://api.github.com/repos/mutagen-io/mutagen/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
-    && curl -fsSL "https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_linux_${ARCH}_v${MUTAGEN_VERSION}.tar.gz" | tar -xz -C /tmp mutagen-agents.tar.gz \
+    && MUTAGEN_VERSION=$(curl -fSL https://api.github.com/repos/mutagen-io/mutagen/releases/latest | jq -r '.tag_name | ltrimstr("v")') \
+    && curl -fSL "https://github.com/mutagen-io/mutagen/releases/download/v${MUTAGEN_VERSION}/mutagen_linux_${ARCH}_v${MUTAGEN_VERSION}.tar.gz" | tar -xz -C /tmp mutagen-agents.tar.gz \
     && mkdir -p ${HOME}/.mutagen/agents/${MUTAGEN_VERSION} \
     && tar -xzf /tmp/mutagen-agents.tar.gz -C ${HOME}/.mutagen/agents/${MUTAGEN_VERSION} linux_${ARCH} \
     && mv ${HOME}/.mutagen/agents/${MUTAGEN_VERSION}/linux_${ARCH} ${HOME}/.mutagen/agents/${MUTAGEN_VERSION}/mutagen-agent \
