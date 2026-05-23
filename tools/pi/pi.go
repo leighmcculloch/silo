@@ -20,7 +20,7 @@ var Tool = tools.Tool{
 	Description:     "Pi Coding Agent - AI coding assistant",
 	DockerfileStage: dockerfileStage,
 	Command: func(home string) []string {
-		return []string{home + "/.local/node/bin/pi"}
+		return []string{"pi"}
 	},
 	DefaultConfig: func() config.ToolConfig {
 		return config.ToolConfig{
@@ -32,7 +32,7 @@ var Tool = tools.Tool{
 
 // fetchLatestVersion queries the npm registry for the latest pi version.
 func fetchLatestVersion(ctx context.Context) string {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://registry.npmjs.org/@mariozechner/pi-coding-agent/latest", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://registry.npmjs.org/@earendil-works/pi-coding-agent/latest", nil)
 	if err != nil {
 		return ""
 	}
