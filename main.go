@@ -188,6 +188,11 @@ Configuration is loaded from (in order, merged):
   silo --resume <session-id>`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Parse silo's root flags while traversing to a tool subcommand.
+		// Tool subcommands disable flag parsing so their args pass through
+		// unchanged; without this, root flags placed before the tool name
+		// (e.g. `silo --verbose pi`) would never be parsed.
+		TraverseChildren: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSilo(cmd, args, stdout, stderr)
 		},
