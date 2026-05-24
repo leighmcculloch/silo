@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     zsh \
     rsync \
     tmux \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Docker CE (for container backend which runs in a VM)
@@ -38,8 +39,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 RUN useradd -m -u ${UID} -d ${HOME} -s /bin/bash -G docker ${USER}
 
 # Allow user passwordless sudo for specific commands
-RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* \
-    && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/${USER} \
+RUN echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/dockerd" > /etc/sudoers.d/${USER} \
     && echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt" >> /etc/sudoers.d/${USER} \
     && chmod 0440 /etc/sudoers.d/${USER}
 
