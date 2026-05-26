@@ -49,6 +49,44 @@ type Options struct {
 	Stderr        io.Writer
 }
 
+// buildAction is how Run obtains the image to run when the desired image may
+// not already exist.
+type buildAction int
+
+const (
+	actionUseDesired  buildAction = iota // desired image is cached; run it
+	actionSyncBuild                      // build the desired image synchronously, then run it
+	actionUseFallback                    // run an older fallback image now; build desired in background
+)
+
+// buildPlan is the outcome of planBuild: what to run, and which image (if any)
+// to build in the background.
+type buildPlan struct {
+	action     buildAction
+	bgBuildTag string // image tag to build in the background ("" = none)
+}
+
+// planBuild decides how Run should obtain a runnable image given cache state.
+//
+// The fallback case is the subtle one: when the desired image is absent but a
+// structurally-identical older image exists (only the tool version differs),
+// Run uses the old image immediately and must launch a background build for the
+// desired image. Otherwise — since the cached version already equals the latest
+// fetched version — nothing else would ever build it and Run would fall back to
+// the old image forever.
+func planBuild(imageTag string, imageExists, explicitRebuild, fallbackUsable bool) buildPlan {
+	switch {
+	case imageExists:
+		return buildPlan{action: actionUseDesired}
+	case explicitRebuild:
+		return buildPlan{action: actionSyncBuild}
+	case fallbackUsable:
+		return buildPlan{action: actionUseFallback, bgBuildTag: imageTag}
+	default:
+		return buildPlan{action: actionSyncBuild}
+	}
+}
+
 // Tool runs a tool inside a container.
 func Tool(opts Options) error {
 	tool := opts.ToolDef.Name
@@ -316,7 +354,41 @@ func Tool(opts Options) error {
 		})
 	}
 
-	if imageExists {
+	// launchBgBuild spawns a detached build for the given image tag unless one
+	// is already in flight.
+	launchBgBuild := func(tag string, bArgs map[string]string) {
+		if IsBuilding(tag) {
+			return
+		}
+		_ = LaunchBackgroundBuild(BackgroundBuildOptions{
+			ImageTag:      tag,
+			Dockerfile:    dockerfile,
+			BuildArgs:     bArgs,
+			Backend:       cfg.Backend,
+			FlyApp:        cfg.Backends.Fly.App,
+			FlyRegion:     cfg.Backends.Fly.Region,
+			NamespaceSize: cfg.Backends.Namespace.Size,
+			NamespaceSite: cfg.Backends.Namespace.Site,
+			Tool:          tool,
+		})
+	}
+
+	// Determine whether a structurally-identical older image is usable as a
+	// fallback while the desired image builds. Only relevant when the desired
+	// image is absent and we're not doing an explicit rebuild, so we avoid the
+	// extra ImageExists call otherwise.
+	explicitRebuild := opts.ForceBuild || opts.NoCache || opts.ToolVersion != ""
+	fallbackTag := loadLastImage(tool)
+	fallbackUsable := false
+	if !imageExists && !explicitRebuild && fallbackTag != "" && fallbackTag != imageTag {
+		if exists, _ := backendClient.ImageExists(ctx, fallbackTag); exists {
+			fallbackUsable = structuralTag == loadStructuralTag(tool)
+		}
+	}
+
+	plan := planBuild(imageTag, imageExists, explicitRebuild, fallbackUsable)
+	switch plan.action {
+	case actionUseDesired:
 		// Image is cached — use it directly (scenario 2 & 3 cache hit).
 		if err := buildEnvironment(ctx, backendClient, buildEnvOptions{
 			tool:               tool,
@@ -340,36 +412,28 @@ func Tool(opts Options) error {
 			}
 			return err
 		}
-	} else if opts.ForceBuild || opts.NoCache || opts.ToolVersion != "" {
-		// Scenario 3 cache miss, or explicit rebuild — build synchronously.
+	case actionUseFallback:
+		// Desired image is missing but a structurally-identical older image
+		// exists (only the tool version differs). Run it now; the desired
+		// image builds in the background (launched below via plan.bgBuildTag).
+		logSection("Using cached environment (update building in background)...")
+		runImageTag = fallbackTag
+	case actionSyncBuild:
+		// Explicit rebuild, or no usable fallback — build synchronously.
 		if err := syncBuild(); err != nil {
 			if progress != nil {
 				progress.Complete()
 			}
 			return err
 		}
-	} else {
-		// Image doesn't exist — the background build from a previous run
-		// may not have finished yet. Use the previous image as a fallback
-		// if only the version changed; otherwise build synchronously.
-		fallbackTag := loadLastImage(tool)
-		var fallbackExists bool
-		if fallbackTag != "" && fallbackTag != imageTag {
-			fallbackExists, _ = backendClient.ImageExists(ctx, fallbackTag)
-		}
+	}
 
-		onlyVersionChanged := fallbackExists && structuralTag == loadStructuralTag(tool)
-		if onlyVersionChanged {
-			logSection("Using cached environment (update building in background)...")
-			runImageTag = fallbackTag
-		} else {
-			if err := syncBuild(); err != nil {
-				if progress != nil {
-					progress.Complete()
-				}
-				return err
-			}
-		}
+	// The desired image was missing and we fell back to an older one — relaunch
+	// its build here. The version-change goroutine below won't, because the
+	// cached version already equals the latest fetched version, so without this
+	// we'd fall back forever.
+	if plan.bgBuildTag != "" {
+		launchBgBuild(plan.bgBuildTag, buildArgs)
 	}
 
 	// Save state after image is resolved but before the tool runs, so
@@ -397,17 +461,7 @@ func Tool(opts Options) error {
 			}
 			newBuildArgs["TOOL_VERSION"] = newVersion
 			logSection("New version available (%s), building in background...", newVersion)
-			_ = LaunchBackgroundBuild(BackgroundBuildOptions{
-				ImageTag:      newImageTag,
-				Dockerfile:    dockerfile,
-				BuildArgs:     newBuildArgs,
-				Backend:       cfg.Backend,
-				FlyApp:        cfg.Backends.Fly.App,
-				FlyRegion:     cfg.Backends.Fly.Region,
-				NamespaceSize: cfg.Backends.Namespace.Size,
-				NamespaceSite: cfg.Backends.Namespace.Site,
-				Tool:          tool,
-			})
+			launchBgBuild(newImageTag, newBuildArgs)
 		}()
 	}
 

@@ -66,6 +66,58 @@ func TestRepoURLMatches(t *testing.T) {
 	}
 }
 
+func TestPlanBuild(t *testing.T) {
+	const desired = "silo-claude-abc123-2.1.150"
+
+	tests := []struct {
+		name            string
+		imageExists     bool
+		explicitRebuild bool
+		fallbackUsable  bool
+		wantAction      buildAction
+		wantBgBuildTag  string
+	}{
+		{
+			name:        "desired image cached runs it directly",
+			imageExists: true,
+			wantAction:  actionUseDesired,
+		},
+		{
+			name:            "explicit rebuild builds synchronously",
+			explicitRebuild: true,
+			wantAction:      actionSyncBuild,
+		},
+		{
+			name:           "no usable fallback builds synchronously",
+			wantAction:     actionSyncBuild,
+			wantBgBuildTag: "",
+		},
+		{
+			// Regression: the cached version's image went missing (a prior
+			// background build never completed), but a structurally-identical
+			// older image exists. We must run the fallback AND relaunch the
+			// background build for the desired image — otherwise we fall back
+			// forever while reporting the new version as cached.
+			name:           "missing desired image with usable fallback relaunches background build",
+			fallbackUsable: true,
+			wantAction:     actionUseFallback,
+			wantBgBuildTag: desired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := planBuild(desired, tt.imageExists, tt.explicitRebuild, tt.fallbackUsable)
+			if got.action != tt.wantAction {
+				t.Errorf("action = %v, want %v", got.action, tt.wantAction)
+			}
+			if got.bgBuildTag != tt.wantBgBuildTag {
+				t.Errorf("bgBuildTag = %q, want %q", got.bgBuildTag, tt.wantBgBuildTag)
+			}
+		})
+	}
+}
+
 func TestCollectMountsIncludesAdditionalCLIMounts(t *testing.T) {
 	home := t.TempDir()
 	oldHome := os.Getenv("HOME")
