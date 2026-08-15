@@ -27,9 +27,6 @@ var Tool = tools.Tool{
 			MountsRW: []string{
 				"~/.codex",
 			},
-			MountsRO: []string{
-				"~/.claude/skills",
-			},
 			Env: []string{
 				"OPENAI_API_KEY",
 			},
